@@ -1,0 +1,18 @@
+{{ define "main" }}
+<div class="doc-content">
+    <div class="doc-body markdown">
+        {{ .Content }}
+    </div>
+    
+    {{ if .Pages }}
+    <div class="doc-list">
+        <h2>Contents</h2>
+        {{ range sort .Pages ".File.Path" }}
+        <article class="doc-list-item">
+            <h3><a href="{{ .Permalink }}">{{ .Title }}</a></h3>
+        </article>
+        {{ end }}
+    </div>
+    {{ end }}
+</div>
+{{ end }}

@@ -1,0 +1,15 @@
+{{ define "main" }}
+<article class="doc-content">
+    <div class="doc-body markdown">
+        {{ .Content }}
+    </div>
+    <div class="doc-navigation">
+        {{ with .PrevInSection }}
+        <a href="{{ .Permalink }}" class="doc-nav-prev">← {{ .Title }}</a>
+        {{ end }}
+        {{ with .NextInSection }}
+        <a href="{{ .Permalink }}" class="doc-nav-next">{{ .Title }} →</a>
+        {{ end }}
+    </div>
+</article>
+{{ end }}

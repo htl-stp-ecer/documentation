@@ -1,0 +1,29 @@
+{{- $.Scratch.Add "index" slice -}}
+
+{{- range .Site.RegularPages -}}
+    {{- $content := .RawContent -}}
+    {{- $url := .Permalink -}}
+    {{- $pageTitle := .Title -}}
+    
+    {{- range findRE `(?m)^#{1,2} (.+)$` $content -}}
+        {{- $heading := replaceRE `^#{1,2} ` "" . -}}
+        {{- $anchor := $heading | urlize -}}
+        {{- $.Scratch.Add "index" (dict "title" $heading "url" (printf "%s#%s" $url $anchor) "page" $pageTitle) -}}
+    {{- end -}}
+{{- end -}}
+
+{{- range .Site.Pages -}}
+    {{- if eq .Kind "section" -}}
+        {{- $content := .RawContent -}}
+        {{- $url := .Permalink -}}
+        {{- $pageTitle := .Title -}}
+        
+        {{- range findRE `(?m)^#{1,2} (.+)$` $content -}}
+            {{- $heading := replaceRE `^#{1,2} ` "" . -}}
+            {{- $anchor := $heading | urlize -}}
+            {{- $.Scratch.Add "index" (dict "title" $heading "url" (printf "%s#%s" $url $anchor) "page" $pageTitle) -}}
+        {{- end -}}
+    {{- end -}}
+{{- end -}}
+
+{{- $.Scratch.Get "index" | jsonify -}}

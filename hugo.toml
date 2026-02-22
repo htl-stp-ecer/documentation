@@ -1,0 +1,6 @@
+baseURL = 'https://schloejak.github.io/'
+languageCode = 'en-us'
+title = 'TechDocs - Product Documentation'
+
+[outputs]
+  home = ["HTML", "JSON"]
