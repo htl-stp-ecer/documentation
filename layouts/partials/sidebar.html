@@ -9,7 +9,7 @@
 
             <div class="nav-section">
                 <div class="nav-section-title">Documentation</div>
-                
+
                 {{ $currentPage := . }}
                 {{ $docs := .Site.GetPage "/00-docs" }}
                 {{ if $docs }}
@@ -40,38 +40,6 @@
                             {{ end }}
                         </div>
                     {{ end }}
-                {{ end }}
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-title">Blog</div>
-                {{ $blog := .Site.GetPage "/01-blog" }}
-                {{ if $blog }}
-                <div class="nav-folder{{ if $currentPage.IsDescendant $blog }} expanded{{ end }}">
-                    <div class="nav-folder-header">
-                        <a href="{{ $blog.Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink $blog.Permalink }} active{{ end }}">
-                            Latest Posts
-                        </a>
-                        {{ if $blog.Pages }}
-                        <button class="folder-toggle" aria-label="Toggle folder">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                        {{ end }}
-                    </div>
-                    {{ if $blog.Pages }}
-                    <ul class="nav-folder-items">
-                        {{ range sort $blog.Pages ".File.Path" }}
-                        <li>
-                            <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
-                                <span class="nav-text">{{ .Title }}</span>
-                            </a>
-                        </li>
-                        {{ end }}
-                    </ul>
-                    {{ end }}
-                </div>
                 {{ end }}
             </div>
         </nav>
