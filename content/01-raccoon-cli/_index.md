@@ -1,11 +1,11 @@
 ---
-title: "raccoon-cli"
+title: "Raccoon CLI"
 date: 2024-01-01
 draft: false
 weight: 2
 ---
 
-# raccoon-cli
+# Raccoon CLI
 
 raccoon-cli is the command-line tool you run on your **laptop** to manage robot projects, configure hardware, sync files to the robot, and run your programs remotely.
 
