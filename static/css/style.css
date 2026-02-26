@@ -401,6 +401,14 @@ body {
     text-decoration: underline;
 }
 
+/* Images */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.2rem 0;
+}
+
 /* Code Blocks */
 pre {
     background: #f8f8f8;

@@ -11,35 +11,33 @@
                 <div class="nav-section-title">Documentation</div>
 
                 {{ $currentPage := . }}
-                {{ $docs := .Site.GetPage "/00-docs" }}
-                {{ if $docs }}
-                    {{ range sort $docs.Sections ".File.Path" }}
-                        <div class="nav-folder{{ if $currentPage.IsDescendant . }} expanded{{ end }}">
-                            <div class="nav-folder-header">
-                                <a href="{{ .Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
-                                    {{ .Title }}
-                                </a>
-                                {{ if .Pages }}
-                                <button class="folder-toggle" aria-label="Toggle folder">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                        <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                </button>
-                                {{ end }}
-                            </div>
+                {{ $home := .Site.Home }}
+                {{ range sort $home.Sections ".File.Path" }}
+                    <div class="nav-folder{{ if $currentPage.IsDescendant . }} expanded{{ end }}">
+                        <div class="nav-folder-header">
+                            <a href="{{ .Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
+                                {{ .Title }}
+                            </a>
                             {{ if .Pages }}
-                            <ul class="nav-folder-items">
-                                {{ range sort .Pages ".File.Path" }}
-                                <li>
-                                    <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
-                                        <span class="nav-text">{{ .Title }}</span>
-                                    </a>
-                                </li>
-                                {{ end }}
-                            </ul>
+                            <button class="folder-toggle" aria-label="Toggle folder">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
                             {{ end }}
                         </div>
-                    {{ end }}
+                        {{ if .Pages }}
+                        <ul class="nav-folder-items">
+                            {{ range sort .Pages ".File.Path" }}
+                            <li>
+                                <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
+                                    <span class="nav-text">{{ .Title }}</span>
+                                </a>
+                            </li>
+                            {{ end }}
+                        </ul>
+                        {{ end }}
+                    </div>
                 {{ end }}
             </div>
         </nav>
