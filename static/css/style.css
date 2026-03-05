@@ -511,6 +511,15 @@ tr:nth-child(even) {
     border-top: 1px solid var(--border-color);
 }
 
+.doc-nav-left {
+    text-align: left;
+}
+
+.doc-nav-right {
+    text-align: right;
+    margin-left: auto;
+}
+
 .doc-nav-prev, .doc-nav-next {
     padding: 10px 15px;
     background: #f8f8f8;
@@ -518,6 +527,7 @@ tr:nth-child(even) {
     color: var(--primary-color);
     text-decoration: none;
     transition: background 0.2s;
+    display: inline-block;
 }
 
 .doc-nav-prev:hover, .doc-nav-next:hover {

@@ -28,7 +28,7 @@
                         </div>
                         {{ if .Pages }}
                         <ul class="nav-folder-items">
-                            {{ range sort .Pages ".File.Path" }}
+                            {{ range .Pages.ByWeight }}
                             <li>
                                 <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
                                     <span class="nav-text">{{ .Title }}</span>
