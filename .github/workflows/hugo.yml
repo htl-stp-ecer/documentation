@@ -57,6 +57,13 @@ jobs:
       - name: Build
         run: hugo --minify
 
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=raccoon-docs
+
       - name: Package site
         run: tar -czf documentation-site.tar.gz -C public .
 
