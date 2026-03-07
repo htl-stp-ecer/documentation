@@ -1,6 +1,6 @@
 {{ $steps := site.Data.dsl_steps }}
 {{ if not $steps }}
-<p><em>DSL step catalog not available yet. It will appear after the first library release.</em></p>
+{{ errorf "dsl_steps.json not found in data/ – the CI fetch step must provide it" }}
 {{ else }}
 
 <div class="dsl-filter">
@@ -10,88 +10,47 @@
 
 <div id="dsl-count" class="dsl-count"></div>
 
-{{ $categories := dict
-    "Drive" (slice "drive" "strafe" "wall" "stop")
-    "Turn" (slice "turn")
-    "Line Follow" (slice "line-follow" "lineup")
-    "Sensor-Triggered Motion" (slice "sensor" "wait" "distance")
-    "Motor & Servo" (slice "motor" "servo" "actuator")
-    "Control Flow" (slice "control" "loop" "defer" "run" "timeout" "concurrent")
-    "Timing & Sync" (slice "timing" "sync" "button")
-    "Calibration & Tuning" (slice "calibration" "auto-tune" "characterize" "deadzone" "light")
-}}
-
-{{ $catOrder := slice "Drive" "Turn" "Line Follow" "Sensor-Triggered Motion" "Motor & Servo" "Control Flow" "Timing & Sync" "Calibration & Tuning" }}
-
-{{ $placed := slice }}
-
-{{ range $catName := $catOrder }}
-{{ $catTags := index $categories $catName }}
-{{ $catSteps := slice }}
-{{ range $step := $steps }}
-    {{ $dominated := false }}
-    {{ range $t := $step.tags }}
-        {{ range $ct := $catTags }}
-            {{ if eq $t $ct }}{{ $dominated = true }}{{ end }}
-        {{ end }}
-    {{ end }}
-    {{ if $dominated }}
-        {{ $catSteps = $catSteps | append $step }}
-    {{ end }}
-{{ end }}
-
-{{ if $catSteps }}
-<details class="dsl-group">
-    <summary class="dsl-group-title">
-        <span class="dsl-group-icon">&#9654;</span>
-        {{ $catName }}
-        <span class="dsl-group-count">{{ len $catSteps }}</span>
-    </summary>
-    <div class="dsl-group-body">
-    {{ range $catSteps }}
-    <details class="dsl-step" data-tags="{{ delimit .tags "," }}" data-name="{{ .name }}">
-        <summary class="dsl-step-header">
-            <code class="dsl-step-sig">{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}</code>
-            <div class="dsl-step-meta">
-                <div class="dsl-step-tags">
-                    {{ range .tags }}<span class="dsl-tag">{{ . }}</span>{{ end }}
-                </div>
+<div id="dsl-list">
+{{ range $steps }}
+<details class="dsl-step" data-tags="{{ delimit .tags "," }}" data-name="{{ .name }}">
+    <summary class="dsl-step-header">
+        <code class="dsl-step-sig">{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}</code>
+        <div class="dsl-step-meta">
+            <div class="dsl-step-tags">
+                {{ range .tags }}<span class="dsl-tag">{{ . }}</span>{{ end }}
             </div>
-        </summary>
-        <div class="dsl-step-body">
-            {{ if .docstring }}
-            <div class="dsl-step-doc">{{ .docstring | markdownify }}</div>
-            {{ end }}
-            {{ $apiPath := replace .module "." "/" }}
-            <div class="dsl-step-module"><a href="/api/autoapi/{{ $apiPath }}/index.html" target="_blank">{{ .module }}</a></div>
         </div>
-    </details>
-    {{ end }}
+    </summary>
+    <div class="dsl-step-body">
+        {{ if .docstring }}
+        <div class="dsl-step-doc">{{ .docstring | markdownify }}</div>
+        {{ end }}
+        {{ $apiPath := replace .module "." "/" }}
+        <div class="dsl-step-module"><a href="/api/autoapi/{{ $apiPath }}/index.html" target="_blank">{{ .module }}</a></div>
     </div>
 </details>
 {{ end }}
-{{ end }}
+</div>
 
 <script>
 (function() {
     var search = document.getElementById('dsl-search');
-    var groups = document.querySelectorAll('.dsl-group');
+    var steps = document.querySelectorAll('.dsl-step');
     var chipContainer = document.getElementById('dsl-tag-chips');
     var countEl = document.getElementById('dsl-count');
     var activeTag = null;
 
     var allTags = {};
-    document.querySelectorAll('.dsl-step').forEach(function(step) {
+    steps.forEach(function(step) {
         step.dataset.tags.split(',').forEach(function(t) {
             if (t) allTags[t] = (allTags[t] || 0) + 1;
         });
     });
 
-    var sortedTags = Object.keys(allTags).sort();
-    sortedTags.forEach(function(tag) {
+    Object.keys(allTags).sort().forEach(function(tag) {
         var chip = document.createElement('button');
         chip.className = 'dsl-chip';
-        chip.textContent = tag;
+        chip.textContent = tag + ' (' + allTags[tag] + ')';
         chip.dataset.tag = tag;
         chip.addEventListener('click', function() {
             if (activeTag === tag) {
@@ -111,27 +70,21 @@
         var q = search.value.toLowerCase();
         var totalVisible = 0;
 
-        groups.forEach(function(group) {
-            var anyVisible = false;
-            group.querySelectorAll('.dsl-step').forEach(function(step) {
-                var name = step.dataset.name.toLowerCase();
-                var tags = step.dataset.tags.toLowerCase();
-                var doc = step.textContent.toLowerCase();
-                var matchSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1 || doc.indexOf(q) !== -1;
-                var matchTag = !activeTag || tags.split(',').indexOf(activeTag) !== -1;
-                var visible = matchSearch && matchTag;
-                step.style.display = visible ? '' : 'none';
-                if (visible) { anyVisible = true; totalVisible++; }
-            });
-            group.style.display = anyVisible ? '' : 'none';
-            if (q || activeTag) { if (anyVisible) group.open = true; }
+        steps.forEach(function(step) {
+            var name = step.dataset.name.toLowerCase();
+            var tags = step.dataset.tags.toLowerCase();
+            var doc = step.textContent.toLowerCase();
+            var matchSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1 || doc.indexOf(q) !== -1;
+            var matchTag = !activeTag || tags.split(',').indexOf(activeTag) !== -1;
+            var visible = matchSearch && matchTag;
+            step.style.display = visible ? '' : 'none';
+            if (visible) totalVisible++;
         });
 
-        var total = document.querySelectorAll('.dsl-step').length;
         if (q || activeTag) {
-            countEl.textContent = 'Showing ' + totalVisible + ' of ' + total + ' steps';
+            countEl.textContent = 'Showing ' + totalVisible + ' of ' + steps.length + ' steps';
         } else {
-            countEl.textContent = total + ' steps available';
+            countEl.textContent = steps.length + ' steps available';
         }
     }
 
@@ -174,52 +127,15 @@
     margin-bottom: 1rem;
 }
 
-/* Category groups */
-.dsl-group {
-    margin-bottom: 1rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    overflow: hidden;
-}
-.dsl-group > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 0.65rem 1rem;
-    background: #f8fafc;
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: #1e293b;
+#dsl-list {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    user-select: none;
-    border-bottom: 1px solid transparent;
+    flex-direction: column;
+    gap: 0.45rem;
 }
-.dsl-group[open] > summary { border-bottom-color: #e2e8f0; }
-.dsl-group > summary::-webkit-details-marker { display: none; }
-.dsl-group-icon {
-    font-size: 0.6rem;
-    transition: transform 0.2s;
-    display: inline-block;
-    color: #94a3b8;
-}
-.dsl-group[open] > summary .dsl-group-icon { transform: rotate(90deg); }
-.dsl-group-count {
-    background: #e2e8f0;
-    color: #64748b;
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 0.1rem 0.5rem;
-    border-radius: 10px;
-    margin-left: auto;
-}
-.dsl-group-body { padding: 0.5rem 0.65rem; }
 
-/* Individual step cards */
 .dsl-step {
     border: 1px solid #e8ecf1;
     border-radius: 7px;
-    margin-bottom: 0.45rem;
     background: white;
     transition: border-color 0.15s;
 }
@@ -249,7 +165,6 @@
     border-radius: 10px; font-size: 0.68rem;
 }
 
-/* Expanded step body */
 .dsl-step-body {
     padding: 0.5rem 0.75rem 0.65rem;
     border-top: 1px solid #f1f5f9;
@@ -294,7 +209,6 @@
     transition: opacity 0.15s;
 }
 .dsl-step-module a:hover { opacity: 1; text-decoration: underline; }
-
 </style>
 
 {{ end }}
