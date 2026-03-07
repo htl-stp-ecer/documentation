@@ -29,3 +29,4 @@ After that, dive into the sections that match what you want to do:
 | [Programming]({{< ref "/02-programming" >}}) | Writing missions and using the robot API |
 | [Web IDE]({{< ref "/03-web-ide" >}}) | Using the browser-based mission editor |
 | [Robot UI]({{< ref "/04-robot-ui" >}}) | The robot's touchscreen — sensors, programs, WiFi, settings |
+| [API Reference]({{< ref "/05-api-reference" >}}) | Auto-generated Python and C++ API docs |
