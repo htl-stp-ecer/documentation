@@ -40,12 +40,30 @@ All three modes provide a dedicated page that displays detailed network informat
 
 ![IMG: Device info example screen](/images/botui/settings/wifi-device-info.png)
 
+### Power
+
+This section contains options for controlling the device's power state.
+
 - **Shutdown**: Powers off the device completely.
 - **Reboot**: Restarts the device.
-- **Calibrate**: Starts a calibration process (e.g., for the touchscreen or display).
-- **Rotate**: Changes the screen orientation (for example portrait or landscape).
-- **Hide UI**: Hides the current user interface.
-- **Status**: Opens an overview of system information and statistics.
+
+### Calibrate
+
+This option starts the touchscreen calibration process. A Wombat icon appears in the corners and in the center of the screen. The user must tap each one as accurately as possible. The more precise the taps are, the more accurate the screen calibration will be for user input.
+
+### Rotate
+
+Changes the screen orientation. The display can be rotated in 90° increments (90°, 180°, 270°, and 360°).
+
+### Hide UI
+
+Hides the current user interface and displays the system logs.
+
+### Status
+
+The status page provides an overview of different **systemd services**.  
+Each service has its own page where users can **start**, **restart**, **view logs**, and **enable** the service. The current **service status** is also displayed.
+![IMG: Example status page of the flutter-ui.service](/images/botui/settings/systemd-status.png)
 
 ## Toggles
 - **Screensaver**: Enables or disables the screensaver.
