@@ -54,6 +54,9 @@ jobs:
           hugo-version: 'latest'
           extended: true
 
+      - name: Clean previous build
+        run: rm -rf public
+
       - name: Build
         run: hugo --minify --cleanDestinationDir
 
