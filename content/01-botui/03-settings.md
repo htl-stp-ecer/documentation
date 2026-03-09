@@ -26,6 +26,7 @@ Allows the robot to create its own wireless hotspot. The following settings can 
 - **Password** (*default*: auto-generated)
 - **Wi-Fi band** (5 GHz, 2.4 GHz or Auto, *default*: Auto)
 - **Security type** (WPA3 Personal, WPA2 Personal or Open, *default*: WPA3 Personal)
+- **Hidden** (*default*: off)
 
 The hotspot status is also displayed, showing whether it is **inactive** or **active**. When active, the assigned IP address is shown.
 
