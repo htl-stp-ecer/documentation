@@ -12,5 +12,5 @@ The Raccoon platform consists of several tools that work together:
 
 | Section | What it covers |
 |---|---|
-| [BotUI]({{< ref "/00-botui" >}}) | The UI visible on the display of the robot. |
+| [BotUI]({{< ref "/01-botui" >}}) | The UI visible on the display of the robot. |
 | [API Reference]({{< ref "/05-api-reference" >}}) |  |
