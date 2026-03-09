@@ -7,4 +7,4 @@ weight: 1
 
 # Dashboard
 The dashboard is the main page where you can redirect yourself to the sensor data, programs and the robot settings. It is the starting point after the robot boots from where your operations can begin. 
-![IMG: Dashboard Screen on the Bot UI](/images/botui/sensors/botui-dashboard.png)
+![IMG: Dashboard Screen on the Bot UI](/images/botui/botui-dashboard.png)
