@@ -58,11 +58,11 @@ This option starts the touchscreen calibration process. A Wombat icon appears in
 
 Changes the screen orientation. The display can be rotated in 90° increments (90°, 180°, 270°, and 360°).
 
+![IMG: Screen of the rotation options](/images/botui/settings/rotate-screen.png)
+
 ### Hide UI
 
 Hides the current user interface and displays the system logs.
-
-![IMG: Screen of the rotation options](/images/botui/settings/rotate-screen.png)
 
 ### Status
 
