@@ -29,6 +29,8 @@ Allows the robot to create its own wireless hotspot. The following settings can 
 
 The hotspot status is also displayed, showing whether it is **inactive** or **active**. When active, the assigned IP address is shown.
 
+![IMG: Example of using default values to create a new hotspot](/images/botui/settings/wifi-hotspot.png)
+
 **LAN Only Mode (3)**  
 Used when the device is connected via an Ethernet (LAN) cable. In this mode, information about the currently connected network is displayed.
 
