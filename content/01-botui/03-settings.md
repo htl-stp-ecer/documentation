@@ -62,6 +62,8 @@ Changes the screen orientation. The display can be rotated in 90° increments (9
 
 Hides the current user interface and displays the system logs.
 
+![IMG: Screen of the rotation options](/images/botui/settings/rotate-screen.png)
+
 ### Status
 
 The status page provides an overview of different **systemd services**.  
