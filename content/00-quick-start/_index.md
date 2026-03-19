@@ -187,10 +187,10 @@ raccoon will automatically sync your project files to the robot and execute `src
 
 Now that your robot is running, explore the rest of the documentation:
 
-- **[raccoon-cli reference]({{< ref "/01-raccoon-cli" >}})** — all available commands explained
+- **[raccoon-cli reference]({{< ref "/01-botui" >}})** — what you can do from the robot's touchscreen
 - **[Programming guide]({{< ref "/02-programming" >}})** — all motion commands, sensor APIs, and mission patterns
 - **[Web IDE]({{< ref "/03-web-ide" >}})** — build missions visually in the browser
-- **[Robot UI]({{< ref "/04-robot-ui" >}})** — what you can do from the robot's touchscreen
+- **[Robot UI]({{< ref "/04-raccoon-cli" >}})** — all available commands explained
 
 ---
 
