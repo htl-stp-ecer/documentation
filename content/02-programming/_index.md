@@ -38,6 +38,7 @@ graph TD
 | [Robot Definition]({{< ref "02-robot-definition" >}}) | Declaring hardware, kinematics, and drive |
 | [Missions]({{< ref "03-missions" >}}) | Writing and sequencing missions |
 | [Steps DSL]({{< ref "04-steps" >}}) | The motion/action building blocks |
+| [Stop Conditions]({{< ref "04a-stop-conditions" >}}) | Combining conditions with OR, AND, THEN |
 | [Custom Steps]({{< ref "05-custom-steps" >}}) | Writing your own reusable steps |
 | [Sensors]({{< ref "06-sensors" >}}) | IR, analog, digital, and camera sensors |
 | [Drive System]({{< ref "07-drive-system" >}}) | Kinematics, velocity control, PID tuning |

@@ -141,46 +141,15 @@ Four things happening simultaneously: line following, grabbing objects at the ri
 
 ## Stop Conditions
 
-Many steps accept a `.until(condition)` clause that stops the step when a condition is met:
+Many steps accept a `.until(condition)` clause that controls when the step finishes:
 
 ```python
-# Drive forward until the sensor sees black
 drive_forward(speed=0.8).until(on_black(Defs.front.right))
-
-# Drive until black OR 50cm traveled (whichever comes first)
 drive_forward(speed=1.0).until(on_black(Defs.front.right) | after_cm(50))
-
-# Drive until black AND at least 10cm traveled (prevents false triggers)
-drive_forward(speed=1.0).until(on_black(Defs.front.right) & after_cm(10))
-
-# Sequential conditions: wait 10cm THEN start checking for black
 drive_forward(speed=1.0).until(after_cm(10) > on_black(Defs.front.right))
 ```
 
-### Available Conditions
-
-| Condition | What It Checks |
-|-----------|---------------|
-| `on_black(sensor, threshold=0.7)` | IR sensor reads black |
-| `on_white(sensor, threshold=0.7)` | IR sensor reads white |
-| `after_seconds(s)` | Fixed time elapsed |
-| `after_cm(cm)` | Distance traveled (via odometry) |
-| `after_degrees(deg)` | Heading changed by N degrees (via IMU) |
-| `on_digital(sensor, pressed=True)` | Digital sensor state |
-| `on_analog_above(sensor, threshold)` | Analog reading above value |
-| `on_analog_below(sensor, threshold)` | Analog reading below value |
-| `stall_detected(motor, threshold_tps=10, duration=0.25)` | Motor is stalling |
-| `custom(fn)` | Your own lambda/function |
-
-### Combining Conditions
-
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| `\|` | OR — either condition | `on_black(s) \| after_cm(50)` |
-| `&` | AND — both conditions | `on_black(s) & after_cm(10)` |
-| `>` | THEN — second only checked after first | `after_cm(10) > on_black(s)` |
-
-The `>` (THEN) operator is particularly useful: `after_cm(10) > on_black(sensor)` means "ignore the sensor for the first 10 cm, then start checking for black." This prevents premature triggering when the robot starts on or near a line.
+Conditions can be combined with `|` (OR), `&` (AND), `>` (THEN), and grouped with parentheses for complex logic. See **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** for the full reference.
 
 ## Control Flow
 
@@ -274,24 +243,12 @@ class M00SetupMission(Mission):
 
             # Run distance calibration
             calibrate(distance_cm=50),
-
-            # Optional: test loop for lineup debugging
-            loop_forever(seq([
-                wait_for_button(),
-                forward_single_lineup(
-                    Defs.front.right,
-                    entry_threshold=0.9,
-                    exit_threshold=0.85,
-                    correction_side=CorrectionSide.RIGHT,
-                    forward_speed=0.5,
-                ),
-            ])),
         ])
 ```
 
 ## Mission Registration
 
-Missions are registered in the Robot class:
+Missions are registered in the Robot class. This is salso automatically generated for you. **Don't edit this!** To change it, edit the `raccoon.project.yaml` file:
 
 ```python
 class Robot(GenericRobot):

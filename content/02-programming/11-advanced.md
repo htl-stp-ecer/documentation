@@ -41,6 +41,31 @@ You don't need to understand asyncio to write missions — `seq()` and `parallel
 - Use `await asyncio.sleep(duration)` instead of `time.sleep()`
 - Never block the event loop with synchronous I/O or long computations
 
+### No Threads — This Is Critical
+
+> **The SDK is NOT thread-safe. Never use threads.** Do not use `threading`, `Thread`, `concurrent.futures`, or any other threading mechanism. This is a deliberate design decision, not a limitation.
+
+**Why no threads?** The robot spends ~90% of its time busy-waiting (polling sensors, waiting for motors to reach a position, sleeping between control loop iterations). Threads would be overkill and introduce race conditions. Instead, `asyncio` schedules everything as coroutines on a single thread — essentially acting as a cooperative CPU scheduler. Each coroutine runs until it hits an `await`, then yields control so other coroutines can run.
+
+This design is what makes safe shutdown possible. When the 120-second timer fires, the framework cancels the running mission by cancelling its asyncio task. Because everything is cooperative and single-threaded, the cancellation happens cleanly at the next `await` point — no motor is left spinning, no half-finished operation corrupts state. With threads, you'd have race conditions between the shutdown logic and the mission code, and motors could keep running after the robot is supposed to stop.
+
+**The golden rule: always yield control with `await`.**
+
+```python
+# CORRECT — yields control, other coroutines can run
+await asyncio.sleep(0.1)
+
+# WRONG — blocks the entire event loop, nothing else runs
+import time
+time.sleep(0.1)   # NEVER do this!
+```
+
+If you block the event loop with `time.sleep()`, synchronous network calls, or heavy computation:
+- The 100 Hz control loop stops updating → the robot jerks or drifts
+- `parallel()` tracks freeze → only one track runs at a time
+- The shutdown timer can't fire → the robot won't stop at 120 seconds
+- UI screens stop responding → the touchscreen freezes
+
 ### The 100 Hz Control Loop
 
 Motion steps run a fixed-rate loop at 100 Hz (every 10ms):
