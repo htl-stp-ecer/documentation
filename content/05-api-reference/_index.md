@@ -1,5 +1,6 @@
 ---
 title: "API Reference"
+author: "Tobias Madlberger"
 date: 2024-01-01
 draft: false
 weight: 6

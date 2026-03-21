@@ -1,5 +1,6 @@
 ---
 title: "Settings"
+author: "Jakob Schlögl"
 date: 2026-03-05
 draft: false
 weight: 4

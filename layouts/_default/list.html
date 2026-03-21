@@ -3,5 +3,10 @@
     <div class="doc-body markdown">
         {{ .Content }}
     </div>
+    {{ with .Params.author }}
+    <div class="doc-author">
+        Written by <a href="/contributors/">{{ . }}</a>
+    </div>
+    {{ end }}
 </div>
 {{ end }}

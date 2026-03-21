@@ -619,3 +619,137 @@ tr:nth-child(even) {
 .sidebar::-webkit-scrollbar-thumb:hover {
     background: #666;
 }
+
+/* Author attribution */
+.doc-author {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    color: #777;
+}
+
+.doc-author a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.doc-author a:hover {
+    text-decoration: underline;
+}
+
+/* Contributors page */
+.contributors-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.contributor-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.75rem;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.75rem;
+    transition: box-shadow 0.2s ease;
+}
+
+.contributor-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.contributor-left {
+    flex-shrink: 0;
+}
+
+img.contributor-photo {
+    width: 120px;
+    min-width: 120px;
+    height: 120px;
+    max-width: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    border: 3px solid var(--border-color);
+    margin: 0;
+}
+
+div.contributor-photo-placeholder {
+    width: 120px;
+    min-width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    border: 3px solid var(--border-color);
+}
+
+.contributor-right {
+    flex: 1;
+    min-width: 0;
+}
+
+.contributor-name {
+    font-size: 1.25rem;
+    margin: 0 0 0.15rem 0;
+    color: var(--text-color);
+}
+
+.contributor-role {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+.contributor-bio {
+    font-size: 0.9rem;
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.contributor-bio p {
+    margin: 0;
+}
+
+.contributor-socials {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.social-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f5f5f5;
+    color: #555;
+    transition: background 0.2s ease, color 0.2s ease;
+    text-decoration: none;
+}
+
+.social-link:hover {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+@media (max-width: 600px) {
+    .contributor-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .contributor-socials {
+        justify-content: center;
+    }
+}

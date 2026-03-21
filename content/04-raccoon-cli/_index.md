@@ -1,5 +1,6 @@
 ---
 title: "Raccoon CLI"
+author: "Florian Schwanzer"
 date: 2026-03-19
 draft: true
 weight: 1
