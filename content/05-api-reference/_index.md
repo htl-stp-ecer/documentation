@@ -9,6 +9,12 @@ weight: 6
 
 Full auto-generated documentation for the LibStp library, built from source on every release.
 
+## Available Steps
+
+All steps available in the LibStp DSL, grouped by category. These are the building blocks you use to compose robot missions.
+
+[View Available Steps]({{< relref "01-available-steps" >}})
+
 ## Python API
 
 Complete reference for all Python modules — motors, servos, sensors, motion steps, missions, calibration, and more.

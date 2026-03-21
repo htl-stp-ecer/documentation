@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 260" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <!-- Background -->
+  <rect width="560" height="260" fill="none"/>
+
+  <!-- Axes -->
+  <line x1="60" y1="200" x2="510" y2="200" stroke="#333" stroke-width="1.5"/>
+  <line x1="60" y1="200" x2="60" y2="30" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Axis arrows -->
+  <polygon points="60,28 56,36 64,36" fill="#333"/>
+  <polygon points="512,200 504,196 504,204" fill="#333"/>
+
+  <!-- Axis labels -->
+  <text x="285" y="240" text-anchor="middle" fill="#555" font-size="14">Time</text>
+  <text x="20" y="115" text-anchor="middle" fill="#555" font-size="14" transform="rotate(-90,20,115)">Velocity</text>
+
+  <!-- Grid line for max_velocity -->
+  <line x1="60" y1="60" x2="430" y2="60" stroke="#ddd" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="55" y="64" text-anchor="end" fill="#888" font-size="11">max_velocity</text>
+
+  <!-- Trapezoidal profile - the main shape -->
+  <polygon points="100,200 210,60 360,60 430,200" fill="#42A5F5" fill-opacity="0.12" stroke="none"/>
+  <polyline points="100,200 210,60 360,60 430,200" fill="none" stroke="#42A5F5" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- Phase markers (vertical dashed lines) -->
+  <line x1="210" y1="60" x2="210" y2="200" stroke="#999" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="360" y1="60" x2="360" y2="200" stroke="#999" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- Phase labels -->
+  <text x="155" y="125" text-anchor="middle" fill="#1565C0" font-size="12" font-weight="600">Accel</text>
+  <text x="285" y="90" text-anchor="middle" fill="#1565C0" font-size="12" font-weight="600">Cruise</text>
+  <text x="395" y="125" text-anchor="middle" fill="#1565C0" font-size="12" font-weight="600">Decel</text>
+
+  <!-- Slope annotations -->
+  <text x="140" y="178" text-anchor="middle" fill="#888" font-size="10">acceleration</text>
+  <text x="410" y="178" text-anchor="middle" fill="#888" font-size="10">deceleration</text>
+
+  <!-- Zero label -->
+  <text x="55" y="204" text-anchor="end" fill="#888" font-size="11">0</text>
+</svg>

@@ -47,3 +47,11 @@ graph TD
 | [Calibration]({{< ref "10-calibration" >}}) | Motor and sensor calibration workflow |
 | [UI Steps & Screens]({{< ref "12-ui-steps" >}}) | Touchscreen UI, widgets, custom screens |
 | [Advanced Topics]({{< ref "11-advanced" >}}) | Async, timing, transport, debugging |
+
+### Algorithms
+
+| Page | What It Does |
+|------|-------------|
+| [Line Following]({{< ref "algorithms/line-following" >}}) | PID-based edge tracking with profiled and directional variants |
+| [Lineup]({{< ref "algorithms/lineup" >}}) | Single-pass geometric line alignment |
+| [IR Sensor Calibration (K-Means)]({{< ref "algorithms/ir-calibration" >}}) | Clustering-based threshold detection for IR sensors |

@@ -306,6 +306,18 @@ body {
     margin-left: 10px;
 }
 
+.nav-subfolder {
+    margin: 2px 0;
+}
+
+.nav-subfolder .nav-folder-link {
+    font-size: 0.9em;
+}
+
+.nav-subfolder .nav-folder-items .nav-item {
+    font-size: 0.9em;
+}
+
 /* Main Content */
 .main-content {
     flex: 1;

@@ -26,13 +26,42 @@
                             </button>
                             {{ end }}
                         </div>
-                        {{ if .Pages }}
+                        {{ if or .Pages .Sections }}
                         <ul class="nav-folder-items">
-                            {{ range .Pages.ByWeight }}
+                            {{ range .RegularPages.ByWeight }}
                             <li>
                                 <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
                                     <span class="nav-text">{{ .Title }}</span>
                                 </a>
+                            </li>
+                            {{ end }}
+                            {{ range .Sections }}
+                            <li>
+                                <div class="nav-folder nav-subfolder{{ if $currentPage.IsDescendant . }} expanded{{ end }}">
+                                    <div class="nav-folder-header">
+                                        <a href="{{ .Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
+                                            {{ .Title }}
+                                        </a>
+                                        {{ if .Pages }}
+                                        <button class="folder-toggle" aria-label="Toggle folder">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
+                                        {{ end }}
+                                    </div>
+                                    {{ if .Pages }}
+                                    <ul class="nav-folder-items">
+                                        {{ range .Pages.ByWeight }}
+                                        <li>
+                                            <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
+                                                <span class="nav-text">{{ .Title }}</span>
+                                            </a>
+                                        </li>
+                                        {{ end }}
+                                    </ul>
+                                    {{ end }}
+                                </div>
                             </li>
                             {{ end }}
                         </ul>

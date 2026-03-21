@@ -41,10 +41,21 @@ On your laptop, open your WiFi settings and connect to the network the robot is 
 
 ## Step 3 — Install raccoon on Your Laptop
 
-Open a terminal and run:
+Download the latest release from [htl-stp-ecer/raccoon-cli](https://github.com/htl-stp-ecer/raccoon-cli/releases) and install the two `.whl` files.
+
+**Option A — via `gh` CLI:**
 
 ```bash
-pip install raccoon
+gh release download v0.1.25 -R htl-stp-ecer/raccoon-cli -p "*.whl"
+pip install raccoon_transport-0.1.25-py3-none-any.whl raccoon-0.1.25-py3-none-any.whl
+```
+
+**Option B — manual download:**
+
+Download the `.whl` files from the release page, then:
+
+```bash
+pip install raccoon_transport-0.1.25-py3-none-any.whl raccoon-0.1.25-py3-none-any.whl
 ```
 
 Verify it installed correctly:

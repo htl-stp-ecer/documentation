@@ -7,7 +7,7 @@ weight: 10
 
 # Servos
 
-Servos are position-controlled actuators used for arms, claws, shields, and other mechanisms. LibSTP supports up to 4 servos on the Wombat (ports 0–3).
+Servos are position-controlled actuators used for arms, claws, shields, and other mechanisms.
 
 ## Declaration
 
@@ -45,6 +45,22 @@ arm = ServoPreset(
 
 `ServoPreset` creates callable methods for each position name. The angle values (0–180) correspond to the servo's physical range.
 
+### Servo Offsets
+
+`ServoPreset` supports an `offset` parameter that shifts all positions by a fixed number of degrees:
+
+```python
+claw = ServoPreset(
+    Servo(port=2),
+    positions={"closed": 135, "open": 30},
+    offset=5   # Adds 5 degrees to every position
+)
+```
+
+This is useful when replacing a broken servo. A new servo mounted on the same shaft may land a few teeth off from the original, causing all positions to be shifted by the same amount. Since all positions are just angle values, adding a constant offset shifts every position by the same amount — no need to re-tune each angle individually.
+
+> **Tip:** When choosing your servo angles, try to avoid values very close to 0 or 180. Keeping some margin (e.g. 10–170) leaves room to apply a positive or negative offset when a servo needs to be swapped at competition — without hitting the physical limits.
+
 ## Usage in Missions
 
 ### Preset Servos
@@ -81,7 +97,7 @@ shake_servo(Defs.claw_servo, duration=2.0, angle_a=30, angle_b=135)
 
 ### Slow Servo
 
-Move to a position at a controlled speed (degrees per second) — useful for gentle placement:
+Move to a position at a controlled speed (degrees per second) — useful for gentle placement. By default, `slow_servo` uses ease-in-ease-out interpolation, which smoothly accelerates and decelerates the servo for fluid motion:
 
 ```python
 slow_servo(Defs.my_servo, angle=90, speed=30.0)   # 30 degrees/sec (slower than default 60)

@@ -119,18 +119,6 @@ kinematics = DifferentialKinematics(
 )
 ```
 
-```mermaid
-graph TD
-    subgraph "Differential Drive"
-        L["Left<br/>Motor"] ---|"wheelbase"| R["Right<br/>Motor"]
-        C["Center of<br/>Rotation"]
-    end
-
-    style L fill:#42A5F5,color:#fff
-    style R fill:#42A5F5,color:#fff
-    style C fill:#FF7043,color:#fff
-```
-
 - Both wheels forward → robot drives forward
 - Left faster than right → robot turns right
 - Wheels opposite directions → robot spins in place
@@ -201,8 +189,8 @@ motion_pid_config = UnifiedMotionPidConfig(
     ),
     angular=AxisConstraints(
         max_velocity=2.9424,       # rad/s
-        acceleration=14.6122,      # rad/s^2
-        deceleration=7156.1491,    # rad/s^2
+        acceleration=7.6122,      # rad/s^2
+        deceleration=16.1491,    # rad/s^2
     ),
     lateral=AxisConstraints(       # Only for mecanum
         max_velocity=0.2209,
@@ -221,13 +209,7 @@ motion_pid_config = UnifiedMotionPidConfig(
 
 `AxisConstraints` define the robot's physical limits. The motion planner uses these to create trapezoidal velocity profiles:
 
-```mermaid
-graph LR
-    subgraph "Trapezoidal Velocity Profile"
-        direction LR
-        A["Accelerate<br/>→ max_velocity"] --> B["Cruise at<br/>max_velocity"] --> C["Decelerate<br/>→ 0"]
-    end
-```
+{{< figure src="/images/trapezoidal-velocity-profile.svg" alt="Trapezoidal velocity profile showing acceleration, cruise, and deceleration phases" >}}
 
 - `max_velocity`: The fastest the robot will ever go. Set this conservatively — it's the speed at `speed=1.0`.
 - `acceleration`: How quickly the robot ramps up to max velocity.
@@ -241,13 +223,7 @@ LibSTP includes automatic tuning steps that measure your robot's actual performa
 
 ```python
 # In your setup mission:
-auto_tune(
-    vel_axes=["vx"],                        # Which velocity axes to tune
-    tune_velocity=True,                      # Tune velocity PID
-    tune_motion=True,                        # Tune motion PID
-    characterize_axes=["linear", "angular"], # Measure physical limits
-    characterize_trials=3,                   # Repetitions per test
-)
+auto_tune()
 ```
 
 This drives the robot through a series of test maneuvers, measures the response, and updates the configuration. Run it on a flat surface with enough room (at least 1m in each direction).

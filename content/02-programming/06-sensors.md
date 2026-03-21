@@ -60,54 +60,13 @@ Defs.front.lineup_on_black()                # Square up on a line
 Defs.front.strafe_left_until_black(sensor=Defs.front.right)
 ```
 
-### Line Following Explained
+### Line Following
 
-```mermaid
-graph TD
-    subgraph "Line Following"
-        A["Robot follows edge of line"] --> B["Sensor on left side of line"]
-        B --> C{"Sensor reading?"}
-        C -->|"Too black<br/>(on line)"| D["Steer away from line"]
-        C -->|"Too white<br/>(off line)"| E["Steer toward line"]
-        C -->|"Edge value<br/>(on edge)"| F["Drive straight"]
-    end
-
-    style D fill:#333,color:#fff
-    style E fill:#eee,color:#000
-    style F fill:#4CAF50,color:#fff
-```
-
-Line following works by keeping a sensor on the edge between black and white. A PID controller continuously adjusts steering to hold the sensor at the calibrated edge value.
+Line following uses a PID controller to keep a sensor on the edge between black and white. For a detailed explanation of the algorithm, variants, and parameters, see [Line Following]({{< ref "algorithms/line-following" >}}).
 
 ### Lineup (Line Alignment)
 
-Lineup aligns the robot square on a line using one or two sensors:
-
-```mermaid
-graph LR
-    subgraph "Before Lineup"
-        B1["⬜ Sensor L"] --- BR["Robot (angled)"] --- B2["⬛ Sensor R"]
-    end
-    subgraph "After Lineup"
-        A1["⬛ Sensor L"] --- AR["Robot (square)"] --- A2["⬛ Sensor R"]
-    end
-    B1 -.->|"lineup_on_black()"| A1
-```
-
-```python
-# Dual sensor: both sensors find the line
-forward_lineup_on_black(Defs.front.left, Defs.front.right)
-backward_lineup_on_black(Defs.front.left, Defs.front.right)
-
-# Single sensor: one sensor finds the line, robot pivots to align
-forward_single_lineup(
-    Defs.front.right,
-    entry_threshold=0.9,          # When to start correcting
-    exit_threshold=0.7,           # When to consider "on line"
-    correction_side=CorrectionSide.RIGHT,
-    forward_speed=0.5,
-)
-```
+Lineup aligns the robot square on a line using a geometric single-pass approach — no iterative correction loops, so it completes with almost no time lost. For a detailed explanation, see [Lineup]({{< ref "algorithms/lineup" >}}).
 
 ## Digital Sensors
 
@@ -130,7 +89,7 @@ arm_up_limit = DigitalSensor(port=1)      # Limit switch
 wait_for_digital(Defs.arm_down_limit, pressed=True)
 
 # Use as stop condition
-set_motor_velocity(Defs.arm_motor, -100).until(
+drive_forward(speed=0.5).until(
     on_digital(Defs.arm_down_limit)
 )
 
