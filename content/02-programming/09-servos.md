@@ -56,12 +56,12 @@ Defs.claw.closed()
 Defs.arm.up()
 Defs.arm.down()
 
-# Custom wait time (milliseconds) — override the auto-estimated travel time
-Defs.arm.up(300)           # Wait 300ms for the servo to reach position
-Defs.claw.closed(120)      # Wait 120ms
+# With speed control (degrees per second) — returns a slow servo step
+Defs.arm.up(300)           # Move to "up" at 300 deg/s
+Defs.claw.closed(120)      # Move to "closed" at 120 deg/s
 ```
 
-The auto-wait estimates travel time based on the angle difference. Override with a manual duration if the servo is under load and moves slower than expected.
+When called without an argument, the servo moves at full speed. When called with a number, it moves at that speed in degrees per second — useful for gentle or controlled movements.
 
 ### Plain Servo
 
@@ -104,9 +104,9 @@ fully_disable_servos()
 seq([
     Defs.claw.open(),
     Defs.arm.down(),
-    Defs.claw.closed(120),     # Close and wait for grip
-    Defs.arm.up(120),          # Lift
-    Defs.claw.open(60),        # Release
+    Defs.claw.closed(120),     # Close at 120 deg/s (controlled grip)
+    Defs.arm.up(120),          # Lift at 120 deg/s
+    Defs.claw.open(60),        # Release slowly at 60 deg/s
 ])
 ```
 
@@ -154,11 +154,11 @@ Repeat for each named position. The angles depend on how the servo is mounted �
 
 ## Timing Considerations
 
-Servo steps **block** until the estimated travel time elapses. The framework estimates travel time based on how far the servo needs to rotate. If a servo is under load (lifting something heavy), it may take longer than estimated — use a manual wait time:
+Servo steps **block** until the servo reaches its target position. When called without a speed argument, the servo moves at full speed and the step estimates travel time based on the angle difference. When called with a speed (degrees per second), it uses a slow servo step that controls the movement rate:
 
 ```python
-Defs.arm.down()        # Auto-estimated: might be too short under load
-Defs.arm.down(500)     # Manual: wait 500ms regardless
+Defs.arm.down()        # Full speed, auto-estimated travel time
+Defs.arm.down(60)      # 60 deg/s — slower, more controlled
 ```
 
-If timing is critical, add a small buffer to your wait times. An arm that arrives 50ms early does nothing wrong; an arm that's still moving when the next step starts can cause problems.
+Use a slower speed for heavy or delicate mechanisms where full-speed movement could cause problems (slamming, overshooting, dropping objects).

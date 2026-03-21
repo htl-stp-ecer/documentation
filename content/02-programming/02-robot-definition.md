@@ -72,7 +72,7 @@ With `ServoPreset`, you can move to named positions directly in your missions:
 ```python
 Defs.claw.open()       # Moves to angle 30
 Defs.arm.above_pom()   # Moves to angle 55
-Defs.arm.up(300)       # Moves to angle 105, waits 300ms for travel
+Defs.arm.up(300)       # Moves to angle 105 at 300 degrees/sec (slow servo)
 ```
 
 ### Sensors
@@ -114,17 +114,33 @@ Defs.front.strafe_left_until_black()    # Strafe left until sensor sees black
 Defs.front.lineup_on_black()            # Align both sensors on a black line
 ```
 
-### Wait-for-Light Sensor
+### Required Attributes: `button` and `wait_for_light_sensor`
 
-If you're using the Botball competition start light, declare an analog sensor for it:
+The `RobotDefinitionsProtocol` expects specially-named attributes in your `Defs` class:
 
 ```python
-from libstp import AnalogSensor
+from libstp import DigitalSensor, AnalogSensor
 
-wait_for_light_sensor = AnalogSensor(port=2)
+button = DigitalSensor(port=10)                    # Required — exact name
+wait_for_light_sensor = AnalogSensor(port=2)       # Optional — exact name
 ```
 
-The `GenericRobot` base class looks for `defs.wait_for_light_sensor`. If present, the pre-start gate uses the light sensor. If absent, it falls back to a button press. For competition, you almost always want a light sensor.
+These names are **not arbitrary** — the framework looks for them by name:
+
+- **`button`** (required): Registered as the system-wide primary button. Used by `wait_for_button()`, UI interactions, and any step that needs physical button input. Must be named exactly `button`.
+- **`wait_for_light_sensor`** (optional): Used by the pre-start gate to detect the competition start light. If not present, the robot can only start via button press. For competition, you need this so the robot can start with the light signal. Must be named exactly `wait_for_light_sensor`.
+
+Both are defined in the YAML `definitions:` section with these exact names:
+
+```yaml
+definitions:
+  button:
+    type: DigitalSensor
+    port: 10
+  wait_for_light_sensor:       # Optional, but needed for competition start
+    type: AnalogSensor
+    port: 2
+```
 
 ### The `analog_sensors` List
 
@@ -140,129 +156,84 @@ class Defs:
 
 ## Robot Class (`robot.py`)
 
-The `Robot` class extends `GenericRobot` and wires together hardware, drive system, odometry, and missions.
+The `robot.py` file is **entirely code-generated** from the `robot:` section of `raccoon.project.yml`. It wires together your hardware definitions, drive system, kinematics, odometry, motion PID, physical dimensions, and mission list. **Never edit this file by hand** — all configuration goes through the YAML.
 
-### Minimal Example (Differential Drive)
+Here's what each part of the generated code does and which YAML section it comes from:
 
-This is a real, working robot definition from the Ecer2026 ConeBot:
+### Generated Attributes Reference
 
-```python
-from libstp import (
-    DifferentialKinematics, Drive, FusedOdometry, FusedOdometryConfig,
-    GenericRobot, PidConfig, PidGains, Feedforward,
-    AxisVelocityControlConfig, ChassisVelocityControlConfig,
-    AxisConstraints, UnifiedMotionPidConfig, SensorPosition,
-)
-from src.hardware.defs import Defs
-from src.missions.m00_setup_mission import M00SetupMission
-from src.missions.m01_drive_to_cone_mission import M01DriveToConeMission
+| Attribute | What It Does | YAML Source |
+|-----------|-------------|-------------|
+| `defs` | Hardware definitions instance | `definitions:` |
+| `kinematics` | Translates chassis velocity to/from wheel speeds | `robot.drive.kinematics` |
+| `drive` | Velocity controller (PID + feedforward per axis) | `robot.drive.vel_config` |
+| `odometry` | Tracks robot position and heading on the field | `robot.odometry` |
+| `motion_pid_config` | Controls trajectory following accuracy (distance/heading PID, axis constraints) | `robot.motion_pid` |
+| `shutdown_in` | Emergency stop timer in seconds | `robot.shutdown_in` |
+| `setup_mission` | Mission that runs before the start signal | `missions:` (entry tagged `setup`) |
+| `missions` | Main missions, run in order after start | `missions:` (untagged entries) |
+| `shutdown_mission` | Mission that runs when timer expires | `missions:` (entry tagged `shutdown`) |
+| `width_cm`, `length_cm` | Physical robot dimensions | `robot.physical` |
+| `rotation_center_forward_cm`, `rotation_center_strafe_cm` | Offset from geometric center to rotation center | `robot.physical.rotation_center` |
+| `_sensor_positions` | Where each sensor is mounted relative to rotation center | `robot.physical.sensors` |
+| `_wheel_positions` | Where each wheel is mounted (mecanum only) | Derived from kinematics geometry |
 
+### YAML → Generated Code
 
-class Robot(GenericRobot):
-    defs = Defs()
+Here's how the YAML maps to the generated `robot.py`. You configure everything on the left; code generation produces the right:
 
-    # --- Kinematics: how wheel speeds map to robot motion ---
-    kinematics = DifferentialKinematics(
-        left_motor=defs.front_left_motor,
-        right_motor=defs.front_right_motor,
-        wheel_radius=0.0345,     # meters
-        wheelbase=0.16,          # distance between wheels, meters
-    )
+```yaml
+# raccoon.project.yml
+robot:
+  shutdown_in: 120
 
-    # --- Drive: velocity controller ---
-    # ChassisVelocityControlConfig fields (vx, vy, wz) are set after construction
-    @staticmethod
-    def _build_vel_config(vx=None, vy=None, wz=None):
-        cfg = ChassisVelocityControlConfig()
-        if vx: cfg.vx = vx
-        if vy: cfg.vy = vy
-        if wz: cfg.wz = wz
-        return cfg
+  drive:
+    kinematics:
+      type: differential          # or "mecanum"
+      wheel_radius: 0.0345
+      wheelbase: 0.16
+      left_motor: front_left_motor
+      right_motor: front_right_motor
 
-    drive = Drive(
-        kinematics=kinematics,
-        vel_config=_build_vel_config(
-            vx=AxisVelocityControlConfig(
-                pid=PidGains(kp=0.0, ki=0.0, kd=0.0),
-                ff=Feedforward(kS=0.0, kV=1.0, kA=0.0),
-            ),
-        ),
-        imu=defs.imu,
-    )
+    vel_config:
+      vx:
+        pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+        ff: { kS: 0.0, kV: 1.0, kA: 0.0 }
 
-    # --- Odometry: position tracking ---
-    odometry = FusedOdometry(
-        imu=defs.imu,
-        kinematics=kinematics,
-        config=FusedOdometryConfig(bemf_trust=1.0),
-    )
+  odometry:
+    type: FusedOdometry           # or "Stm32Odometry"
 
-    # --- Motion PID: how accurately the robot follows trajectories ---
-    motion_pid_config = UnifiedMotionPidConfig(
-        distance=PidConfig(kp=7.875, ki=0.0, kd=0.0, ...),
-        heading=PidConfig(kp=7.875, ki=0.0, kd=0.0625, ...),
-        linear=AxisConstraints(
-            max_velocity=0.2368,       # m/s
-            acceleration=0.2798,       # m/s^2
-            deceleration=2.0532,       # m/s^2
-        ),
-        angular=AxisConstraints(
-            max_velocity=2.9424,       # rad/s
-            acceleration=14.6122,      # rad/s^2
-            deceleration=7156.1491,    # rad/s^2
-        ),
-        # ... tolerance and saturation settings ...
-    )
+  motion_pid:
+    distance: { kp: 7.875, ki: 0.0, kd: 0.0 }
+    heading: { kp: 7.875, ki: 0.0, kd: 0.0625 }
+    linear:
+      max_velocity: 0.2368
+      acceleration: 0.2798
+      deceleration: 2.0532
+    angular:
+      max_velocity: 2.9424
+      acceleration: 14.6122
+      deceleration: 7156.1491
 
-    # --- Lifecycle ---
-    shutdown_in = 120  # Kill switch: stop everything after 120 seconds
-    setup_mission = M00SetupMission()
-    missions = [M01DriveToConeMission()]
-    shutdown_mission = None
+  physical:
+    width_cm: 13.0
+    length_cm: 19.0
+    rotation_center:
+      x_cm: 2.5
+      y_cm: 5.5
+    sensors:
+      - name: front_right_ir_sensor
+        x_cm: 14.0
+        y_cm: 7.5
+        clearance_cm: 1.0
 
-    # --- Physical dimensions (used by geometry system) ---
-    width_cm = 13.0
-    length_cm = 19.0
-    rotation_center_forward_cm = -4.0  # Offset from geometric center
-    rotation_center_strafe_cm = 0.0
-
-    # --- Sensor positions (for odometry compensation) ---
-    _sensor_positions = {
-        defs.front_right_ir_sensor: SensorPosition(
-            forward_cm=7.5, strafe_cm=-7.25, clearance_cm=1.0
-        ),
-    }
+missions:
+  - M00SetupMission: setup
+  - M01DriveToConeMission
+  - M99ShutdownMission: shutdown
 ```
 
-### Mecanum Drive Example
-
-The PackingBot uses a 4-wheel mecanum drive that can strafe sideways:
-
-```python
-from libstp import MecanumKinematics, Stm32Odometry, WheelPosition
-
-class Robot(GenericRobot):
-    defs = Defs()
-
-    kinematics = MecanumKinematics(
-        front_left_motor=defs.front_left_motor,
-        front_right_motor=defs.front_right_motor,
-        back_left_motor=defs.rear_left_motor,
-        back_right_motor=defs.rear_right_motor,
-        track_width=0.2,       # distance between left and right wheels
-        wheel_radius=0.0375,
-        wheelbase=0.125,       # distance between front and rear axles
-    )
-
-    odometry = Stm32Odometry(imu=defs.imu, kinematics=kinematics)
-
-    _wheel_positions = {
-        defs.front_left_motor: WheelPosition(forward_cm=6.25, strafe_cm=10.0),
-        defs.front_right_motor: WheelPosition(forward_cm=6.25, strafe_cm=-10.0),
-        defs.rear_left_motor: WheelPosition(forward_cm=-6.25, strafe_cm=10.0),
-        defs.rear_right_motor: WheelPosition(forward_cm=-6.25, strafe_cm=-10.0),
-    }
-```
+All the PID values, axis constraints, kinematics parameters, and physical dimensions are set in the YAML. Code generation turns them into the Python `Robot` class. Auto-tune and calibration steps update these YAML values automatically.
 
 ### Kinematics: Differential vs. Mecanum
 
@@ -289,9 +260,8 @@ graph LR
 | Can drive forward/backward | Yes | Yes |
 | Can turn in place | Yes | Yes |
 | Can strafe sideways | No | Yes |
-| Typical use | Simple robots | Complex manipulation robots |
 
-Choose `DifferentialKinematics` for a 2-wheel robot, `MecanumKinematics` for a 4-wheel omnidirectional robot.
+In competition, you typically use both: one differential and one mecanum robot. Set `type: differential` or `type: mecanum` in the YAML kinematics section accordingly.
 
 ### Mission Lifecycle
 
@@ -315,25 +285,27 @@ sequenceDiagram
     R->>M1: Run missions[0]
     M1-->>R: Complete
     R->>M2: Run missions[1]
-    T-->>R: Time's up!
+    M2-->>R: Complete
+    Note over R: All missions done
     R->>SD: Run shutdown_mission
     SD-->>R: Done
     Note over R: All motors disabled
+    Note over T: Timer is a last resort<br/>if missions take too long
 ```
 
 **Setup mission** runs before the start signal — use it for calibration, homing servos, and any pre-match preparation.
 
 **Main missions** run in order after the start signal. Each mission runs to completion before the next one starts.
 
-**Shutdown mission** runs when the `shutdown_in` timer expires. Use it for controlled shutdown (lowering arms, releasing objects). If no shutdown mission is set, all motors are simply disabled.
+**Shutdown mission** runs when all main missions have completed **or** when the `shutdown_in` timer expires — whichever comes first. Most of the time, your missions finish normally and shutdown runs as the final cleanup step. Use it for controlled shutdown (lowering arms, releasing objects). If no shutdown mission is set, all motors are simply disabled.
 
 ### The `shutdown_in` Timer
 
-`shutdown_in = 120` means the robot will force-stop 120 seconds after the start signal. This is a safety feature required by Botball competition rules. When the timer fires:
+`shutdown_in = 120` means the robot will force-stop 120 seconds after the start signal. This is a **last resort safety mechanism** required by Botball competition rules — your missions should normally finish well before the timer fires. When the timer does fire:
 
 1. The currently running mission is cancelled
 2. The shutdown mission runs (if defined)
 3. All motors are disabled
 4. The program exits
 
-This happens regardless of what the robot is doing. Plan your missions to finish within the time limit.
+Plan your missions to finish within the time limit. If everything goes well, your robot completes all missions, runs the shutdown mission, and stops cleanly — without ever hitting the timer.

@@ -157,7 +157,7 @@ motor_brake(Defs.cone_motor)            # Active hold position
 ## Servo Steps
 
 ```python
-# Move to angle (auto-waits for travel time)
+# Move to angle (blocks until servo arrives)
 servo(Defs.claw_servo, 90)
 
 # ServoPreset shortcuts (defined in defs.py)
@@ -165,7 +165,7 @@ Defs.claw.open()
 Defs.claw.closed()
 Defs.arm.up()
 Defs.arm.down()
-Defs.arm.above_pom(300)       # Custom wait time in ms
+Defs.arm.above_pom(300)       # Move at 300 deg/s (slow servo step)
 
 # Oscillate between two angles
 shake_servo(Defs.claw_servo, duration=2.0, angle_a=30, angle_b=135)
