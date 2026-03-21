@@ -28,26 +28,15 @@ rear = SensorGroup(right=rear_right_ir)   # Single sensor groups work too
 
 ### Calibration
 
-IR sensors need calibration to distinguish black from white on your specific game table. Calibration stores two thresholds per sensor:
+IR sensors need calibration to distinguish black from white on your specific game table. During calibration, the robot drives across the surface while sampling sensors at 100 Hz. A K-Means clustering algorithm (k=2) automatically separates the readings into white and black clusters, producing per-sensor thresholds that are persisted across runs.
 
-```yaml
-# racoon.calibration.yml
-root:
-  ir-calibration:
-    default:
-      white_tresh: 1469.84
-      black_tresh: 2490.58
-    default_port0:
-      white_tresh: 543.45
-      black_tresh: 3647.12
-```
+Run calibration as part of your setup mission:
 
-Run calibration during setup:
 ```python
-calibrate_sensors()     # Interactive calibration via BotUI
+calibrate(distance_cm=50)    # Calibrates both distance and IR sensors
 ```
 
-Or as part of the setup mission (see [Calibration]({{< ref "10-calibration" >}})).
+For a detailed explanation of how the calibration algorithm works, see [Calibration]({{< ref "10-calibration" >}}).
 
 ### Using IR Sensors in Steps
 
