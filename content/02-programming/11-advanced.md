@@ -114,7 +114,21 @@ This is a compile-time safety net. It catches common mistakes like accidentally 
 
 ## Robot Services
 
-Services are lazily-instantiated singletons attached to the robot. They persist across missions within a single run.
+Services are lazily-instantiated singletons attached to the robot. They persist across missions within a single run and provide a place for stateful logic that doesn't belong in missions or steps.
+
+### When to Use a Service
+
+Not every piece of logic needs a service. Use one when:
+
+- **State persists across missions.** A mission runs, stores a result, and a later mission needs that result. Steps are stateless — they execute and return. Services hold onto data for the entire run.
+- **Multiple hardware components work together as a single mechanism.** If a motor, a sensor, and a servo need to be coordinated (e.g. a drum collector that spins a motor while reading a light sensor to count pockets), that coordination logic belongs in a service — not spread across individual steps.
+- **Calibration produces thresholds used later.** A calibration step collects samples and computes thresholds. The service stores those thresholds so subsequent steps can use them without recalibrating.
+
+If your logic is stateless and only touches one hardware component, a plain step function is simpler and sufficient.
+
+### Creating a Service
+
+Services extend `RobotService` and receive the robot instance in their constructor:
 
 ```python
 from libstp import RobotService
@@ -130,11 +144,91 @@ class CounterService(RobotService):
         return self.count
 ```
 
-Access a service from any step:
+Access a service from any step via `robot.get_service()`. The first call creates the instance; subsequent calls return the same one (lazy singleton):
 
 ```python
 run(lambda robot: robot.get_service(CounterService).increment())
 ```
+
+### Example: Combined Hardware Mechanism
+
+A drum collector robot uses a motor to rotate a drum and a light sensor to detect pocket positions. The `DrumMotorService` owns both pieces of hardware and provides higher-level operations:
+
+```python
+from libstp import RobotService, Motor, AnalogSensor
+
+class DrumMotorService(RobotService):
+    def __init__(self, robot):
+        super().__init__(robot)
+        self._blocked_threshold = None
+        self._pocket_threshold = None
+        self._current_index = 0
+
+    @property
+    def motor(self) -> Motor:
+        return self.robot.defs.drum_motor
+
+    @property
+    def light_sensor(self) -> AnalogSensor:
+        return self.robot.defs.drum_light_sensor
+
+    @property
+    def is_calibrated(self) -> bool:
+        return self._blocked_threshold is not None
+
+    @property
+    def midpoint(self) -> float:
+        """Midpoint between blocked and pocket thresholds."""
+        return (self._blocked_threshold + self._pocket_threshold) / 2
+
+    @property
+    def current_index(self) -> int:
+        return self._current_index
+
+    def apply_calibration(self, blocked, pocket):
+        """Store thresholds computed during calibration."""
+        self._blocked_threshold = blocked
+        self._pocket_threshold = pocket
+
+    async def advance(self, count=1):
+        """Spin motor forward, counting pocket transitions on the sensor."""
+        # Uses stored thresholds to detect transitions
+        ...
+
+    async def go_to(self, index):
+        """Navigate to a specific pocket by shortest path."""
+        ...
+```
+
+Properties give the service a clean interface: `motor` and `light_sensor` provide convenient access to the hardware without exposing `self.robot.defs` to callers, `is_calibrated` and `midpoint` derive values from internal state, and `current_index` exposes read-only tracking. Steps that use the service only see the properties and methods — never the raw internals.
+
+The calibration step calls `apply_calibration()`, and later mission steps call `advance()` or `go_to()` — all sharing the same thresholds and position tracking through the service.
+
+### Where to Put Services
+
+Services live in `src/service/`:
+
+```
+src/
+├── service/
+│   ├── __init__.py
+│   └── drum_motor_service.py
+├── missions/
+├── steps/
+└── hardware/
+```
+
+### Call Flow
+
+The typical pattern is **mission → step → service**:
+
+1. **Missions** define the sequence of what happens and when.
+2. **Steps** are the atomic operations that missions compose (drive, servo move, sensor read).
+3. **Services** provide the stateful logic and hardware coordination that steps call into.
+
+Steps should call service methods rather than managing state themselves. This keeps steps reusable and testable — the state lives in one place.
+
+### Built-in Services
 
 The `HeadingReferenceService` is a built-in service that stores the marked heading reference. You can create your own services for any cross-mission state.
 
@@ -213,6 +307,8 @@ logging.set_file_level("libstp.step.base", logging.Level.debug)
 Log levels (from most to least verbose): `trace`, `debug`, `info`, `warn`, `error`, `critical`.
 
 Enable verbose logging when debugging motion issues — the drive system, odometry, and motion planner log detailed telemetry at `trace` level.
+
+> **Warning:** Setting motion-related files (e.g. `drive.py`, `linear_motion.cpp`, `stm32_odometry.cpp`) to `trace` level produces a high volume of log output. This significantly drops the control loop update rate, causing noticeably worse driving behavior — the robot may steer erratically or overshoot targets. Use `trace` on motion files only for stationary debugging or short diagnostic runs, not during actual competition missions. For normal operation, `info` or `debug` is sufficient.
 
 ## Timing Instrumentation
 

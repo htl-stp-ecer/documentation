@@ -47,6 +47,9 @@ my-robot/
     │   ├── m01_first_task.py    # First autonomous mission
     │   ├── m02_second_task.py   # Second autonomous mission
     │   └── m99_shutdown.py      # Cleanup after timeout
+    ├── service/
+    │   ├── __init__.py          # Required for Python imports
+    │   └── my_service.py        # Stateful logic shared across missions
     └── steps/
         ├── __init__.py          # Required for Python imports
         └── my_custom_steps.py   # Reusable custom step functions
