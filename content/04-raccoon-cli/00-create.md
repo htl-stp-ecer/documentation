@@ -1,69 +1,198 @@
 ---
-title: "Create"
+title: "create"
 author: "Florian Schwanzer"
 date: 2026-03-19
-draft: true
+draft: false
 weight: 2
 ---
 
-# Create
-There are two different types that can be created.
+# raccoon create
 
-## Creating a Project
+Two subcommands: `project` for bootstrapping a new project from scratch, and `mission` for adding a new mission to an existing project.
+
+---
+
+## raccoon create project
+
 ```bash
 raccoon create project <name>
+raccoon create project <name> --path /path/to/parent/dir
+raccoon create project <name> --no-wizard
 ```
-With this command we can create a new Raccoon Project with the specified name.
 
-Further arguments that can be given:
-- `--path`
-    ```bash
-    raccoon create project TestProject --path /path/to/parent/dir
-    ```
-    With the given option `--path` you can tell Raccoon to create the project in a specific directory.
-    
-    Default is the current directory.
-- `--no-wizard`
-  ```bash
-  raccoon create project TestProject --no-wizard
-  ```
-  The configuration wizard will be skipped for creation. This is not recommended
+Scaffolds a complete project directory, initializes a local git history, and — unless `--no-wizard` is passed — immediately launches the setup wizard to configure hardware.
 
-### Setup-Wizard Steps
-TODO: Move to wizard command section
-1. Establish Connection to Pi
-   2. Pi address (IP or hostname)
-   3. Port
-   4. SSH Username
-5. Project Name (Default: the given name in the command)
-6. Drivetrain Type (mechanum, differential) (Default: mechanum)
-7. Port of the front-left motor (Default: 0)
-8. Is the front-left motor inverted (Default: No)
-9. Port of the front-right motor (Default: 1)
-10. Is the front-right motor inverted (Default: Yes)
-11. Port of the rear-left motor (Default: 2)
-12. Is the rear-left motor inverted (Default: No)
-13. Port of the rear-right motor (Default: 3)
-14. Is the rear-right motor inverted (Default: Yes)
-15. Diameter of the wheel in mm (Default: 60)
-16. Track width (cm, left <-> right wheel centers) (Default: 19)
-17. Wheelbase (cm, front <-> rear axle centers) (Default: 12)
-18. Velocity low-pass alpha (0-1) (Default: 0.8)
-19. Run the guided encoder encoder tick acceleration (Default: No)
-    20. Ticks per wheel revolution (Default: 314159)
+### Options
 
-### What the command does
-1. Creates a new project with the given name and path
-2. Creates project template structure (/src, /src/hardware, /src/missions, etc.)
-3. Creates config files with the given setup values
-   4. `connection.yml` with the connection to the pi
-   5. `hardware.yml` with Settings for the ports
-   6. `missions.yml` with all defined missions
-   7. `motors.yml` settings for the motors
-   8. `robot.yml` settings for the drive, motionPID and odometry
-   9. `servos.yml` settings for the servos
-4. Create a `raccoon.project.yml` with the references to the config files
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--path PATH` | current directory | Parent directory in which to create the project folder |
+| `--no-wizard` | off | Skip the setup wizard. Run `raccoon wizard` later to configure the project. |
 
-## Creating a Mission
+### What it does
+
+1. Creates a new directory `<name>` at the target path
+2. Renders the project scaffold templates into the directory (see structure below)
+3. Assigns a unique UUID to the project in `raccoon.project.yml`
+4. Initializes a local git repository with an initial snapshot commit
+5. Unless `--no-wizard`: prompts for a Pi connection and launches the [setup wizard]({{< ref "/04-raccoon-cli" >}})
+6. Opens PyCharm if available and prints SSH interpreter setup instructions
+
+### Generated project structure
+
+```
+<name>/
+├── raccoon.project.yml       # Main project config — name, UUID, includes
+├── config/
+│   ├── connection.yml        # Pi address, port, SSH user
+│   ├── hardware.yml          # Hardware definitions (motors, servos, sensors)
+│   ├── missions.yml          # Ordered list of missions to run
+│   ├── motors.yml            # Per-motor port and calibration settings
+│   ├── robot.yml             # Drivetrain, odometry, motion PID, physical dims
+│   └── servos.yml            # Servo port and named-position settings
+├── src/
+│   ├── __init__.py
+│   ├── main.py               # Entry point — instantiates Robot and calls start()
+│   ├── hardware/
+│   │   └── __init__.py       # Populated by raccoon codegen
+│   ├── missions/
+│   │   ├── __init__.py
+│   │   └── setup_mission.py  # Pre-built setup mission (calibrate + wait for button)
+│   └── steps/
+│       └── __init__.py       # Place for reusable step helpers
+├── run.sh                    # Convenience script for local execution
+├── upload.sh                 # Convenience script for uploading to the robot
+├── .gitignore
+└── .raccoonignore            # Files excluded from raccoon sync
+```
+
+### Config files
+
+**`raccoon.project.yml`** — the root config file that raccoon reads for every command. It contains the project name and UUID, and pulls in the four subsections via YAML includes:
+
+```yaml
+name: MyRobot
+uuid: 3f2a1b9c-...
+
+robot:       !include 'config/robot.yml'
+missions:    !include 'config/missions.yml'
+definitions: !include 'config/hardware.yml'
+connection:  !include 'config/connection.yml'
+```
+
+**`config/connection.yml`** — stores the Pi's IP address, port, and SSH username. Written automatically by `raccoon connect`.
+
+**`config/hardware.yml`** — lists every hardware component (motors, servos, IMU, sensors). The `_motors` and `_servos` keys merge in the separate `motors.yml` and `servos.yml` files.
+
+**`config/motors.yml`** — one entry per drive motor with port, inversion flag, and calibration data (ticks-to-radians conversion, velocity low-pass filter alpha). Populated by `raccoon wizard` and `raccoon calibrate`.
+
+**`config/robot.yml`** — drivetrain kinematics (type, wheel radius, wheelbase), per-axis velocity PID/feedforward controllers, odometry type, motion PID tuning, and the robot's physical dimensions and start pose.
+
+**`config/missions.yml`** — the ordered list of missions the robot executes. Entries can include an optional mode key:
+
+```yaml
+- SetupMission: setup
+- M01DriveToConeMission
+- M02CollectConeMission
+```
+
+**`config/servos.yml`** — servo port assignments and named positions (e.g. `up: 30`, `down: 160`). Commented-out examples are included in the scaffold.
+
+### Example
+
+```bash
+raccoon create project ConeBot
+# Creates ./ConeBot/, scaffolds all files, initializes git, launches wizard
+
+raccoon create project ConeBot --path ~/robots
+# Creates ~/robots/ConeBot/
+
+raccoon create project ConeBot --no-wizard
+# Scaffolds only — run 'cd ConeBot && raccoon wizard' to configure later
+```
+
+---
+
+## raccoon create mission
+
+```bash
+raccoon create mission <name>
+```
+
+Must be run from inside a project directory (any subdirectory works — raccoon searches upward for `raccoon.project.yml`).
+
+### What it does
+
+1. Converts the name to `snake_case` and `PascalCase`
+2. Creates `src/missions/<snake_case>_mission.py` from the mission template
+3. Appends the mission class name to the `missions` list in `config/missions.yml`
+4. Inserts the corresponding import into `src/main.py`
+
+### Generated mission file
+
+```python
+from libstp import *
+
+from src.hardware.defs import Defs
 
 
+class DriveToConeMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([])
+```
+
+Fill in the `seq([...])` body with libstp steps. See the [Steps documentation]({{< ref "/02-programming/04-steps" >}}) for available steps.
+
+### Naming conventions
+
+raccoon accepts any casing — `PascalCase`, `kebab-case`, or `snake_case` — and normalises it automatically:
+
+| Input | Class name | File |
+|-------|-----------|------|
+| `DriveToZone` | `DriveToZoneMission` | `drive_to_zone_mission.py` |
+| `drive-to-zone` | `DriveToZoneMission` | `drive_to_zone_mission.py` |
+| `drive_to_zone` | `DriveToZoneMission` | `drive_to_zone_mission.py` |
+
+The `Mission` suffix is added automatically. If you accidentally include it in the name (e.g. `DriveToZoneMission`), raccoon strips the duplicate and prints a note.
+
+**Recommended: use an `M##` prefix** to encode the execution order directly in the name. This keeps both the class names and filenames self-documenting:
+
+```bash
+raccoon create mission M01DriveToZone
+raccoon create mission M02CollectSamples
+raccoon create mission M03ReturnToBase
+```
+
+This produces:
+
+```
+src/missions/
+├── m01_drive_to_zone_mission.py     → class M01DriveToZoneMission
+├── m02_collect_samples_mission.py   → class M02CollectSamplesMission
+└── m03_return_to_base_mission.py    → class M03ReturnToBaseMission
+```
+
+And in `config/missions.yml`:
+
+```yaml
+- SetupMission: setup
+- M01DriveToZoneMission
+- M02CollectSamplesMission
+- M03ReturnToBaseMission
+```
+
+> The `M00` slot is reserved by convention for the setup mission that ships with every new project.
+
+### Example
+
+```bash
+cd ConeBot
+
+raccoon create mission M01DriveToGate
+# Created: src/missions/m01_drive_to_gate_mission.py
+# Added:   M01DriveToGateMission to config/missions.yml
+# Imported in src/main.py
+
+raccoon create mission M02CollectBall
+# Created: src/missions/m02_collect_ball_mission.py
+```
