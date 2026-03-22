@@ -15,7 +15,7 @@ Every robot project follows the same file layout. This page explains what each f
 Use the Raccoon CLI to scaffold a new project:
 
 ```bash
-raccoon create my-robot
+raccoon create project MyRobot
 ```
 
 This generates the full directory layout, YAML configuration, and starter Python files. See [Raccoon CLI]({{< ref "04-raccoon-cli" >}}) for details on the CLI commands.

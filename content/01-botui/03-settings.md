@@ -18,8 +18,14 @@ This page provides access to basic system and display settings.
 
 The Wi-Fi settings provide three different operating modes:
 
-**Wi-Fi Client Mode (1)**  
+**Wi-Fi Client Mode (1)**
 Allows the device to connect to existing wireless networks. New networks can be added manually. Once connected, networks are saved automatically, so the password does not need to be entered again. If a saved network is nearby and the robot has no internet connection, it will automatically reconnect to that network.
+
+> **Note:** A USB keyboard must be plugged into the Wombat to type the WiFi password.
+
+Once connected, tap **Device Info** on the WiFi page to see the assigned IP address — you will need this to connect raccoon-cli from your laptop.
+
+**Troubleshooting:** If the robot connects successfully (status turns green) but your laptop cannot reach it, reboot the Wombat. A known network manager bug occasionally requires this.
 
 **Hotspot Mode (2)**  
 Allows the robot to create its own wireless hotspot. The following settings can be configured:

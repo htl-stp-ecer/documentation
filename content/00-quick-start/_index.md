@@ -1,221 +1,261 @@
 ---
 title: "Quick Start"
 author: "Tobias Madlberger"
-date: 2024-01-01
+date: 2026-03-22
 draft: false
 weight: 1
 ---
 
-# Quick Start: From Robot Setup to Running a Program
+# Quick Start
 
-This page covers the **minimum required steps** to go from a freshly assembled robot to a running program. Nothing optional, no detours.
+From unboxed hardware to a driving robot in as few steps as possible.
 
 ---
 
 ## What You Need
 
 **Hardware:**
-- A Wombat controller (Raspberry Pi 3 based) with the Raccoon image flashed to the SD card
-- At least 2 DC motors wired to motor ports 0 and 1
-- A powered battery pack connected to the Wombat
+- Wombat controller with RaccoonOS flashed to the SD card
+- Battery pack
+- At least 2 DC motors wired to motor ports
+- **USB keyboard** — needed once to enter WiFi password on the Wombat
 
 **On your laptop:**
 - Python 3.11 or newer
-- pip (comes with Python)
-- A terminal (Terminal on macOS/Linux, Windows Terminal on Windows)
-
-![Wombat with motors](wombat-with-motors.jpg)
-
-## Step 1 — Power On the Robot
-
-Connect the battery and switch the Wombat on. After a few seconds the touchscreen will show the dashboard with three tiles: **Sensors & Actors**, **Programs**, and **Settings**.
+- A terminal
 
 ---
 
-## Step 2 — Connect Your Laptop with the Robot
+## Step 1 — Flash the SD Card
 
-On your laptop, open your WiFi settings and connect to the network the robot is broadcasting. The robot's IP address is usually **192.168.4.1** and is displayed on the touchscreen.
+Download the latest **RaccoonOS** `.img` file:
 
-> **[PICTURE: Laptop WiFi settings screen selecting the robot's network]**
+> **[TODO: INSERT DOWNLOAD LINK]**
+
+Flash it to the SD card using [Balena Etcher](https://etcher.balena.io/) or [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
+
+Then unscrew the lid on the **back** of the Wombat, insert the SD card, and close it up again.
+
+> If your SD card was pre-flashed (e.g. at a workshop), skip to Step 2.
 
 ---
 
-## Step 3 — Install raccoon on Your Laptop
+## Step 2 — Power On & Connect to a Network
 
-Download the latest release from [htl-stp-ecer/raccoon-cli](https://github.com/htl-stp-ecer/raccoon-cli/releases) and install the two `.whl` files.
+Connect the battery and power on the Wombat. After a few seconds the **BotUI** touchscreen dashboard appears — that's your confirmation it booted correctly.
 
-**Option A — via `gh` CLI:**
+The Wombat supports three connection modes. Open **Settings → WiFi** in BotUI to choose one:
+
+| Mode | When to use |
+|------|-------------|
+| **WiFi Client** | Join your existing WiFi network |
+| **Hotspot** | Wombat creates its own network — your laptop connects to it |
+| **LAN** | Plug in an ethernet cable (peer-to-peer also works) |
+
+For **WiFi Client** mode:
+1. Select **WiFi Client** from the dropdown and click **Connect to WiFi**
+2. Scroll to your network and tap it
+3. Enter the password using a **USB keyboard** plugged into the Wombat
+4. When the status turns green, go back and tap **Device Info** to see the IP address
+
+> Note the IP — you'll need it shortly. Example: `192.168.178.124`
+
+**If the robot isn't reachable after connecting:** this is a known network manager issue. Reboot the Wombat and it will reconnect.
+
+→ See [BotUI documentation]({{< ref "/01-botui" >}}) for full detail on all connection modes.
+
+---
+
+## Step 3 — Install raccoon-cli
+
+raccoon-cli is the tool you use to manage projects, generate code, and run programs on the robot.
+
+**Requires Python 3.11+.**
+
+1. Go to **[github.com/htl-stp-ecer/raccoon-cli/releases](https://github.com/htl-stp-ecer/raccoon-cli/releases)** and find the latest release
+2. Download both `.whl` files
+3. Install them:
 
 ```bash
-gh release download v0.1.25 -R htl-stp-ecer/raccoon-cli -p "*.whl"
-pip install raccoon_transport-0.1.25-py3-none-any.whl raccoon-0.1.25-py3-none-any.whl
+pip install raccoon_transport-*.whl raccoon-*.whl
 ```
 
-**Option B — manual download:**
+> **Ubuntu/Debian:** pip may refuse with `externally-managed-environment`. Add `--break-system-packages`:
+> ```bash
+> pip install --break-system-packages raccoon_transport-*.whl raccoon-*.whl
+> ```
 
-Download the `.whl` files from the release page, then:
+> **"raccoon: command not found"** after installing? Make sure Python's script directory is in your `$PATH`.
+
+Verify it worked:
 
 ```bash
-pip install raccoon_transport-0.1.25-py3-none-any.whl raccoon-0.1.25-py3-none-any.whl
-```
-
-Verify it installed correctly:
-
-```bash
-raccoon --help
+raccoon -h
 ```
 
 You should see a list of available commands.
 
 ---
 
-## Step 4 — Connect raccoon to Your Robot
+## Step 4 — Create a Project
 
-```bash
-raccoon connect 192.168.4.1
-```
-
-raccoon will establish a connection to the robot and save it for future commands. You only need to do this once (or when you switch robots).
-
-Confirm the connection is active:
-
-```bash
-raccoon status
-```
-
----
-
-## Step 5 — Create a New Project
+raccoon only works inside a project folder. Create one first:
 
 ```bash
 raccoon create project MyRobot
 cd MyRobot
 ```
 
-This creates a project folder with the following structure:
-
-```
-MyRobot/
-├── raccoon.project.yml    ← hardware configuration
-├── src/
-│   ├── main.py            ← entry point
-│   ├── hardware/          ← generated files (do not edit manually)
-│   └── missions/          ← your mission files go here
-```
+→ See [Project Structure]({{< ref "/02-programming/01-project-structure" >}}) for an explanation of what gets created.
 
 ---
 
-## Step 6 — Configure Your Hardware
+## Step 5 — Connect to the Robot
+
+```bash
+raccoon connect 192.168.178.124
+```
+
+Replace the IP with the one shown on your Wombat's screen.
+
+On first connect, raccoon will attempt SSH key authentication. If that fails it asks:
+> *"Set up SSH key authentication now?"*
+
+Say **yes**. When prompted for a password, use the Wombat's default credentials:
+- **User:** `pi`
+- **Password:** `raspberrypi`
+
+raccoon will create an SSH key, copy it to the Wombat, and save an API token. From here on, no password is needed.
+
+> **Security:** Change the default password once your setup is complete.
+
+If the robot's IP ever changes, just re-run `raccoon connect <new-IP>`.
+
+---
+
+## Step 6 — Update
+
+If raccoon warns about a version mismatch between your laptop and the robot, run:
+
+```bash
+raccoon update
+```
+
+This checks both sides against the latest release and updates anything that's out of date. It requires the [GitHub CLI (`gh`)](https://cli.github.com/) to be installed and authenticated.
+
+---
+
+## Step 7 — Configure Your Hardware
+
+Run the interactive wizard:
 
 ```bash
 raccoon wizard
 ```
 
-The wizard asks a series of questions:
+It walks you through drivetrain type, motor ports, inversion, and robot dimensions. Answers are saved to `raccoon.project.yml` and the `config/` files.
 
-1. **Drivetrain type** — choose `differential` (2 driven wheels) or `mecanum` (4 omnidirectional wheels)
-2. **Motor ports** — which port number each motor is connected to on the Wombat
-3. **Motor inversion** — whether any motors spin the wrong direction (you can always change this later)
-4. **Robot dimensions** — wheel diameter and track width in millimetres
+**The most critical setting:** all motors must spin **forward** when given a positive power command. Decide which direction is "forward" for your robot, then set `inverted: true` in `config/motors.yml` for any motor that spins the wrong way.
 
-Your answers are saved to `raccoon.project.yml`. You can re-run the wizard at any time to change them.
+> The Wombat can be mounted in any orientation — the software accounts for it.
 
----
-
-## Step 7 — Generate Hardware Code
-
-```bash
-raccoon codegen
-```
-
-This reads your configuration and creates two files:
-
-- `src/hardware/defs.py` — motor and sensor objects
-- `src/hardware/robot.py` — the `Robot` class with your drivetrain
-
-**Do not edit these files manually** — they are overwritten every time you run `codegen`.
+→ See [Robot Definition]({{< ref "/02-programming/02-robot-definition" >}}) for the full YAML reference.
 
 ---
 
-## Step 8 — Calibrate Your Motors
-
-Place the robot on the ground where the wheels can spin freely, then run:
-
-```bash
-raccoon calibrate
-```
-
-The motors will spin while the calibration routine measures their response. When it finishes, the optimal PID and feedforward parameters are saved to your `raccoon.project.yml` automatically.
-
-> **[PICTURE: Robot on the floor with wheels spinning during calibration]**
-
----
-
-## Step 9 — Write a Mission
-
-Open `src/missions/` and create a file called `drive_mission.py`:
-
-```python
-from libstp.mission import Mission
-
-class DriveMission(Mission):
-    def sequence(self):
-        # Drive forward 30 cm
-        self.robot.motion.drive(distance_mm=300)
-
-        # Turn 90 degrees right
-        self.robot.motion.turn(angle_deg=90)
-
-        # Drive forward 20 cm
-        self.robot.motion.drive(distance_mm=200)
-```
-
-Then open `src/main.py` and register the mission:
-
-```python
-from hardware.robot import Robot
-from missions.drive_mission import DriveMission
-
-robot = Robot()
-robot.add_mission(DriveMission)
-robot.start()
-```
-
----
-
-## Step 10 — Run It
+## Step 8 — Run It
 
 ```bash
 raccoon run
 ```
 
-raccoon will automatically sync your project files to the robot and execute `src/main.py`. You will see the robot's output streamed back to your terminal in real time.
+This does everything in one command:
+1. Saves a local checkpoint (safety snapshot)
+2. Syncs your files to the robot
+3. Runs code generation on the robot (`defs.py`, `robot.py`)
+4. Executes `src/main.py`, streaming output to your terminal
+5. Saves another checkpoint and pulls any updated files back
 
-> **[PICTURE: Terminal showing output from raccoon run with the robot moving]**
+You should see the robot boot, run the setup mission, and wait. Press **Ctrl+C** to stop.
+
+A fresh project has no missions yet — you'll see:
+```
+warning  | [Robot]: Robot does not have any missions attached
+```
+That's expected. The robot is running correctly.
+
+---
+
+## Step 9 — Test Basic Motion
+
+Create a smoke test mission:
+
+```bash
+raccoon create mission M01SmokeMission
+```
+
+Open the generated file in `src/missions/m01_smoke_mission.py` and add a simple sequence:
+
+```python
+from libstp import *
+
+
+class M01SmokeMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            drive_forward(30),   # drive 30 cm forward
+            turn_right(90),      # turn 90° right
+        ])
+```
+
+Then register it in `config/missions.yml`:
+
+```yaml
+- SetupMission: setup
+- M01SmokeMission
+```
+
+Run it:
+
+```bash
+raccoon run
+```
+
+The robot should drive forward and turn. Distance and straightness may be off — that's fine for now. What matters is that it moves in the right direction.
+
+**If it doesn't move at all:** check `config/motors.yml` — are the port numbers correct, and is `inverted` set correctly for each motor?
+
+→ See [Missions]({{< ref "/02-programming/03-missions" >}}) and [Steps]({{< ref "/02-programming/04-steps" >}}) for the full API.
 
 ---
 
 ## What Comes Next
 
-Now that your robot is running, explore the rest of the documentation:
+Your robot is running. Here's where to go from here:
 
-- **[Robot UI]({{< ref "/01-botui" >}})** — what you can do from the robot's touchscreen
-- **[Programming guide]({{< ref "/02-programming" >}})** — all motion commands, sensor APIs, and mission patterns
-- **[Web IDE]({{< ref "/03-web-ide" >}})** — build missions visually in the browser
-- **[raccoon-cli reference]({{< ref "/04-raccoon-cli" >}})** — all available commands explained
+| Topic | Where |
+|-------|-------|
+| Make it drive accurately | [Calibration]({{< ref "/02-programming/10-calibration" >}}) |
+| Writing real missions | [Missions]({{< ref "/02-programming/03-missions" >}}) |
+| Sensors, servos, drive system | [Programming Guide]({{< ref "/02-programming" >}}) |
+| Configure sensor positions visually | [Web IDE]({{< ref "/03-web-ide" >}}) — run with `raccoon web` |
+| All CLI commands explained | [raccoon-cli reference]({{< ref "/04-raccoon-cli" >}}) |
+| What you can do from the touchscreen | [BotUI]({{< ref "/01-botui" >}}) |
 
 ---
 
-## Common Problems
+## Optional: IDE Setup (PyCharm)
 
-**"Connection refused" when running `raccoon connect`**  
-Make sure your laptop is connected to the robot's WiFi, not your home network.
+Not required, but gives you full tab completion against the robot's Python environment.
 
-**Motors don't move**  
-Check that the motor cables are firmly seated in the Wombat ports. Verify the port numbers match what you entered in the wizard.
+> Future versions of raccoon will not require this setup.
 
-**Robot drives in the wrong direction**  
-Re-run `raccoon wizard` and flip the `inverted` setting for the affected motor, then re-run `raccoon codegen`.
+**Requires:** PyCharm with a [student license](https://www.jetbrains.com/community/education/).
 
-**Calibration fails immediately**  
-Ensure the battery is sufficiently charged. Low battery prevents motor operation.
+1. Open the project folder in PyCharm
+2. Add an **SSH interpreter** — follow [JetBrains' guide](https://www.jetbrains.com/help/pycharm/configuring-remote-interpreters-via-ssh.html)
+   - Host: your Wombat's IP, User: `pi`, no password (SSH key is already set up)
+3. Choose **"Use existing interpreter"** and select the system Python 3.13+
+4. **Disable automatic file upload** — raccoon handles syncing
+
+PyCharm will index the remote environment and you'll have full completion on all libstp types.
