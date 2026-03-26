@@ -8,7 +8,7 @@ weight: 2
 
 # raccoon create
 
-Two subcommands: `project` for bootstrapping a new project from scratch, and `mission` for adding a new mission to an existing project.
+Create can be used to either create an entirely new project or a mission for an project.
 
 ---
 
@@ -20,14 +20,16 @@ raccoon create project <name> --path /path/to/parent/dir
 raccoon create project <name> --no-wizard
 ```
 
-Scaffolds a complete project directory, initializes a local git history, and — unless `--no-wizard` is passed — immediately launches the setup wizard to configure hardware.
+- Scaffolds a complete project directory,
+- initializes a local git history
+- and unless `--no-wizard` is passed — immediately launches the setup wizard to configure hardware.
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--path PATH` | current directory | Parent directory in which to create the project folder |
-| `--no-wizard` | off | Skip the setup wizard. Run `raccoon wizard` later to configure the project. |
+| Option | Default | Description                                                                                   |
+|--------|---------|-----------------------------------------------------------------------------------------------|
+| `--path PATH` | current directory | Parent directory in which to create the project folder                                        |
+| `--no-wizard` | off | Skip the setup wizard. Run `raccoon wizard` later to configure the project. (Not recommended) |
 
 ### What it does
 
@@ -42,7 +44,6 @@ Scaffolds a complete project directory, initializes a local git history, and —
 
 ```
 <name>/
-├── raccoon.project.yml       # Main project config — name, UUID, includes
 ├── config/
 │   ├── connection.yml        # Pi address, port, SSH user
 │   ├── hardware.yml          # Hardware definitions (motors, servos, sensors)
@@ -62,6 +63,7 @@ Scaffolds a complete project directory, initializes a local git history, and —
 │       └── __init__.py       # Place for reusable step helpers
 ├── run.sh                    # Convenience script for local execution
 ├── upload.sh                 # Convenience script for uploading to the robot
+├── raccoon.project.yml       # Main project config — name, UUID, includes
 ├── .gitignore
 └── .raccoonignore            # Files excluded from raccoon sync
 ```
@@ -79,14 +81,23 @@ missions:    !include 'config/missions.yml'
 definitions: !include 'config/hardware.yml'
 connection:  !include 'config/connection.yml'
 ```
+---
 
 **`config/connection.yml`** — stores the Pi's IP address, port, and SSH username. Written automatically by `raccoon connect`.
 
+---
+
 **`config/hardware.yml`** — lists every hardware component (motors, servos, IMU, sensors). The `_motors` and `_servos` keys merge in the separate `motors.yml` and `servos.yml` files.
+
+---
 
 **`config/motors.yml`** — one entry per drive motor with port, inversion flag, and calibration data (ticks-to-radians conversion, velocity low-pass filter alpha). Populated by `raccoon wizard` and `raccoon calibrate`.
 
+---
+
 **`config/robot.yml`** — drivetrain kinematics (type, wheel radius, wheelbase), per-axis velocity PID/feedforward controllers, odometry type, motion PID tuning, and the robot's physical dimensions and start pose.
+
+---
 
 **`config/missions.yml`** — the ordered list of missions the robot executes. Entries can include an optional mode key:
 

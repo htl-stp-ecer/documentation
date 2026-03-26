@@ -12,8 +12,7 @@ weight: 3
 raccoon connect <IP>
 ```
 
-Connects raccoon to your Wombat robot. Run this once after creating a project, and again any time the robot's IP address changes.
-
+Connects raccoon to your Wombat robot.
 ## What it does
 
 1. Checks that the robot's API server is reachable at `<IP>:8421`
