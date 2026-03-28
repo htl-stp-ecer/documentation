@@ -35,6 +35,7 @@ graph TD
 | Page | What You'll Learn |
 |------|-------------------|
 | [Architecture Overview]({{< ref "00-overview" >}}) | The full layer stack, how pieces connect |
+| [Your First Robot Program]({{< ref "00a-first-robot-program" >}}) | Hands-on tutorial: drive, servos, sensors, first mission |
 | [Project Structure]({{< ref "01-project-structure" >}}) | Files, folders, and configuration |
 | [Robot Definition]({{< ref "02-robot-definition" >}}) | Declaring hardware, kinematics, and drive |
 | [Missions]({{< ref "03-missions" >}}) | Writing and sequencing missions |
