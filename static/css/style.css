@@ -78,6 +78,9 @@ body {
 }
 
 .site-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--amber);
@@ -883,5 +886,153 @@ div.contributor-photo-placeholder {
 
     .contributor-socials {
         justify-content: center;
+    }
+}
+
+/* ─── Header raccoon icon ────────────────────────────────── */
+.header-raccoon-icon {
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    flex-shrink: 0;
+    /* Tint to cream on the dark header */
+    filter: invert(95%) sepia(10%) saturate(300%) hue-rotate(330deg) brightness(105%);
+    opacity: 0.85;
+}
+
+/* ─── Home Hero ──────────────────────────────────────────── */
+.home-hero {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 280px;
+    padding: 48px 40px 40px;
+    margin: -40px -40px 0 -40px;
+    background: var(--bg-deeper);
+    border-bottom: 2px solid var(--amber);
+    overflow: hidden;
+}
+
+.hero-text {
+    position: relative;
+    z-index: 2;
+    max-width: 460px;
+}
+
+.hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+}
+
+.hero-title {
+    font-size: 3.8rem;
+    font-weight: 700;
+    color: var(--cream);
+    line-height: 1.0;
+    letter-spacing: 0.02em;
+    margin: 0 0 8px;
+}
+
+.hero-tagline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    color: var(--amber);
+    font-weight: 500;
+    margin: 0 0 6px;
+}
+
+.hero-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--dim);
+    font-style: italic;
+    letter-spacing: 0.04em;
+    margin: 0;
+}
+
+.hero-divider {
+    width: 80px;
+    height: 2px;
+    background: rgba(218, 160, 62, 0.5);
+    margin: 20px 0;
+    border-radius: 1px;
+}
+
+.hero-cta {
+    display: inline-block;
+    padding: 10px 22px;
+    background: var(--amber);
+    color: var(--bg-deeper);
+    font-weight: 700;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    text-decoration: none;
+    border: none;
+    transition: background 0.15s, color 0.15s;
+    letter-spacing: 0.02em;
+}
+
+.hero-cta:hover {
+    background: var(--cream);
+    color: var(--bg-deeper);
+    border-bottom: none;
+}
+
+.hero-raccoon {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 340px;
+    height: 340px;
+    pointer-events: none;
+    /* Fade left edge into bg */
+    mask-image: linear-gradient(to right, transparent 0%, black 35%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 35%);
+}
+
+.raccoon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    /* Tint to cream, dim it so it feels like a watermark */
+    filter: invert(95%) sepia(10%) saturate(300%) hue-rotate(330deg) brightness(105%);
+    opacity: 0.12;
+}
+
+/* Separate content section from hero */
+.home-body {
+    margin-top: 20px;
+}
+
+/* Hide the redundant H1 on the home page (hero already has the title) */
+.home-body > h1:first-child {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .home-hero {
+        margin: -20px -20px 0 -20px;
+        padding: 36px 20px 32px;
+        min-height: auto;
+    }
+
+    .hero-title {
+        font-size: 2.6rem;
+    }
+
+    .hero-raccoon {
+        width: 200px;
+        height: 200px;
+        right: -10px;
     }
 }

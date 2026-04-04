@@ -5,7 +5,10 @@
             <span></span>
             <span></span>
         </button>
-        <a href="/" class="site-title">{{ .Site.Title }}</a>
+        <a href="/" class="site-title">
+            <img src="/images/raccoon.svg" alt="" class="header-raccoon-icon">
+            {{ .Site.Title }}
+        </a>
         <div class="header-search">
             <input type="search" placeholder="Search docs..." class="search-input" id="search-input" autocomplete="off">
             <div class="search-results" id="search-results"></div>
