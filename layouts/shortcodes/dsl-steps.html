@@ -3,212 +3,456 @@
 {{ errorf "dsl_steps.json not found in data/ – the CI fetch step must provide it" }}
 {{ else }}
 
-<div class="dsl-filter">
-    <input type="text" id="dsl-search" placeholder="Search steps by name, tag, or description..." />
-    <div id="dsl-tag-chips" class="dsl-tag-chips"></div>
+<div class="dsl-widget">
+
+  <div class="dsl-toolbar">
+    <input type="text" id="dsl-search" class="dsl-search-input"
+           placeholder="Search steps by name, tag, or description…"
+           autocomplete="off" spellcheck="false">
+    <div id="dsl-tag-chips" class="dsl-chips"></div>
+  </div>
+
+  <div id="dsl-count" class="dsl-count"></div>
+  <div id="dsl-list" class="dsl-list"></div>
+
 </div>
 
-<div id="dsl-count" class="dsl-count"></div>
-
-<div id="dsl-list">
+{{/* Render steps as invisible data carriers — JS builds the visible UI */}}
+<div id="dsl-data" hidden>
 {{ range $steps }}
-<details class="dsl-step" data-tags="{{ delimit .tags "," }}" data-name="{{ .name }}">
-    <summary class="dsl-step-header">
-        <code class="dsl-step-sig">{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}</code>
-        <div class="dsl-step-meta">
-            <div class="dsl-step-tags">
-                {{ range .tags }}<span class="dsl-tag">{{ . }}</span>{{ end }}
-            </div>
-        </div>
-    </summary>
-    <div class="dsl-step-body">
-        {{ if .docstring }}
-        <div class="dsl-step-doc">{{ .docstring | markdownify }}</div>
-        {{ end }}
-        {{ $apiPath := replace .module "." "/" }}
-        <div class="dsl-step-module"><a href="/api/autoapi/{{ $apiPath }}/index.html" target="_blank">{{ .module }}</a></div>
-    </div>
-</details>
+<div class="dsl-raw"
+     data-name="{{ .name }}"
+     data-tags="{{ delimit .tags "," }}"
+     data-sig="{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}"
+     data-module="{{ .module }}">
+  <div class="dsl-raw-doc">{{ if .docstring }}{{ .docstring | markdownify }}{{ end }}</div>
+</div>
 {{ end }}
 </div>
 
 <script>
-(function() {
-    var search = document.getElementById('dsl-search');
-    var steps = document.querySelectorAll('.dsl-step');
-    var chipContainer = document.getElementById('dsl-tag-chips');
-    var countEl = document.getElementById('dsl-count');
-    var activeTag = null;
+(function () {
+  /* ── Tag → colour class mapping ────────────────────── */
+  const TAG_HUE = {
+    calibration: 'tag-rust',
+    drive:       'tag-sky',
+    motion:      'tag-sky',
+    control:     'tag-amber',
+    concurrent:  'tag-amber',
+    sensor:      'tag-green',
+    light:       'tag-green',
+    servo:       'tag-berry',
+    timing:      'tag-dim',
+    wait:        'tag-dim',
+    ui:          'tag-dim',
+    distance:    'tag-dim',
+    motor:       'tag-sky',
+    deadzone:    'tag-dim',
+  };
+  function tagClass(t) { return TAG_HUE[t] || 'tag-dim'; }
 
-    var allTags = {};
-    steps.forEach(function(step) {
-        step.dataset.tags.split(',').forEach(function(t) {
-            if (t) allTags[t] = (allTags[t] || 0) + 1;
-        });
+  /* ── Extract first sentence from raw text ─────────── */
+  function firstSentence(el) {
+    const raw = el.textContent.trim();
+    const m   = raw.match(/^[^.!?\n]+[.!?]/);
+    return (m ? m[0] : raw.split('\n')[0]).trim();
+  }
+
+  /* ── Pretty-print: break signature at commas ─────── */
+  function funcName(sig) {
+    const m = sig.match(/^(\w+)\s*\(/);
+    return m ? m[1] : sig;
+  }
+
+  /* ── Read raw step elements ───────────────────────── */
+  const rawEls  = Array.from(document.querySelectorAll('.dsl-raw'));
+  const allSteps = rawEls.map(el => ({
+    name:    el.dataset.name,
+    tags:    el.dataset.tags ? el.dataset.tags.split(',').filter(Boolean) : [],
+    sig:     el.dataset.sig,
+    module:  el.dataset.module,
+    docEl:   el.querySelector('.dsl-raw-doc'),
+    brief:   firstSentence(el.querySelector('.dsl-raw-doc')),
+  }));
+
+  /* ── Collect all tags + counts ─────────────────────── */
+  const tagCount = {};
+  allSteps.forEach(s => s.tags.forEach(t => { tagCount[t] = (tagCount[t]||0)+1; }));
+  const sortedTags = Object.keys(tagCount).sort();
+
+  /* ── Build tag chip bar ─────────────────────────────── */
+  const chipBar = document.getElementById('dsl-tag-chips');
+  let activeTag = null;
+  sortedTags.forEach(tag => {
+    const btn = document.createElement('button');
+    btn.className = 'dsl-chip ' + tagClass(tag);
+    btn.textContent = tag + ' · ' + tagCount[tag];
+    btn.dataset.tag = tag;
+    btn.addEventListener('click', () => {
+      if (activeTag === tag) {
+        activeTag = null;
+        btn.classList.remove('active');
+      } else {
+        activeTag = tag;
+        document.querySelectorAll('.dsl-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      render();
+    });
+    chipBar.appendChild(btn);
+  });
+
+  /* ── Build a single step <details> card ─────────────── */
+  function buildCard(step) {
+    const details = document.createElement('details');
+    details.className = 'dsl-card';
+
+    // Summary row
+    const summary = document.createElement('summary');
+    summary.className = 'dsl-card-summary';
+
+    const sigWrap = document.createElement('div');
+    sigWrap.className = 'dsl-card-sig-wrap';
+
+    const sigEl = document.createElement('code');
+    sigEl.className = 'dsl-card-sig';
+    sigEl.textContent = step.sig;
+    sigWrap.appendChild(sigEl);
+
+    const brief = document.createElement('span');
+    brief.className = 'dsl-card-brief';
+    brief.textContent = step.brief;
+    sigWrap.appendChild(brief);
+
+    summary.appendChild(sigWrap);
+
+    const meta = document.createElement('div');
+    meta.className = 'dsl-card-meta';
+    step.tags.forEach(t => {
+      const chip = document.createElement('span');
+      chip.className = 'dsl-tag ' + tagClass(t);
+      chip.textContent = t;
+      meta.appendChild(chip);
+    });
+    const arrow = document.createElement('span');
+    arrow.className = 'dsl-expand-arrow';
+    arrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5L7 9L11 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    meta.appendChild(arrow);
+    summary.appendChild(meta);
+
+    details.appendChild(summary);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'dsl-card-body';
+
+    const docDiv = document.createElement('div');
+    docDiv.className = 'dsl-card-doc';
+    docDiv.innerHTML = step.docEl ? step.docEl.innerHTML : '';
+    body.appendChild(docDiv);
+
+    const modEl = document.createElement('div');
+    modEl.className = 'dsl-card-module';
+    const apiPath = step.module.replace(/\./g, '/');
+    modEl.innerHTML = `<a href="/api/autoapi/${apiPath}/index.html" target="_blank">${step.module}</a>`;
+    body.appendChild(modEl);
+
+    details.appendChild(body);
+    return details;
+  }
+
+  /* ── Main render function ────────────────────────────── */
+  const list     = document.getElementById('dsl-list');
+  const countEl  = document.getElementById('dsl-count');
+  const searchEl = document.getElementById('dsl-search');
+
+  function render() {
+    const q = (searchEl.value || '').toLowerCase().replace(/[_\-]/g, ' ').trim();
+
+    // Filter
+    const visible = allSteps.filter(s => {
+      const matchTag    = !activeTag || s.tags.includes(activeTag);
+      const matchSearch = !q || (
+        s.name.toLowerCase().replace(/[_\-]/g,' ').includes(q) ||
+        s.tags.join(' ').includes(q) ||
+        (s.docEl && s.docEl.textContent.toLowerCase().includes(q))
+      );
+      return matchTag && matchSearch;
     });
 
-    Object.keys(allTags).sort().forEach(function(tag) {
-        var chip = document.createElement('button');
-        chip.className = 'dsl-chip';
-        chip.textContent = tag + ' (' + allTags[tag] + ')';
-        chip.dataset.tag = tag;
-        chip.addEventListener('click', function() {
-            if (activeTag === tag) {
-                activeTag = null;
-                chip.classList.remove('active');
-            } else {
-                activeTag = tag;
-                document.querySelectorAll('.dsl-chip').forEach(function(c) { c.classList.remove('active'); });
-                chip.classList.add('active');
-            }
-            filterSteps();
-        });
-        chipContainer.appendChild(chip);
-    });
+    list.innerHTML = '';
+    countEl.textContent = (q || activeTag)
+      ? `Showing ${visible.length} of ${allSteps.length} steps`
+      : `${allSteps.length} steps available`;
 
-    function filterSteps() {
-        var q = search.value.toLowerCase();
-        var totalVisible = 0;
-
-        steps.forEach(function(step) {
-            var name = step.dataset.name.toLowerCase();
-            var tags = step.dataset.tags.toLowerCase();
-            var doc = step.textContent.toLowerCase();
-            var matchSearch = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1 || doc.indexOf(q) !== -1;
-            var matchTag = !activeTag || tags.split(',').indexOf(activeTag) !== -1;
-            var visible = matchSearch && matchTag;
-            step.style.display = visible ? '' : 'none';
-            if (visible) totalVisible++;
-        });
-
-        if (q || activeTag) {
-            countEl.textContent = 'Showing ' + totalVisible + ' of ' + steps.length + ' steps';
-        } else {
-            countEl.textContent = steps.length + ' steps available';
-        }
+    if (visible.length === 0) {
+      list.innerHTML = '<div class="dsl-empty">No steps match this filter.</div>';
+      return;
     }
 
-    search.addEventListener('input', filterSteps);
-    filterSteps();
+    // Group by first tag when not filtering, flat otherwise
+    const grouped = (q || activeTag)
+      ? { '': visible }
+      : (() => {
+          const g = {};
+          visible.forEach(s => {
+            const key = s.tags[0] || 'other';
+            (g[key] = g[key] || []).push(s);
+          });
+          return g;
+        })();
+
+    Object.keys(grouped).sort().forEach(groupKey => {
+      const steps = grouped[groupKey];
+      if (!steps.length) return;
+
+      if (groupKey) {
+        const hdr = document.createElement('div');
+        hdr.className = 'dsl-group-header';
+        hdr.innerHTML = `<span class="dsl-group-bar"></span><span class="dsl-group-name">${groupKey}</span><span class="dsl-group-count">${steps.length}</span>`;
+        list.appendChild(hdr);
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'dsl-group-steps';
+      steps.forEach(s => grid.appendChild(buildCard(s)));
+      list.appendChild(grid);
+    });
+  }
+
+  searchEl.addEventListener('input', render);
+  render();
 })();
 </script>
 
 <style>
-.dsl-filter { margin-bottom: 0.75rem; }
-#dsl-search {
-    width: 100%;
-    padding: 0.6rem 0.85rem;
-    font-size: 0.95rem;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    box-sizing: border-box;
-    outline: none;
-    transition: border-color 0.15s;
+/* ── Widget shell ─────────────────────────────────────── */
+.dsl-widget {
+  margin-top: 1.5rem;
 }
-#dsl-search:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
 
-.dsl-tag-chips {
-    display: flex; flex-wrap: wrap; gap: 0.35rem;
-    margin-top: 0.6rem;
+/* ── Toolbar ─────────────────────────────────────────── */
+.dsl-toolbar {
+  margin-bottom: 1rem;
+}
+.dsl-search-input {
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: var(--bg-med);
+  border: 1px solid var(--bg-warm);
+  border-radius: 6px;
+  color: var(--cream);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.dsl-search-input::placeholder { color: var(--dim); }
+.dsl-search-input:focus { border-color: var(--amber); }
+
+/* ── Tag chips ───────────────────────────────────────── */
+.dsl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
 }
 .dsl-chip {
-    background: #f1f5f9; color: #475569;
-    border: 1px solid #e2e8f0;
-    padding: 0.15rem 0.55rem;
-    border-radius: 14px; font-size: 0.72rem;
-    cursor: pointer; transition: all 0.15s;
-    font-family: inherit;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  border: 1px solid var(--bg-warm);
+  background: var(--bg-med);
+  color: var(--dim);
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
 }
-.dsl-chip:hover { background: #e2e8f0; }
-.dsl-chip.active { background: #6366f1; color: white; border-color: #6366f1; }
+.dsl-chip:hover { border-color: var(--dim); color: var(--cream); }
+.dsl-chip.active { background: var(--amber); color: var(--bg-deeper); border-color: var(--amber); }
 
+/* ── Count label ─────────────────────────────────────── */
 .dsl-count {
-    font-size: 0.82rem; color: #94a3b8;
-    margin-bottom: 1rem;
+  font-size: 0.78rem;
+  color: var(--dim);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 1.25rem;
+  letter-spacing: 0.02em;
 }
 
-#dsl-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
+/* ── Group header ────────────────────────────────────── */
+.dsl-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--bg-warm);
+}
+.dsl-group-header:first-child { margin-top: 0; }
+.dsl-group-bar {
+  display: inline-block;
+  width: 4px;
+  height: 1.1em;
+  background: var(--amber);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.dsl-group-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--cream);
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+.dsl-group-count {
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--dim);
+  margin-left: auto;
 }
 
-.dsl-step {
-    border: 1px solid #e8ecf1;
-    border-radius: 7px;
-    background: white;
-    transition: border-color 0.15s;
+/* ── Step grid ───────────────────────────────────────── */
+.dsl-group-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
-.dsl-step:hover { border-color: #c7d2fe; }
-.dsl-step > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 0.5rem 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+
+/* ── Step card ───────────────────────────────────────── */
+.dsl-card {
+  background: var(--bg-med);
+  border: 1px solid var(--bg-warm);
+  border-radius: 6px;
+  transition: border-color 0.15s;
+  overflow: hidden;
 }
-.dsl-step > summary::-webkit-details-marker { display: none; }
-.dsl-step-sig {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #1e293b;
-    word-break: break-all;
+.dsl-card:hover { border-color: rgba(218,160,62,0.4); }
+.dsl-card[open] { border-color: rgba(218,160,62,0.6); }
+
+.dsl-card-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  user-select: none;
 }
-.dsl-step-meta { display: flex; align-items: center; gap: 0.5rem; }
-.dsl-step-tags { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.dsl-card-summary::-webkit-details-marker { display: none; }
+.dsl-card-summary:focus-visible { outline: 2px solid var(--amber); }
+
+.dsl-card-sig-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dsl-card-sig {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--amber);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.dsl-card[open] .dsl-card-sig {
+  white-space: normal;
+  word-break: break-all;
+}
+.dsl-card-brief {
+  font-size: 0.8rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.dsl-card[open] .dsl-card-brief { display: none; }
+
+.dsl-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* ── Inline tags ─────────────────────────────────────── */
 .dsl-tag {
-    background: #f1f5f9; color: #64748b;
-    padding: 0.08rem 0.45rem;
-    border-radius: 10px; font-size: 0.68rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
+.tag-amber { background: rgba(218,160,62,0.15); color: var(--amber); }
+.tag-sky   { background: rgba(120,160,190,0.15); color: var(--sky);   }
+.tag-green { background: rgba(106,153, 78,0.15); color: var(--green); }
+.tag-rust  { background: rgba(186,100, 60,0.15); color: var(--rust);  }
+.tag-berry { background: rgba(148, 90,120,0.15); color: var(--berry); }
+.tag-dim   { background: rgba(200,185,165,0.1);  color: var(--dim);   }
 
-.dsl-step-body {
-    padding: 0.5rem 0.75rem 0.65rem;
-    border-top: 1px solid #f1f5f9;
+/* ── Expand arrow ────────────────────────────────────── */
+.dsl-expand-arrow {
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease, color 0.15s;
+  flex-shrink: 0;
 }
-.dsl-step-doc {
-    font-size: 0.85rem;
-    color: #374151;
-    line-height: 1.55;
+.dsl-card[open] .dsl-expand-arrow { transform: rotate(180deg); color: var(--amber); }
+
+/* ── Card body ───────────────────────────────────────── */
+.dsl-card-body {
+  padding: 0.75rem 0.9rem 0.85rem;
+  border-top: 1px solid var(--bg-warm);
+  background: rgba(26,21,17,0.4);
 }
-.dsl-step-doc p { margin: 0.3rem 0; }
-.dsl-step-doc p:first-child { margin-top: 0; }
-.dsl-step-doc code {
-    background: #f1f5f9;
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    font-size: 0.8rem;
+.dsl-card-doc {
+  font-size: 0.84rem;
+  color: var(--cream);
+  line-height: 1.6;
 }
-.dsl-step-doc pre {
-    background: #1e293b;
-    color: #e2e8f0;
-    padding: 0.65rem 0.85rem;
-    border-radius: 6px;
-    overflow-x: auto;
-    font-size: 0.8rem;
-    margin: 0.5rem 0;
+.dsl-card-doc p       { margin: 0.4rem 0; }
+.dsl-card-doc p:first-child { margin-top: 0; }
+.dsl-card-doc code    { background: var(--bg-warm); color: var(--amber); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.8em; }
+.dsl-card-doc pre     { background: var(--bg-deeper); color: var(--cream); padding: 0.75rem 0.9rem; border-radius: 5px; overflow-x: auto; font-size: 0.8rem; margin: 0.6rem 0; border-left: 3px solid var(--amber); }
+.dsl-card-doc pre code { background: none; padding: 0; color: inherit; }
+.dsl-card-doc ul, .dsl-card-doc ol { margin: 0.35rem 0; padding-left: 1.5rem; }
+.dsl-card-doc li      { margin: 0.15rem 0; }
+.dsl-card-doc strong  { color: var(--cream); }
+
+.dsl-card-module {
+  margin-top: 0.7rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bg-warm);
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
 }
-.dsl-step-doc pre code {
-    background: none;
-    padding: 0;
-    color: inherit;
+.dsl-card-module a {
+  color: var(--dim);
+  text-decoration: none;
+  border: none;
+  opacity: 0.8;
+  transition: color 0.15s, opacity 0.15s;
 }
-.dsl-step-doc ul, .dsl-step-doc ol { margin: 0.3rem 0; padding-left: 1.5rem; }
-.dsl-step-doc li { margin: 0.15rem 0; }
-.dsl-step-module {
-    margin-top: 0.45rem;
-    font-size: 0.75rem;
+.dsl-card-module a:hover { color: var(--amber); opacity: 1; }
+
+/* ── Empty state ─────────────────────────────────────── */
+.dsl-empty {
+  color: var(--dim);
+  font-size: 0.9rem;
+  padding: 2rem 0;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
 }
-.dsl-step-module a {
-    color: #6366f1;
-    text-decoration: none;
-    opacity: 0.7;
-    transition: opacity 0.15s;
-}
-.dsl-step-module a:hover { opacity: 1; text-decoration: underline; }
 </style>
 
 {{ end }}
