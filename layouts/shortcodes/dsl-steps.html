@@ -222,7 +222,7 @@
       .map(x => x.s);
 
     list.innerHTML = '';
-    countEl.textContent = (q || activeTag)
+    countEl.textContent = (raw || activeTag)
       ? `Showing ${visible.length} of ${allSteps.length} steps`
       : `${allSteps.length} steps available`;
 
@@ -232,7 +232,7 @@
     }
 
     // Group by first tag when not filtering, flat otherwise
-    const grouped = (q || activeTag)
+    const grouped = (raw || activeTag)
       ? { '': visible }
       : (() => {
           const g = {};
