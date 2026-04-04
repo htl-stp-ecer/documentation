@@ -102,12 +102,135 @@
     chipBar.appendChild(btn);
   });
 
-  /* ── Build a single step <details> card ─────────────── */
+  /* ── Signature parser ───────────────────────────────── */
+  function parseSig(sig) {
+    const m = sig.match(/^(\w+)\s*\(([\s\S]*)\)\s*$/);
+    if (!m) return { name: sig, params: [] };
+    const name = m[1];
+    const argsStr = m[2].trim();
+    if (!argsStr) return { name, params: [] };
+    // Split at top-level commas
+    const parts = []; let depth = 0, cur = '';
+    for (const ch of argsStr) {
+      if ('[({'.includes(ch)) depth++;
+      else if ('])}'.includes(ch)) depth--;
+      else if (ch === ',' && depth === 0) { parts.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    const params = parts.map(p => {
+      let d = 0, ci = -1;
+      for (let i = 0; i < p.length; i++) {
+        if ('[({'.includes(p[i])) d++;
+        else if ('])}'.includes(p[i])) d--;
+        else if (p[i] === ':' && d === 0) { ci = i; break; }
+      }
+      if (ci === -1) {
+        const ei = p.indexOf('=');
+        return ei === -1 ? { name: p, type: null, dflt: null }
+                         : { name: p.slice(0, ei).trim(), type: null, dflt: p.slice(ei + 1).trim() };
+      }
+      const pname = p.slice(0, ci).trim();
+      const rest  = p.slice(ci + 1).trim();
+      let ed = 0, ei = -1;
+      for (let i = 0; i < rest.length; i++) {
+        if ('[({'.includes(rest[i])) ed++;
+        else if ('])}'.includes(rest[i])) ed--;
+        else if (rest[i] === '=' && ed === 0) { ei = i; break; }
+      }
+      return ei === -1 ? { name: pname, type: rest, dflt: null }
+                       : { name: pname, type: rest.slice(0, ei).trim(), dflt: rest.slice(ei + 1).trim() };
+    });
+    return { name, params };
+  }
+
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── Compact sig: name(p1, p2) for collapsed view ─── */
+  function compactSigHtml(sig) {
+    const { name, params } = parseSig(sig);
+    const ps = params.map(p => `<span class="sig-p">${esc(p.name)}</span>`).join('<span class="sig-sep">, </span>');
+    return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">(</span>${ps}<span class="sig-punc">)</span>`;
+  }
+
+  /* ── Full highlighted sig for expanded view ─────────── */
+  function fullSigHtml(sig) {
+    const { name, params } = parseSig(sig);
+    if (!params.length) return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">()</span>`;
+    const renderParam = p => {
+      let h = `<span class="sig-p">${esc(p.name)}</span>`;
+      if (p.type) h += `<span class="sig-colon">: </span><span class="sig-type">${esc(p.type)}</span>`;
+      if (p.dflt) h += `<span class="sig-eq"> = </span><span class="sig-dflt">${esc(p.dflt)}</span>`;
+      return h;
+    };
+    if (params.length === 1) {
+      return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">(</span>${renderParam(params[0])}<span class="sig-punc">)</span>`;
+    }
+    const lines = params.map((p, i) =>
+      `  ${renderParam(p)}${i < params.length - 1 ? '<span class="sig-punc">,</span>' : ''}`
+    ).join('\n');
+    return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">(</span>\n${lines}\n<span class="sig-punc">)</span>`;
+  }
+
+  /* ── Docstring reformatter ───────────────────────────── */
+  function reformatDoc(docEl, paramMap) {
+    if (!docEl) return null;
+    const div = document.createElement('div');
+    div.innerHTML = docEl.innerHTML;
+    Array.from(div.querySelectorAll('p')).forEach(p => {
+      const text = p.textContent;
+      if (/^Args:\s*\n/.test(text)) {
+        p.replaceWith(buildArgsEl(text, paramMap));
+      } else if (/^Returns:\s*[\n\S]/.test(text)) {
+        const body = text.replace(/^Returns:\s*\n?/, '').trim();
+        const el = document.createElement('div');
+        el.className = 'dsl-section';
+        el.innerHTML = `<div class="dsl-section-label">Returns</div><div class="dsl-section-body">${esc(body)}</div>`;
+        p.replaceWith(el);
+      } else if (/^Examples?::?\s*$/.test(text.trim())) {
+        p.remove();
+      }
+    });
+    return div;
+  }
+
+  function buildArgsEl(text, paramMap) {
+    const lines = text.split('\n').slice(1);
+    const args = []; let cur = null;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const m = line.match(/^[ \t]+(\w+):\s*(.*)/);
+      if (m) { if (cur) args.push(cur); cur = { name: m[1], desc: m[2] }; }
+      else if (cur) cur.desc += ' ' + line.trim();
+    }
+    if (cur) args.push(cur);
+    const el = document.createElement('div');
+    el.className = 'dsl-args';
+    el.innerHTML = '<div class="dsl-section-label">Args</div>';
+    args.forEach(a => {
+      const info = paramMap[a.name] || {};
+      const row = document.createElement('div');
+      row.className = 'dsl-arg-row';
+      let typeHtml = '';
+      if (info.type) typeHtml += `<span class="dsl-arg-type">${esc(info.type)}</span>`;
+      if (info.dflt !== null && info.dflt !== undefined)
+        typeHtml += `<span class="dsl-arg-dflt"> = ${esc(info.dflt)}</span>`;
+      row.innerHTML = `<span class="dsl-arg-name">${esc(a.name)}</span>${typeHtml}<span class="dsl-arg-desc">${a.desc}</span>`;
+      el.appendChild(row);
+    });
+    return el;
+  }
+
+  /* ── Build a single step <details> card ────────────��── */
   function buildCard(step) {
+    const { params } = parseSig(step.sig);
+    const paramMap = {};
+    params.forEach(p => { paramMap[p.name] = { type: p.type, dflt: p.dflt }; });
+
     const details = document.createElement('details');
     details.className = 'dsl-card';
 
-    // Summary row
+    // ── Summary (collapsed) ──────────────────────────────
     const summary = document.createElement('summary');
     summary.className = 'dsl-card-summary';
 
@@ -116,7 +239,7 @@
 
     const sigEl = document.createElement('code');
     sigEl.className = 'dsl-card-sig';
-    sigEl.textContent = step.sig;
+    sigEl.innerHTML = compactSigHtml(step.sig);
     sigWrap.appendChild(sigEl);
 
     const brief = document.createElement('span');
@@ -139,16 +262,23 @@
     arrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5L7 9L11 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     meta.appendChild(arrow);
     summary.appendChild(meta);
-
     details.appendChild(summary);
 
-    // Body
+    // ── Body (expanded) ──────────────────────────────────
     const body = document.createElement('div');
     body.className = 'dsl-card-body';
 
+    // Full signature block
+    const fullSigEl = document.createElement('pre');
+    fullSigEl.className = 'dsl-full-sig';
+    fullSigEl.innerHTML = fullSigHtml(step.sig);
+    body.appendChild(fullSigEl);
+
+    // Reformatted docstring
     const docDiv = document.createElement('div');
     docDiv.className = 'dsl-card-doc';
-    docDiv.innerHTML = step.docEl ? step.docEl.innerHTML : '';
+    const reformatted = reformatDoc(step.docEl, paramMap);
+    if (reformatted) docDiv.appendChild(reformatted);
     body.appendChild(docDiv);
 
     const modEl = document.createElement('div');
@@ -391,24 +521,30 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
+/* Compact collapsed signature */
 .dsl-card-sig {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--amber);
+  font-size: 0.82rem;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+  background: none;
+  padding: 0;
+  border: none;
+  color: inherit;
 }
-.dsl-card[open] .dsl-card-sig {
-  white-space: normal;
-  word-break: break-all;
-}
+.sig-name { color: var(--amber); font-weight: 700; }
+.sig-p    { color: var(--cream); }
+.sig-type { color: var(--sky); }
+.sig-dflt { color: var(--green); }
+.sig-punc, .sig-sep, .sig-colon, .sig-eq { color: var(--dim); }
+
 .dsl-card-brief {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
@@ -416,6 +552,22 @@
   display: block;
 }
 .dsl-card[open] .dsl-card-brief { display: none; }
+
+/* Full syntax-highlighted signature in expanded body */
+.dsl-full-sig {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  background: var(--bg-deeper);
+  border: 1px solid var(--bg-warm);
+  border-left: 3px solid var(--amber);
+  border-radius: 4px;
+  padding: 0.65rem 0.9rem;
+  margin: 0 0 0.9rem;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--cream);
+}
 
 .dsl-card-meta {
   display: flex;
@@ -485,6 +637,58 @@
   transition: color 0.15s, opacity 0.15s;
 }
 .dsl-card-module a:hover { color: var(--amber); opacity: 1; }
+
+/* ── Args table ──────────────────────────────────────── */
+.dsl-section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.4rem;
+  margin-top: 0.8rem;
+}
+.dsl-args { margin-bottom: 0.6rem; }
+.dsl-arg-row {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) minmax(60px, auto) 1fr;
+  gap: 0.3rem 0.75rem;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(74,64,56,0.5);
+  font-size: 0.81rem;
+}
+.dsl-arg-row:last-child { border-bottom: none; }
+.dsl-arg-name {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--cream);
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.dsl-arg-type {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--sky);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.dsl-arg-dflt {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--green);
+  font-size: 0.75rem;
+}
+.dsl-arg-desc { color: var(--dim); line-height: 1.5; }
+
+/* ── Returns / generic section ───────────────────────── */
+.dsl-section { margin: 0.6rem 0; }
+.dsl-section-body {
+  font-size: 0.82rem;
+  color: var(--dim);
+  line-height: 1.55;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--bg-warm);
+}
 
 /* ── Empty state ─────────────────────────────────────── */
 .dsl-empty {
