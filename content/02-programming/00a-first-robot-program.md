@@ -475,6 +475,26 @@ seq([
 
 ---
 
+## See a Complete Project
+
+The code snippets on this page are intentionally minimal — each one teaches one thing. Once you understand the pieces, it helps to see them all working together in a real project.
+
+**[raccoon-example](https://github.com/htl-stp-ecer/raccoon-example)** is a clean reference robot that demonstrates everything on this page in a single, readable codebase:
+
+- `m00_setup_mission.py` — servo homing, `calibrate()`, `wait_for_button()`  
+- `m01_navigate_to_object_mission.py` — `mark_heading_reference()`, `parallel()`, `.until()` with a sensor stop condition  
+- `m02_collect_object_mission.py` — reusable custom step, `wall_align_backward()`  
+- `m03_deliver_object_mission.py` — `strafe_follow_line_single()`, combined stop conditions  
+- `steps/arm_steps.py` — `seq()` composition and `defer()` for runtime decisions  
+
+It is built with the same patterns as competition robots, but written for clarity rather than speed. The competition robots ([drumbot](https://gitlab.com/fallgame2025/drumbot), [conebot](https://gitlab.com/fallgame2025/conebot), [packingbot](https://gitlab.com/fallgame2025/packingbot)) show what the platform looks like under real pressure — raccoon-example shows what the code *should* look like when you have time to write it properly.
+
+```bash
+git clone https://github.com/htl-stp-ecer/raccoon-example.git
+```
+
+---
+
 ## What to Learn Next
 
 | Topic | When you need it |

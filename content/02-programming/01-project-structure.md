@@ -10,6 +10,20 @@ weight: 2
 
 Every robot project follows the same file layout. This page explains what each file does and how the pieces fit together.
 
+## See It First
+
+Before reading the rest of this page, it helps to have a real project open in front of you.
+
+**[raccoon-example](https://github.com/htl-stp-ecer/raccoon-example)** is a clean reference robot built specifically for documentation purposes — no competition pressure, no half-finished experiments. It demonstrates every concept on this page in a single, readable project:
+
+```bash
+git clone https://github.com/htl-stp-ecer/raccoon-example.git
+```
+
+Open it alongside this page. The file layout, naming conventions, and patterns described below all map directly to files in that repository.
+
+---
+
 ## Creating a Project
 
 Use the Raccoon CLI to scaffold a new project:
