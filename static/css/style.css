@@ -1036,3 +1036,18 @@ div.contributor-photo-placeholder {
         right: -10px;
     }
 }
+
+/* ─── Search result variants ─────────────────────────────── */
+.search-result-item--page .search-result-title {
+    color: var(--amber);
+}
+
+.search-result-page--page {
+    background: rgba(218, 160, 62, 0.15);
+    color: var(--amber);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}

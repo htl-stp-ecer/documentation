@@ -1,73 +1,118 @@
-// Search functionality - searches all headings in markdown files
 let searchIndex = [];
 
-// Load search index
 fetch('/index.json')
-    .then(response => response.json())
-    .then(data => {
-        searchIndex = data;
-    })
-    .catch(error => console.error('Error loading search index:', error));
+    .then(r => r.json())
+    .then(data => { searchIndex = data; })
+    .catch(err => console.error('Search index load failed:', err));
 
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('search-input');
-    const searchResults = document.getElementById('search-results');
-    
-    if (!searchInput || !searchResults) return;
-    
-    searchInput.addEventListener('input', function(e) {
-        const query = e.target.value.trim().toLowerCase();
-        
-        // Clear results if query is empty or too short
-        if (query.length < 2) {
-            searchResults.innerHTML = '';
-            searchResults.style.display = 'none';
+// Normalize: lowercase, collapse underscores/hyphens to spaces, trim
+function normalize(str) {
+    return str.toLowerCase().replace(/[_\-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Score how well a normalized title matches normalized query tokens
+// Higher = better match
+function score(normalizedTitle, queryTokens) {
+    const title = normalizedTitle;
+
+    // Require ALL tokens to be present somewhere in the title (AND semantics)
+    const allPresent = queryTokens.every(tok => title.includes(tok));
+    if (!allPresent) return 0;
+
+    let s = 0;
+
+    // Exact full match
+    if (title === queryTokens.join(' ')) s += 100;
+
+    // Title starts with the full query
+    if (title.startsWith(queryTokens.join(' '))) s += 60;
+
+    // Each token that starts at a word boundary (not mid-word)
+    for (const tok of queryTokens) {
+        const wordBoundary = new RegExp(`(^|\\s)${escapeRegex(tok)}`);
+        if (wordBoundary.test(title)) s += 20;
+        else s += 5; // mid-word match — weaker
+    }
+
+    // Bonus: shorter titles rank above longer ones for the same query
+    s += Math.max(0, 40 - title.length);
+
+    return s;
+}
+
+function escapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightMatch(text, queryTokens) {
+    let result = text;
+    for (const tok of queryTokens) {
+        // Match the original token in the original-case text
+        const re = new RegExp(`(${escapeRegex(tok)})`, 'gi');
+        result = result.replace(re, '<mark>$1</mark>');
+    }
+    return result;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const input   = document.getElementById('search-input');
+    const results = document.getElementById('search-results');
+    if (!input || !results) return;
+
+    input.addEventListener('input', function (e) {
+        const raw   = e.target.value.trim();
+        const query = normalize(raw);
+        const tokens = query.split(' ').filter(t => t.length > 0);
+
+        if (tokens.length === 0 || (tokens.length === 1 && tokens[0].length < 2)) {
+            results.innerHTML = '';
+            results.style.display = 'none';
             return;
         }
-        
-        // Search in heading titles
-        const results = searchIndex.filter(item => 
-            item.title.toLowerCase().includes(query)
-        ).slice(0, 10); // Limit to 10 results
-        
-        // Display results
-        if (results.length > 0) {
-            searchResults.innerHTML = results.map(result => `
-                <a href="${result.url}" class="search-result-item">
-                    <span class="search-result-title">${highlightMatch(result.title, query)}</span>
-                    <span class="search-result-page">in ${result.page}</span>
-                </a>
-            `).join('');
-            searchResults.style.display = 'block';
-        } else {
-            searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
-            searchResults.style.display = 'block';
+
+        // Score every item
+        const scored = searchIndex
+            .map(item => ({
+                item,
+                s: score(normalize(item.title), tokens),
+                // Page-level hits get a category bonus
+                bonus: item.kind === 'page' ? 30 : 0,
+            }))
+            .filter(x => x.s > 0)
+            .map(x => ({ ...x, total: x.s + x.bonus }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 8);
+
+        if (scored.length === 0) {
+            results.innerHTML = '<div class="search-no-results">No results found</div>';
+            results.style.display = 'block';
+            return;
+        }
+
+        results.innerHTML = scored.map(({ item }) => {
+            const isPage = item.kind === 'page';
+            const displayTitle = highlightMatch(item.title, tokens);
+            const sub = isPage
+                ? '<span class="search-result-page search-result-page--page">page</span>'
+                : `<span class="search-result-page">in ${item.page}</span>`;
+            return `<a href="${item.url}" class="search-result-item${isPage ? ' search-result-item--page' : ''}">
+                <span class="search-result-title">${displayTitle}</span>
+                ${sub}
+            </a>`;
+        }).join('');
+        results.style.display = 'block';
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !results.contains(e.target)) {
+            results.style.display = 'none';
         }
     });
-    
-    // Close search results when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.style.display = 'none';
-        }
-    });
-    
-    // Close search results when pressing Escape
-    searchInput.addEventListener('keydown', function(e) {
+
+    input.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
-            searchResults.style.display = 'none';
-            searchInput.blur();
+            results.style.display = 'none';
+            input.blur();
         }
     });
 });
-
-// Highlight matching text
-function highlightMatch(text, query) {
-    const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
-}
-
-// Escape special regex characters
-function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

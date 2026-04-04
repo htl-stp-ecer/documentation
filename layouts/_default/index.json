@@ -1,27 +1,48 @@
 {{- $.Scratch.Add "index" slice -}}
 
+{{- /* Page-level entries — highest priority hits */ -}}
+{{- range .Site.Pages -}}
+    {{- if or (eq .Kind "section") (eq .Kind "page") -}}
+        {{- if ne .Title "" -}}
+            {{- $.Scratch.Add "index" (dict
+                "title" .Title
+                "url"   .Permalink
+                "page"  .Title
+                "kind"  "page"
+            ) -}}
+        {{- end -}}
+    {{- end -}}
+{{- end -}}
+
+{{- /* Heading-level entries — H2 only (H1 duplicates the page title) */ -}}
 {{- range .Site.RegularPages -}}
-    {{- $content := .RawContent -}}
-    {{- $url := .Permalink -}}
     {{- $pageTitle := .Title -}}
-    
-    {{- range findRE `(?m)^#{1,2} (.+)$` $content -}}
-        {{- $heading := replaceRE `^#{1,2} ` "" . -}}
-        {{- $anchor := $heading | urlize -}}
-        {{- $.Scratch.Add "index" (dict "title" $heading "url" (printf "%s#%s" $url $anchor) "page" $pageTitle) -}}
+    {{- $url := .Permalink -}}
+    {{- range findRE `(?m)^## (.+)$` .RawContent -}}
+        {{- $heading := replaceRE `^## ` "" . -}}
+        {{- $anchor  := $heading | urlize -}}
+        {{- $.Scratch.Add "index" (dict
+            "title" $heading
+            "url"   (printf "%s#%s" $url $anchor)
+            "page"  $pageTitle
+            "kind"  "heading"
+        ) -}}
     {{- end -}}
 {{- end -}}
 
 {{- range .Site.Pages -}}
     {{- if eq .Kind "section" -}}
-        {{- $content := .RawContent -}}
-        {{- $url := .Permalink -}}
         {{- $pageTitle := .Title -}}
-        
-        {{- range findRE `(?m)^#{1,2} (.+)$` $content -}}
-            {{- $heading := replaceRE `^#{1,2} ` "" . -}}
-            {{- $anchor := $heading | urlize -}}
-            {{- $.Scratch.Add "index" (dict "title" $heading "url" (printf "%s#%s" $url $anchor) "page" $pageTitle) -}}
+        {{- $url := .Permalink -}}
+        {{- range findRE `(?m)^## (.+)$` .RawContent -}}
+            {{- $heading := replaceRE `^## ` "" . -}}
+            {{- $anchor  := $heading | urlize -}}
+            {{- $.Scratch.Add "index" (dict
+                "title" $heading
+                "url"   (printf "%s#%s" $url $anchor)
+                "page"  $pageTitle
+                "kind"  "heading"
+            ) -}}
         {{- end -}}
     {{- end -}}
 {{- end -}}
