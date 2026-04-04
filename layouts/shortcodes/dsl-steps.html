@@ -161,24 +161,65 @@
     return details;
   }
 
+  /* ── Search helpers ──────────────────────────────────── */
+  function norm(str) {
+    return str.toLowerCase().replace(/[_\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  function escRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  // True if token appears at a word boundary (not inside another word)
+  function wordMatch(text, tok) {
+    return new RegExp('(?:^|[^a-z])' + escRe(tok) + '(?:[^a-z]|$)').test(text);
+  }
+  // Score: 0 = no match, higher = better
+  function scoreStep(step, tokens) {
+    if (!tokens.length) return 1;
+    const normName  = norm(step.name);
+    const normTags  = step.tags.map(norm).join(' ');
+    const normBrief = norm(step.brief);
+    const normDoc   = step.docEl ? norm(step.docEl.textContent) : '';
+
+    // All tokens must match somewhere (AND)
+    const allMatch = tokens.every(tok =>
+      normName.includes(tok) || normTags.includes(tok) ||
+      normBrief.includes(tok) || normDoc.includes(tok)
+    );
+    if (!allMatch) return 0;
+
+    let s = 0;
+    // Name matches are the strongest signal
+    const nameAllMatch = tokens.every(tok => normName.includes(tok));
+    if (nameAllMatch) {
+      if (normName === tokens.join(' '))        s += 100; // exact
+      else if (normName.startsWith(tokens[0])) s += 60;  // starts with
+      else tokens.forEach(tok => { if (wordMatch(normName, tok)) s += 30; else s += 10; });
+    }
+    // Tag matches
+    tokens.forEach(tok => { if (normTags.includes(tok)) s += 20; });
+    // Brief (first sentence) — word-boundary only to avoid noise
+    tokens.forEach(tok => { if (wordMatch(normBrief, tok)) s += 8; });
+    // Full docstring — only word-boundary hits count here
+    tokens.forEach(tok => { if (wordMatch(normDoc, tok)) s += 2; });
+
+    return s;
+  }
+
   /* ── Main render function ────────────────────────────── */
   const list     = document.getElementById('dsl-list');
   const countEl  = document.getElementById('dsl-count');
   const searchEl = document.getElementById('dsl-search');
 
   function render() {
-    const q = (searchEl.value || '').toLowerCase().replace(/[_\-]/g, ' ').trim();
+    const raw    = (searchEl.value || '').trim();
+    const tokens = norm(raw).split(' ').filter(t => t.length > 0);
 
-    // Filter
-    const visible = allSteps.filter(s => {
-      const matchTag    = !activeTag || s.tags.includes(activeTag);
-      const matchSearch = !q || (
-        s.name.toLowerCase().replace(/[_\-]/g,' ').includes(q) ||
-        s.tags.join(' ').includes(q) ||
-        (s.docEl && s.docEl.textContent.toLowerCase().includes(q))
-      );
-      return matchTag && matchSearch;
-    });
+    // Score + filter
+    const visible = allSteps
+      .map(s => ({ s, score: scoreStep(s, tokens) }))
+      .filter(x => x.score > 0 && (!activeTag || x.s.tags.includes(activeTag)))
+      .sort((a, b) => b.score - a.score)
+      .map(x => x.s);
 
     list.innerHTML = '';
     countEl.textContent = (q || activeTag)
