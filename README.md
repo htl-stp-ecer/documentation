@@ -32,4 +32,5 @@ Pushing to the `main` branch automatically triggers a GitHub Actions workflow th
 
 ## License
 
-CC BY 4.0
+Copyright (C) 2026 Tobias Madlberger  
+Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — see [COPYING](COPYING) for details.
