@@ -167,7 +167,7 @@ This checks both sides against the latest release and updates anything that's ou
 
 ## Step 7 — Configure Your Hardware
 
-Run the interactive wizard:
+`raccoon create project` already asked you for basic hardware settings (drivetrain type, motor ports, etc.) during project creation. If you need to change anything later, run the interactive wizard:
 
 ```bash
 raccoon wizard
@@ -256,6 +256,7 @@ Your robot is running. Here's where to go from here:
 | Topic | Where |
 |-------|-------|
 | Make it drive accurately | [Calibration]({{< ref "/02-programming/10-calibration" >}}) |
+| Add sensors, servos, and other hardware | [Robot Definition]({{< ref "/02-programming/02-robot-definition" >}}) — edit `raccoon.project.yml` |
 | Writing real missions | [Missions]({{< ref "/02-programming/03-missions" >}}) |
 | Sensors, servos, drive system | [Programming Guide]({{< ref "/02-programming" >}}) |
 | Configure sensor positions visually | [Web IDE]({{< ref "/03-web-ide" >}}) — run with `raccoon web` |
