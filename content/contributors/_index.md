@@ -23,9 +23,10 @@ contributors:
     image: "/images/contributors/jakob-schloegl.jpg"
     bio: "Major contributor to the BotUI documentation, including the dashboard, settings, sensors, and installation guides. Helped establish the documentation site infrastructure."
   - name: "Florian Schwanzer"
-    role: "Documentation & CLI"
+    role: "Documentation & CLI & Library"
+    github: "GhostlyAbyss"
     image: "/images/contributors/florian-schwanzer.jpg"
-    bio: "Contributed to the raccoon-cli documentation and helped with project setup and path configuration."
+    bio: "Contributed to the raccoon-cli documentation, added features and helped with project all around."
 ---
 
 # Contributors
