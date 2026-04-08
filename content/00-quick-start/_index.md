@@ -102,6 +102,21 @@ raccoon -h
 
 You should see a list of available commands.
 
+### Optional: Install libstp-stubs (tab completion)
+
+For Python tab completion on libstp types in your IDE, install the stub package:
+
+1. Go to **[github.com/htl-stp-ecer/raccoon-lib/releases](https://github.com/htl-stp-ecer/raccoon-lib/releases)** and download the `libstp_stubs-*.whl` file
+2. Install it:
+
+```bash
+pip install libstp_stubs-*.whl
+```
+
+This is a header-only package — it provides type information for your editor but contains no runtime code.
+
+> This step will be streamlined into the main installation process in a future release.
+
 ---
 
 ## Step 4 — Create a Project
@@ -251,18 +266,6 @@ Your robot is running. Here's where to go from here:
 
 ---
 
-## Optional: IDE Setup (PyCharm)
+## Optional: IDE Setup
 
-Not required, but gives you full tab completion against the robot's Python environment.
-
-> Future versions of raccoon will not require this setup.
-
-**Requires:** PyCharm with a [student license](https://www.jetbrains.com/community/education/).
-
-1. Open the project folder in PyCharm
-2. Add an **SSH interpreter** — follow [JetBrains' guide](https://www.jetbrains.com/help/pycharm/configuring-remote-interpreters-via-ssh.html)
-   - Host: your Wombat's IP, User: `pi`, no password (SSH key is already set up)
-3. Choose **"Use existing interpreter"** and select the system Python 3.13+
-4. **Disable automatic file upload** — raccoon handles syncing
-
-PyCharm will index the remote environment and you'll have full completion on all libstp types.
+Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). If you installed `libstp-stubs` in Step 3, you'll have full tab completion on all libstp types out of the box — no special interpreter configuration needed.

@@ -93,13 +93,13 @@ Every builder inherits these methods from `StepBuilder`:
 
 ## Stop Conditions
 
-Many steps accept a `.until(condition)` clause that controls when the step finishes. Conditions can be combined with `|` (OR), `&` (AND), and `>` (THEN), and grouped with parentheses for complex logic:
+Many steps accept a `.until(condition)` clause that controls when the step finishes. Conditions can be combined with `|` (OR), `&` (AND), and `+` (THEN), and grouped with parentheses for complex logic:
 
 ```python
 drive_forward(speed=0.8).until(on_black(Defs.front.right))
 drive_forward(speed=1.0).until(on_black(Defs.front.right) | after_cm(50))
 drive_forward(speed=1.0).until(
-    after_cm(5) > (on_black(Defs.front.left) & on_black(Defs.front.right))
+    after_cm(5) + (on_black(Defs.front.left) & on_black(Defs.front.right))
 )
 ```
 

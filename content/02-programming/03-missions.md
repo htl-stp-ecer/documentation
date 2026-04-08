@@ -147,10 +147,10 @@ Many steps accept a `.until(condition)` clause that controls when the step finis
 ```python
 drive_forward(speed=0.8).until(on_black(Defs.front.right))
 drive_forward(speed=1.0).until(on_black(Defs.front.right) | after_cm(50))
-drive_forward(speed=1.0).until(after_cm(10) > on_black(Defs.front.right))
+drive_forward(speed=1.0).until(after_cm(10) + on_black(Defs.front.right))
 ```
 
-Conditions can be combined with `|` (OR), `&` (AND), `>` (THEN), and grouped with parentheses for complex logic. See **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** for the full reference.
+Conditions can be combined with `|` (OR), `&` (AND), `+` (THEN), and grouped with parentheses for complex logic. See **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** for the full reference.
 
 ## Control Flow
 

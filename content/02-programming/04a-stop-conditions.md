@@ -20,6 +20,7 @@ drive_forward(speed=0.8).until(on_black(Defs.front.right))
 |-----------|---------------|
 | `on_black(sensor, threshold=0.7)` | IR sensor reads black |
 | `on_white(sensor, threshold=0.7)` | IR sensor reads white |
+| `over_line(sensor)` | Sensor crosses a line (black then white) — shorthand for `on_black(sensor) + on_white(sensor)` |
 | `after_seconds(s)` | Fixed time elapsed |
 | `after_cm(cm)` | Distance traveled (via odometry) |
 | `after_degrees(deg)` | Heading changed by N degrees (via IMU) |
@@ -37,7 +38,7 @@ Conditions can be combined with three operators:
 |----------|---------|-----------------|
 | `A \| B` | OR | Either A or B is true |
 | `A & B` | AND | Both A and B are true |
-| `A > B` | THEN | A becomes true, then B becomes true after that |
+| `A + B` | THEN | A becomes true, then B becomes true after that |
 
 ### OR — Either Condition
 
@@ -66,11 +67,13 @@ Use AND to prevent false triggers: "don't count a black reading until we've driv
 ```python
 # First wait 10 cm, THEN start checking for black
 drive_forward(speed=1.0).until(
-    after_cm(10) > on_black(Defs.front.right)
+    after_cm(10) + on_black(Defs.front.right)
 )
 ```
 
 THEN is like AND but with a strict ordering: the first condition must become true before the second one is even checked. This is different from AND — with AND, both are checked simultaneously from the start; with THEN, the second condition is completely ignored until the first fires.
+
+> **`>` is deprecated — use `+` instead.** The `>` operator works for two-element chains (`A > B`), but Python expands longer chains like `a > b > c` into `(a > b) and (b > c)`, which produces incorrect behavior. The `+` operator does the same thing without this problem and works for any number of chained conditions.
 
 ### Real Example: Driving Over a Line
 
@@ -83,12 +86,12 @@ Imagine the robot needs to drive forward, cross over a black line, and stop at t
 #   3. Then stop at the next black reading (on_black again)
 drive_forward(speed=0.8).until(
     on_black(Defs.front.right)       # Hit the first line
-    > after_cm(5)                    # Drive past it
-    > on_black(Defs.front.right)     # Stop at the next line
+    + after_cm(5)                    # Drive past it
+    + on_black(Defs.front.right)     # Stop at the next line
 )
 ```
 
-You can chain `>` multiple times — each condition must fire in sequence before the next one starts checking.
+You can chain `+` multiple times — each condition must fire in sequence before the next one starts checking.
 
 ### When to Use THEN vs AND
 
@@ -104,7 +107,7 @@ drive_forward(speed=1.0).until(
 
 # THEN: second condition is OFF until the first fires
 drive_forward(speed=1.0).until(
-    after_cm(10) > on_black(Defs.front.right)
+    after_cm(10) + on_black(Defs.front.right)
 )
 # Black detection is completely disabled for the first 10 cm.
 # After 10 cm, it starts checking for black.
@@ -128,7 +131,7 @@ drive_forward(speed=0.8).until(
 # Drive until:
 #   After 5 cm, THEN (black on sensor OR 3 seconds elapsed)
 drive_forward(speed=1.0).until(
-    after_cm(5) > (on_black(Defs.front.right) | after_seconds(3))
+    after_cm(5) + (on_black(Defs.front.right) | after_seconds(3))
 )
 ```
 
@@ -146,7 +149,7 @@ drive_forward(speed=1.0).until(
 #     (black on left AND black on right)  — both sensors see the line
 #     OR after 100 cm                     — safety limit
 drive_forward(speed=0.8).until(
-    after_cm(5) > (
+    after_cm(5) + (
         (on_black(Defs.front.left) & on_black(Defs.front.right))
         | after_cm(100)
     )
@@ -207,7 +210,7 @@ When the robot starts on or near a line, skip it before looking for the next one
 
 ```python
 # Skip first 10 cm, then look for black
-drive_forward(speed=1.0).until(after_cm(10) > on_black(Defs.front.right))
+drive_forward(speed=1.0).until(after_cm(10) + on_black(Defs.front.right))
 ```
 
 ### Dual-Sensor Confirmation
