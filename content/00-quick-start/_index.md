@@ -102,9 +102,7 @@ raccoon -h
 
 You should see a list of available commands.
 
-### Optional: Install libstp-stubs (tab completion)
-
-For Python tab completion on libstp types in your IDE, install the stub package:
+Next, install the **libstp-stubs** package — this is required for code generation and IDE support:
 
 1. Go to **[github.com/htl-stp-ecer/raccoon-lib/releases](https://github.com/htl-stp-ecer/raccoon-lib/releases)** and download the `libstp_stubs-*.whl` file
 2. Install it:
@@ -113,9 +111,9 @@ For Python tab completion on libstp types in your IDE, install the stub package:
 pip install libstp_stubs-*.whl
 ```
 
-This is a header-only package — it provides type information for your editor but contains no runtime code.
+This is a header-only package that ships type definitions used by raccoon's code generation and your editor's tab completion.
 
-> This step will be streamlined into the main installation process in a future release.
+> This will be streamlined into the main installation process in a future release.
 
 ---
 
@@ -268,4 +266,4 @@ Your robot is running. Here's where to go from here:
 
 ## Optional: IDE Setup
 
-Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). If you installed `libstp-stubs` in Step 3, you'll have full tab completion on all libstp types out of the box — no special interpreter configuration needed.
+Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). With `libstp-stubs` installed from Step 3, you'll have full tab completion on all libstp types out of the box — no special interpreter configuration needed.
