@@ -1,3 +1,5 @@
+[![Build and Release Hugo site](https://github.com/htl-stp-ecer/documentation/actions/workflows/hugo.yml/badge.svg)](https://github.com/htl-stp-ecer/documentation/actions/workflows/hugo.yml)
+
 # TechDocs - Product Documentation
 
 A documentation site built with [Hugo](https://gohugo.io/) and deployed to GitHub Pages.
