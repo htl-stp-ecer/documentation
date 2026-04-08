@@ -45,6 +45,8 @@ Then unscrew the lid on the **back** of the Wombat, insert the SD card, and clos
 
 > If your SD card was pre-flashed (e.g. at a workshop), skip to Step 2.
 
+> **Important:** After flashing a new SD card, the Wombat's STM32 co-processor firmware also needs to be updated. Once you've completed setup and can reach the robot, run `raccoon update` (see [Step 6](#step-6--update)) to flash the latest STM32 firmware.
+
 ---
 
 ## Step 2 — Power On & Connect to a Network
