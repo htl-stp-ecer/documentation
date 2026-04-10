@@ -4,6 +4,10 @@
     box-sizing: border-box;
 }
 
+html {
+    overflow-x: hidden;
+}
+
 :root {
     /* RaccoonOS color palette — from presentation.typ */
     --bg-dark:   #2A2421;
@@ -347,6 +351,7 @@ body {
 /* ─── Main Content ───────────────────────────────────────── */
 .main-content {
     flex: 1;
+    min-width: 0;
     margin-left: var(--sidebar-width);
     background: var(--content-bg);
     min-height: calc(100vh - var(--header-height));
@@ -356,8 +361,10 @@ body {
 
 .content-wrapper {
     flex: 1;
+    width: 100%;
     max-width: 900px;
     padding: 40px;
+    min-width: 0;
 }
 
 /* ─── Doc Content ────────────────────────────────────────── */
@@ -373,11 +380,14 @@ body {
     line-height: 1.2;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 15px;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 .doc-meta {
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 8px 20px;
     margin-bottom: 25px;
     font-size: 0.85rem;
     color: var(--dim);
@@ -393,6 +403,8 @@ body {
 .doc-body {
     font-size: 1.0rem;
     line-height: 1.75;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 /* ─── Markdown Typography ────────────────────────────────── */
@@ -548,6 +560,19 @@ p code, li code, td code, th code {
 }
 
 /* ─── Tables ─────────────────────────────────────────────── */
+.table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 6px;
+}
+
+.table-wrapper table {
+    margin: 0;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -840,6 +865,25 @@ div.contributor-photo-placeholder {
     border-radius: 6px;
     padding: 16px;
     margin: 1.4rem 0;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.mermaid svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ─── KaTeX overflow safety ──────────────────────────────── */
+.katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0;
+}
+
+.katex {
+    max-width: 100%;
 }
 
 /* ─── Responsive ─────────────────────────────────────────── */
@@ -849,6 +893,7 @@ div.contributor-photo-placeholder {
     }
 
     .sidebar {
+        width: min(var(--sidebar-width), 88vw);
         transform: translateX(-100%);
         transition: transform 0.25s ease;
     }
@@ -869,6 +914,10 @@ div.contributor-photo-placeholder {
         font-size: 1.6rem;
     }
 
+    .markdown h1 { font-size: 1.55rem; }
+    .markdown h2 { font-size: 1.25rem; }
+    .markdown h3 { font-size: 1.05rem; }
+
     .header-search {
         display: none;
     }
@@ -876,6 +925,17 @@ div.contributor-photo-placeholder {
     .doc-navigation {
         flex-direction: column;
         gap: 10px;
+    }
+
+    .doc-nav-right {
+        margin-left: 0;
+        text-align: left;
+    }
+
+    .doc-nav-prev,
+    .doc-nav-next {
+        display: block;
+        width: 100%;
     }
 
     .contributor-card {
@@ -886,6 +946,60 @@ div.contributor-photo-placeholder {
 
     .contributor-socials {
         justify-content: center;
+    }
+
+    .site-footer {
+        padding: 18px 20px;
+    }
+
+    /* Tighten DSL shortcode cards */
+    .dsl-card-summary {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .dsl-card-meta {
+        flex-wrap: wrap;
+    }
+
+    .dsl-arg-row {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-wrapper {
+        padding: 16px 14px;
+    }
+
+    .doc-title {
+        font-size: 1.4rem;
+    }
+
+    .markdown h1 { font-size: 1.35rem; }
+    .markdown h2 { font-size: 1.15rem; }
+
+    .header-content {
+        padding: 0 14px;
+        gap: 12px;
+    }
+
+    pre {
+        padding: 12px 14px;
+        font-size: 0.82rem;
+    }
+
+    th, td {
+        padding: 9px 11px;
+    }
+
+    .doc-list-item {
+        padding: 14px 14px;
+    }
+
+    .site-footer {
+        padding: 16px 14px;
     }
 }
 
@@ -1026,6 +1140,10 @@ div.contributor-photo-placeholder {
         min-height: auto;
     }
 
+    .hero-text {
+        max-width: 100%;
+    }
+
     .hero-title {
         font-size: 2.6rem;
     }
@@ -1034,6 +1152,24 @@ div.contributor-photo-placeholder {
         width: 200px;
         height: 200px;
         right: -10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .home-hero {
+        margin: -16px -14px 0 -14px;
+        padding: 28px 16px 24px;
+    }
+
+    .hero-title {
+        font-size: 2.1rem;
+    }
+
+    .hero-raccoon {
+        width: 160px;
+        height: 160px;
+        right: -24px;
+        opacity: 0.6;
     }
 }
 
