@@ -34,7 +34,7 @@ jobs:
           # Download the latest docs zip from raccoon-lib releases
           mkdir -p static/api
           gh release download --repo htl-stp-ecer/raccoon-lib \
-            --pattern 'libstp-docs-*.zip' \
+            --pattern 'raccoon-docs-*.zip' \
             --dir /tmp/api-docs || { echo "No docs release found, skipping"; exit 0; }
 
           ZIP=$(ls /tmp/api-docs/libstp-docs-*.zip | head -1)
