@@ -164,6 +164,13 @@
     return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">(</span>\n${lines}\n<span class="sig-punc">)</span>`;
   }
 
+  /* ── Inline ``code`` conversion ─────────────────────── */
+  function inlineCode(s) {
+    return esc(s)
+      .replace(/``([^`]+)``/g, '<code>$1</code>')
+      .replace(/`([^`]+)`/g,   '<code>$1</code>');
+  }
+
   /* ── Inline markup: ``code`` → <code>, paragraphs ──── */
   function renderProse(text) {
     // Escape HTML first, then convert ``code`` spans and paragraph breaks
@@ -244,10 +251,12 @@
           const info = paramMap[a.name] || {};
           const row = document.createElement('div');
           row.className = 'dsl-arg-row';
-          let typeHtml = '';
-          if (info.type) typeHtml += `<span class="dsl-arg-type">${esc(info.type)}</span>`;
-          if (info.dflt != null) typeHtml += `<span class="dsl-arg-dflt"> = ${esc(info.dflt)}</span>`;
-          row.innerHTML = `<span class="dsl-arg-name">${esc(a.name)}</span>${typeHtml}<span class="dsl-arg-desc">${esc(a.desc)}</span>`;
+          // Wrap type + default together so grid gets exactly 3 children: name | meta | desc
+          let metaInner = '';
+          if (info.type)        metaInner += `<span class="dsl-arg-type">${esc(info.type)}</span>`;
+          if (info.dflt != null) metaInner += `<span class="dsl-arg-dflt"> = ${esc(info.dflt)}</span>`;
+          const metaHtml = metaInner ? `<span class="dsl-arg-meta">${metaInner}</span>` : '<span class="dsl-arg-meta"></span>';
+          row.innerHTML = `<span class="dsl-arg-name">${esc(a.name)}</span>${metaHtml}<span class="dsl-arg-desc">${inlineCode(a.desc)}</span>`;
           block.appendChild(row);
         });
         wrap.appendChild(block);
@@ -255,7 +264,7 @@
       } else if (sec.type === 'returns') {
         const block = document.createElement('div');
         block.className = 'dsl-section';
-        block.innerHTML = `<div class="dsl-section-label">Returns</div><div class="dsl-section-body">${esc(sec.content)}</div>`;
+        block.innerHTML = `<div class="dsl-section-label">Returns</div><div class="dsl-section-body">${inlineCode(sec.content)}</div>`;
         wrap.appendChild(block);
       }
     });
