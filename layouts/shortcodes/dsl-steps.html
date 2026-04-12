@@ -25,7 +25,7 @@
      data-tags="{{ delimit .tags "," }}"
      data-sig="{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}"
      data-module="{{ .module }}">
-  <div class="dsl-raw-doc">{{ if .docstring }}{{ .docstring | markdownify }}{{ end }}</div>
+  <div class="dsl-raw-doc">{{ if .docstring }}{{ .docstring }}{{ end }}</div>
 </div>
 {{ end }}
 </div>
@@ -51,11 +51,11 @@
   };
   function tagClass(t) { return TAG_HUE[t] || 'tag-dim'; }
 
-  /* ── Extract first sentence from raw text ─────────── */
-  function firstSentence(el) {
-    const raw = el.textContent.trim();
-    const m   = raw.match(/^[^.!?\n]+[.!?]/);
-    return (m ? m[0] : raw.split('\n')[0]).trim();
+  /* ── Extract first sentence from raw docstring ──────── */
+  function firstSentence(raw) {
+    const prose = raw.split(/^(?:Args|Returns|Examples?):/m)[0].trim();
+    const m     = prose.match(/^[^.!?\n]+[.!?]/);
+    return (m ? m[0] : prose.split('\n')[0]).trim();
   }
 
   /* ── Pretty-print: break signature at commas ─────── */
@@ -66,14 +66,17 @@
 
   /* ── Read raw step elements ───────────────────────── */
   const rawEls  = Array.from(document.querySelectorAll('.dsl-raw'));
-  const allSteps = rawEls.map(el => ({
-    name:    el.dataset.name,
-    tags:    el.dataset.tags ? el.dataset.tags.split(',').filter(Boolean) : [],
-    sig:     el.dataset.sig,
-    module:  el.dataset.module,
-    docEl:   el.querySelector('.dsl-raw-doc'),
-    brief:   firstSentence(el.querySelector('.dsl-raw-doc')),
-  }));
+  const allSteps = rawEls.map(el => {
+    const rawDoc = el.querySelector('.dsl-raw-doc').textContent.trim();
+    return {
+      name:    el.dataset.name,
+      tags:    el.dataset.tags ? el.dataset.tags.split(',').filter(Boolean) : [],
+      sig:     el.dataset.sig,
+      module:  el.dataset.module,
+      rawDoc,
+      brief:   firstSentence(rawDoc),
+    };
+  });
 
   /* ── Collect all tags + counts ─────────────────────── */
   const tagCount = {};
@@ -172,53 +175,102 @@
     return `<span class="sig-name">${esc(name)}</span><span class="sig-punc">(</span>\n${lines}\n<span class="sig-punc">)</span>`;
   }
 
-  /* ── Docstring reformatter ───────────────────────────── */
-  function reformatDoc(docEl, paramMap) {
-    if (!docEl) return null;
-    const div = document.createElement('div');
-    div.innerHTML = docEl.innerHTML;
-    Array.from(div.querySelectorAll('p')).forEach(p => {
-      const text = p.textContent;
-      if (/^Args:\s*\n/.test(text)) {
-        p.replaceWith(buildArgsEl(text, paramMap));
-      } else if (/^Returns:\s*[\n\S]/.test(text)) {
-        const body = text.replace(/^Returns:\s*\n?/, '').trim();
-        const el = document.createElement('div');
-        el.className = 'dsl-section';
-        el.innerHTML = `<div class="dsl-section-label">Returns</div><div class="dsl-section-body">${esc(body)}</div>`;
-        p.replaceWith(el);
-      } else if (/^Examples?::?\s*$/.test(text.trim())) {
-        p.remove();
-      }
-    });
-    return div;
+  /* ── Inline markup: ``code`` → <code>, paragraphs ──── */
+  function renderProse(text) {
+    // Escape HTML first, then convert ``code`` spans and paragraph breaks
+    let html = esc(text.trim());
+    html = html.replace(/``([^`]+)``/g, '<code>$1</code>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return html.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, ' ')}</p>`).join('');
   }
 
-  function buildArgsEl(text, paramMap) {
-    const lines = text.split('\n').slice(1);
-    const args = []; let cur = null;
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const m = line.match(/^[ \t]+(\w+):\s*(.*)/);
-      if (m) { if (cur) args.push(cur); cur = { name: m[1], desc: m[2] }; }
-      else if (cur) cur.desc += ' ' + line.trim();
+  /* ── Parse Google-style docstring into sections ───── */
+  function parseDocstring(raw) {
+    if (!raw) return [];
+    const lines  = raw.split('\n');
+    const result = [];
+    let i = 0;
+
+    // Leading prose (before first section header)
+    const textLines = [];
+    while (i < lines.length && !/^(Args|Returns|Examples?):/i.test(lines[i].trim())) {
+      textLines.push(lines[i]);
+      i++;
     }
-    if (cur) args.push(cur);
-    const el = document.createElement('div');
-    el.className = 'dsl-args';
-    el.innerHTML = '<div class="dsl-section-label">Args</div>';
-    args.forEach(a => {
-      const info = paramMap[a.name] || {};
-      const row = document.createElement('div');
-      row.className = 'dsl-arg-row';
-      let typeHtml = '';
-      if (info.type) typeHtml += `<span class="dsl-arg-type">${esc(info.type)}</span>`;
-      if (info.dflt !== null && info.dflt !== undefined)
-        typeHtml += `<span class="dsl-arg-dflt"> = ${esc(info.dflt)}</span>`;
-      row.innerHTML = `<span class="dsl-arg-name">${esc(a.name)}</span>${typeHtml}<span class="dsl-arg-desc">${a.desc}</span>`;
-      el.appendChild(row);
+    const prose = textLines.join('\n').trim();
+    if (prose) result.push({ type: 'text', content: prose });
+
+    while (i < lines.length) {
+      const header = lines[i].trim();
+      i++;
+      if (/^Args:/i.test(header)) {
+        // Collect 4-space-indented arg lines
+        const argLines = [];
+        while (i < lines.length && (lines[i] === '' || /^ {4}/.test(lines[i]))) {
+          argLines.push(lines[i]);
+          i++;
+        }
+        const args = [];
+        let cur = null;
+        for (const line of argLines) {
+          if (!line.trim()) continue;
+          const m = line.match(/^ {4}(\w+):\s*(.*)/);
+          if (m) { if (cur) args.push(cur); cur = { name: m[1], desc: m[2] }; }
+          else if (cur) cur.desc += ' ' + line.trim();
+        }
+        if (cur) args.push(cur);
+        if (args.length) result.push({ type: 'args', args });
+
+      } else if (/^Returns:/i.test(header)) {
+        const retLines = [];
+        while (i < lines.length && (lines[i] === '' || /^ {4}/.test(lines[i]))) {
+          if (lines[i].trim()) retLines.push(lines[i].trim());
+          i++;
+        }
+        if (retLines.length) result.push({ type: 'returns', content: retLines.join(' ') });
+
+      } else if (/^Examples?:/i.test(header)) {
+        // Skip examples block
+        while (i < lines.length && (lines[i] === '' || /^ {4}/.test(lines[i]))) i++;
+      }
+    }
+    return result;
+  }
+
+  /* ── Build doc DOM from raw docstring ───────────────── */
+  function buildDocDiv(rawDoc, paramMap) {
+    const sections = parseDocstring(rawDoc);
+    const wrap = document.createElement('div');
+    sections.forEach(sec => {
+      if (sec.type === 'text') {
+        const p = document.createElement('div');
+        p.innerHTML = renderProse(sec.content);
+        wrap.appendChild(p);
+
+      } else if (sec.type === 'args') {
+        const block = document.createElement('div');
+        block.className = 'dsl-args';
+        block.innerHTML = '<div class="dsl-section-label">Args</div>';
+        sec.args.forEach(a => {
+          const info = paramMap[a.name] || {};
+          const row = document.createElement('div');
+          row.className = 'dsl-arg-row';
+          let typeHtml = '';
+          if (info.type) typeHtml += `<span class="dsl-arg-type">${esc(info.type)}</span>`;
+          if (info.dflt != null) typeHtml += `<span class="dsl-arg-dflt"> = ${esc(info.dflt)}</span>`;
+          row.innerHTML = `<span class="dsl-arg-name">${esc(a.name)}</span>${typeHtml}<span class="dsl-arg-desc">${esc(a.desc)}</span>`;
+          block.appendChild(row);
+        });
+        wrap.appendChild(block);
+
+      } else if (sec.type === 'returns') {
+        const block = document.createElement('div');
+        block.className = 'dsl-section';
+        block.innerHTML = `<div class="dsl-section-label">Returns</div><div class="dsl-section-body">${esc(sec.content)}</div>`;
+        wrap.appendChild(block);
+      }
     });
-    return el;
+    return wrap;
   }
 
   /* ── Build a single step <details> card ────────────��── */
@@ -274,11 +326,10 @@
     fullSigEl.innerHTML = fullSigHtml(step.sig);
     body.appendChild(fullSigEl);
 
-    // Reformatted docstring
+    // Rendered docstring
     const docDiv = document.createElement('div');
     docDiv.className = 'dsl-card-doc';
-    const reformatted = reformatDoc(step.docEl, paramMap);
-    if (reformatted) docDiv.appendChild(reformatted);
+    if (step.rawDoc) docDiv.appendChild(buildDocDiv(step.rawDoc, paramMap));
     body.appendChild(docDiv);
 
     const modEl = document.createElement('div');
@@ -308,7 +359,7 @@
     const normName  = norm(step.name);
     const normTags  = step.tags.map(norm).join(' ');
     const normBrief = norm(step.brief);
-    const normDoc   = step.docEl ? norm(step.docEl.textContent) : '';
+    const normDoc   = step.rawDoc ? norm(step.rawDoc) : '';
 
     // All tokens must match somewhere (AND)
     const allMatch = tokens.every(tok =>
