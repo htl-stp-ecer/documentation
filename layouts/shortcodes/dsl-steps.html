@@ -17,21 +17,10 @@
 
 </div>
 
-{{/* Render steps as invisible data carriers — JS builds the visible UI */}}
-<div id="dsl-data" hidden>
-{{ range $steps }}
-<div class="dsl-raw"
-     data-name="{{ .name }}"
-     data-tags="{{ delimit .tags "," }}"
-     data-sig="{{ if .signature }}{{ .signature }}{{ else }}{{ .name }}(){{ end }}"
-     data-module="{{ .module }}">
-  <div class="dsl-raw-doc">{{ if .docstring }}{{ .docstring }}{{ end }}</div>
-</div>
-{{ end }}
-</div>
-
 <script>
 (function () {
+  /* ── Step data injected by Hugo ─────────────────────── */
+  const stepsJson = {{ $steps | jsonify | safeJS }};
   /* ── Tag → colour class mapping ────────────────────── */
   const TAG_HUE = {
     calibration: 'tag-rust',
@@ -64,17 +53,17 @@
     return m ? m[1] : sig;
   }
 
-  /* ── Read raw step elements ───────────────────────── */
-  const rawEls  = Array.from(document.querySelectorAll('.dsl-raw'));
-  const allSteps = rawEls.map(el => {
-    const rawDoc = el.querySelector('.dsl-raw-doc').textContent.trim();
+  /* ── Map JSON to step objects ────────────────────── */
+  const allSteps = stepsJson.map(s => {
+    const rawDoc = s.docstring || '';
+    const sig    = s.signature || (s.name + '()');
     return {
-      name:    el.dataset.name,
-      tags:    el.dataset.tags ? el.dataset.tags.split(',').filter(Boolean) : [],
-      sig:     el.dataset.sig,
-      module:  el.dataset.module,
+      name:   s.name,
+      tags:   s.tags || [],
+      sig,
+      module: s.module || '',
       rawDoc,
-      brief:   firstSentence(rawDoc),
+      brief:  firstSentence(rawDoc),
     };
   });
 
