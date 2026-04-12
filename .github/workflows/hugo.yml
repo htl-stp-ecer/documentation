@@ -37,7 +37,7 @@ jobs:
             --pattern 'raccoon-docs-*.zip' \
             --dir /tmp/api-docs || { echo "No docs release found, skipping"; exit 0; }
 
-          ZIP=$(ls /tmp/api-docs/libstp-docs-*.zip | head -1)
+          ZIP=$(ls /tmp/api-docs/raccoon-docs-*.zip | head -1)
           echo "Extracting $ZIP into static/api/"
           unzip -o "$ZIP" -d static/api/
 
