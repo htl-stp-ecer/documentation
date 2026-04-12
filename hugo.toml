@@ -2,8 +2,25 @@ baseURL = '/'
 languageCode = 'en-us'
 title = 'Raccoon Wiki'
 
+[outputFormats]
+  [outputFormats.llmstxt]
+    name = "llmstxt"
+    mediaType = "text/plain"
+    path = ""
+    baseName = "llms"
+    isPlainText = true
+    notAlternative = true
+
+  [outputFormats.llmstxtfull]
+    name = "llmstxtfull"
+    mediaType = "text/plain"
+    path = ""
+    baseName = "llms-full"
+    isPlainText = true
+    notAlternative = true
+
 [outputs]
-  home = ["HTML", "JSON"]
+  home = ["HTML", "JSON", "llmstxt", "llmstxtfull"]
 
 [markup]
   [markup.goldmark]

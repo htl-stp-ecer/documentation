@@ -14,6 +14,20 @@ LibSTP supports four sensor types: **IR line sensors**, **digital sensors**, **a
 
 IR sensors are the primary tool for line following and line detection. They measure surface reflectivity — black surfaces absorb light (high value), white surfaces reflect it (low value).
 
+### Shielding from Ambient Light
+
+An IR line sensor works by shining its own infrared LED at the table and measuring the bounce-back. The problem is that it can't tell *its* light apart from anyone else's. Overhead fluorescent tubes, halogen stage lamps, a sunbeam through a window, the IR emitters on a neighbouring robot — all of it leaks into the reading. A sensor that was rock-solid on your workshop bench can suddenly see "black" everywhere because the competition venue's ceiling lights are flooding it, or swing between readings every time someone walks past.
+
+The fix is cheap and mechanical: put a physical shroud around each sensor so its field of view is limited to the patch of table directly underneath it. A small collar cut from black paper, black foam board, or even a few layers of electrical tape is usually enough. What matters is:
+
+- **It extends past the front face of the sensor.** A few millimeters of overhang blocks light coming in at an angle, which is where most of the stray IR enters.
+- **It sits close to the table.** Leave about 2–3 mm of clearance so the shroud doesn't scrape the surface, but no more than that — the bigger the gap, the more ambient light slips in from the side.
+- **It's actually opaque to IR.** Matte black paper and foam board are fine. Some glossy black plastics look opaque to your eye but still pass infrared; if in doubt, double it up, or hold it up to a TV remote and see whether the remote still works through it.
+
+Shield the sensors **before** you run `calibrate()`. The K-Means thresholds are only meaningful under the lighting conditions in which the samples were taken — if you calibrate an unshielded sensor in your workshop and then add a shroud at the venue (or vice versa), every threshold on the robot will be wrong and line following will fall apart.
+
+> **Quick check:** After fitting the shrouds, watch a raw IR reading in BotUI while waving a flashlight around the robot — not shining it down through the shroud, but sweeping it past the sides and in front. A well-shielded sensor barely moves. An unshielded one jumps by hundreds or thousands of units, and that is exactly the noise you're going to be fighting at competition.
+
 ### Declaration
 
 ```python

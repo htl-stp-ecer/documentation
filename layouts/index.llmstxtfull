@@ -1,0 +1,18 @@
+# {{ .Site.Title }}
+
+> Open-Source Robotics Platform for Botball competitions. Raise the floor, don't lower the ceiling.
+
+## Docs
+{{ range .Site.RegularPages.ByWeight -}}
+- [{{ .Title }}]({{ .Permalink }}){{ with .Description }}: {{ . }}{{ end }}
+{{ end }}
+---
+{{ range .Site.RegularPages.ByWeight }}
+# {{ .Title }}
+
+URL: {{ .Permalink }}
+
+{{ .RawContent }}
+
+---
+{{ end }}
