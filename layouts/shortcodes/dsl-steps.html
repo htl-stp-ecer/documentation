@@ -1,6 +1,8 @@
-{{ $steps := site.Data.dsl_steps }}
+{{ $steps := hugo.Data.dsl_steps }}
 {{ if not $steps }}
-{{ errorf "dsl_steps.json not found in data/ – the CI fetch step must provide it" }}
+<div class="dsl-widget dsl-widget-empty">
+  <p>The step index is unavailable in this build because <code>data/dsl_steps.json</code> was not provided.</p>
+</div>
 {{ else }}
 
 <div class="dsl-widget">
@@ -746,6 +748,18 @@
   padding: 2rem 0;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
+}
+.dsl-widget-empty {
+  margin-top: 1.5rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--bg-warm);
+  border-radius: 8px;
+  background: var(--bg-med);
+  color: var(--dim);
+}
+.dsl-widget-empty p {
+  margin: 0;
+  line-height: 1.6;
 }
 </style>
 
