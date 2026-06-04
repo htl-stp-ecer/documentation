@@ -8,9 +8,9 @@ weight: 3
 
 # Programming Guide
 
-This section covers everything you need to program robots with the **LibSTP** SDK — from writing your first mission to tuning low-level motor controllers.
+This section covers everything you need to program robots with the **raccoon** SDK — from writing your first mission to tuning low-level motor controllers.
 
-LibSTP is a layered robotics framework: you write missions in Python using a high-level DSL, while the control loops, kinematics, and hardware drivers run in optimized C++ underneath. You don't need to touch C++ to build a competition robot.
+The current platform is a layered robotics framework: you write missions in Python using a high-level DSL, while the control loops, kinematics, and hardware drivers run in optimized C++ underneath. You don't need to touch C++ to build a competition robot.
 
 ```mermaid
 graph TD
@@ -49,6 +49,8 @@ graph TD
 | [Calibration]({{< ref "10-calibration" >}}) | Motor and sensor calibration workflow |
 | [UI Steps & Screens]({{< ref "12-ui-steps" >}}) | Touchscreen UI, widgets, custom screens |
 | [Advanced Topics]({{< ref "11-advanced" >}}) | Async, timing, transport, debugging |
+| [Motion Flow and Kinematics]({{< ref "19-motion-flow-and-kinematics" >}}) | How motion profiles, drive control, kinematics, HAL, and firmware fit together |
+| [Arm Kinematics and Code Generation]({{< ref "20-arm-kinematics-and-codegen" >}}) | The actual `ArmChain` pipeline: IK, servo mapping, guards, and runtime behavior |
 
 ### Deep Dives
 

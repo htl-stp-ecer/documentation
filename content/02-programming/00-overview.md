@@ -8,7 +8,7 @@ weight: 1
 
 # Architecture Overview
 
-LibSTP is a modular robotics SDK written in C++20 with Python bindings. It runs on a Raspberry Pi inside the Wombat controller. You write mission code in Python; the heavy lifting (control loops at 100 Hz, kinematics math, motor drivers) happens in compiled C++ underneath.
+`raccoon` is a modular robotics SDK written in C++20 with Python bindings. It runs on a Raspberry Pi inside the Wombat controller. You write mission code in Python; the heavy lifting (control loops at 100 Hz, kinematics math, motor drivers) happens in compiled C++ underneath.
 
 ## The Layer Cake
 
@@ -105,7 +105,7 @@ Concrete drivers that talk to actual hardware. The Wombat driver communicates wi
 
 ## Module Map
 
-LibSTP is split into 21 independent C++ modules, each with its own headers, source, and optional Python bindings:
+Internally, the library is split into many `libstp-*` implementation modules, each with its own headers, source, and optional Python bindings. Those internal module names are still used in the repo, even though the public Python API is now `raccoon`.
 
 | Module | Layer | Purpose |
 |--------|-------|---------|

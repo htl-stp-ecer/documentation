@@ -45,7 +45,7 @@ The odometry system integrates two data sources:
 Combines wheel encoder velocity (derived from back-EMF) with IMU heading. This is the recommended default.
 
 ```python
-from libstp import FusedOdometry, FusedOdometryConfig
+from raccoon import FusedOdometry, FusedOdometryConfig
 
 odometry = FusedOdometry(
     imu=defs.imu,
@@ -61,7 +61,7 @@ odometry = FusedOdometry(
 Uses the STM32 firmware's built-in odometry calculation. This runs on the microcontroller and may have lower latency.
 
 ```python
-from libstp import Stm32Odometry
+from raccoon import Stm32Odometry
 
 odometry = Stm32Odometry(imu=defs.imu, kinematics=kinematics)
 ```

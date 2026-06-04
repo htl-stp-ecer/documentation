@@ -18,6 +18,7 @@ This section documents the firmware running on the STM32 and the full data pipel
 - [Sensor Reading](sensors/) — analog ports, digital ports, battery voltage, IMU
 - [Data Pipeline](data-pipeline/) — the full path from physical signal to Python API
 - [Build and Flash](build-flash/) — how to compile and program the firmware
+- [Robot Services And systemd](robot-services-and-systemd/) — the long-lived Pi-side units and how they fit together
 
 ## Source Repositories
 

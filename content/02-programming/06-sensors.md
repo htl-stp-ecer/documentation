@@ -8,7 +8,7 @@ weight: 7
 
 # Sensors
 
-LibSTP supports four sensor types: **IR line sensors**, **digital sensors**, **analog sensors**, and a **camera** interface. All sensors are declared in `defs.py` and accessed throughout your mission code.
+`raccoon` supports four sensor types: **IR line sensors**, **digital sensors**, **analog sensors**, and a **camera** interface. All sensors are declared in `defs.py` and accessed throughout your mission code.
 
 ## IR Sensors (Line Detection)
 
@@ -31,7 +31,7 @@ Shield the sensors **before** you run `calibrate()`. The K-Means thresholds are 
 ### Declaration
 
 ```python
-from libstp import IRSensor, SensorGroup
+from raccoon import IRSensor, SensorGroup
 
 front_right_ir = IRSensor(port=0)
 front_left_ir = IRSensor(port=1)
@@ -90,7 +90,7 @@ Digital sensors return `True` (pressed) or `False` (released). Used for buttons,
 ### Declaration
 
 ```python
-from libstp import DigitalSensor
+from raccoon import DigitalSensor
 
 button = DigitalSensor(port=10)           # Wombat's built-in button
 arm_down_limit = DigitalSensor(port=0)    # Limit switch
@@ -132,7 +132,7 @@ Raw analog readings from the Wombat's analog ports. Values depend on the sensor 
 ### Declaration
 
 ```python
-from libstp import AnalogSensor
+from raccoon import AnalogSensor
 
 light_sensor = AnalogSensor(port=2)
 distance_sensor = AnalogSensor(port=3)
@@ -156,7 +156,7 @@ The camera interface provides access to the Raccoon camera system for object det
 ### Declaration
 
 ```python
-from libstp import CamSensor
+from raccoon import CamSensor
 
 cam = CamSensor()
 ```
@@ -168,7 +168,7 @@ Camera functionality depends on the `raccoon-cam` and `object-detector` services
 The ET (electro-topographic) sensor is a distance/range finder. It wraps an analog input but has a distinct type for clarity:
 
 ```python
-from libstp import ETSensor
+from raccoon import ETSensor
 
 distance = ETSensor(port=3)
 ```

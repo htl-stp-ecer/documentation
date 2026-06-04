@@ -15,7 +15,7 @@ A mission is a self-contained task your robot performs — "drive to the cone an
 Every mission extends the `Mission` base class and implements a `sequence()` method that returns a `Sequential` of steps:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 
@@ -36,7 +36,7 @@ That's it. The framework handles execution, timing, error handling, and hardware
 Here's the actual mission from the Ecer2026 ConeBot that drives to a cone on the game table:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 

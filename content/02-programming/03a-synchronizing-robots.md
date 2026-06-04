@@ -50,7 +50,7 @@ From that moment on, `wait_for_checkpoint(seconds)` pauses the current sequence 
 > If your robot is started by button press instead of a light (e.g. during development, or because the `wait_for_light_sensor` is not defined), the synchronizer latches `T=0` on the button press instead. See **[Making Your Robot Competition Ready]({{< ref "15-competition-ready" >}})** for how to enable the light-start gate.
 
 ```python
-from libstp.step.timing import wait_for_checkpoint
+from raccoon.step.timing import wait_for_checkpoint
 
 seq([
     drive_forward(30),
@@ -210,7 +210,7 @@ When T=12s hits, the loop is cancelled cleanly at the next `await` point and exe
 ## Quick Reference
 
 ```python
-from libstp.step.timing import wait_for_checkpoint, do_until_checkpoint
+from raccoon.step.timing import wait_for_checkpoint, do_until_checkpoint
 
 # Pause until the mission clock reaches T=seconds (or return immediately if past).
 wait_for_checkpoint(seconds)
@@ -219,4 +219,4 @@ wait_for_checkpoint(seconds)
 do_until_checkpoint(seconds, task)
 ```
 
-Both live in `libstp.step.timing` and can be placed anywhere inside a `seq([...])` or `parallel(...)` block, just like any other step.
+Both live in `raccoon.step.timing` and can be placed anywhere inside a `seq([...])` or `parallel(...)` block, just like any other step.

@@ -36,7 +36,7 @@ Five layers, one platform:
 
 | Layer | Component | What It Does |
 |-------|-----------|--------------|
-| **Application** | `raccoon-lib` (libstp) | Python SDK — step DSL, missions, PID, odometry, sensors |
+| **Application** | `raccoon-lib` | Python SDK — step DSL, missions, PID, odometry, sensors |
 | **Visualization** | BotUI | Flutter touchscreen dashboard — sensor monitoring, program launcher |
 | **Visual Editor** | Web IDE | Drag-and-drop flowchart editor that generates real Python |
 | **Toolchain** | raccoon-cli | Laptop-side tool — project scaffolding, code generation, remote sync |
@@ -52,7 +52,7 @@ All layers communicate over **LCM** (Lightweight Communications and Marshalling)
 |---------|----------------|
 | [Quick Start]({{< ref "/00-quick-start" >}}) | Flash the SD card, install the CLI, connect to the robot, and run your first mission |
 | [BotUI]({{< ref "/01-botui" >}}) | The touchscreen UI on the robot — sensor dashboard, program launcher, settings |
-| [Programming Guide]({{< ref "/02-programming" >}}) | The full libstp SDK — missions, steps, sensors, drive system, odometry, servos, calibration |
+| [Programming Guide]({{< ref "/02-programming" >}}) | The full `raccoon` SDK — missions, steps, sensors, drive system, odometry, servos, calibration |
 | [Web IDE]({{< ref "/03-web-ide" >}}) | Visual flowchart editor for building missions without writing code |
 | [raccoon-cli]({{< ref "/04-raccoon-cli" >}}) | All CLI commands — `create`, `connect`, `run`, `update`, `list` |
 | [API Reference]({{< ref "/05-api-reference" >}}) | Full step and function reference with signatures and parameters |

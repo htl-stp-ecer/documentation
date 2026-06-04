@@ -21,7 +21,7 @@ From unboxed hardware to a driving robot in as few steps as possible.
 - **USB keyboard** — needed once to enter WiFi password on the Wombat
 
 **On your laptop:**
-- Python 3.11 or newer
+- Python 3.13 or newer
 - A terminal
 
 ---
@@ -79,20 +79,22 @@ For **WiFi Client** mode:
 
 raccoon-cli is the tool you use to manage projects, generate code, and run programs on the robot.
 
-**Requires Python 3.11+.**
+**Requires Python 3.13+.**
 
-1. Go to **[github.com/htl-stp-ecer/raccoon-cli/releases](https://github.com/htl-stp-ecer/raccoon-cli/releases)** and find the latest release
-2. Download both `.whl` files
-3. Install them:
+Install from PyPI:
 
 ```bash
-pip install raccoon_transport-*.whl raccoon-*.whl
+pip install raccoon-cli
 ```
 
 > **Ubuntu/Debian:** pip may refuse with `externally-managed-environment`. Add `--break-system-packages`:
 > ```bash
-> pip install --break-system-packages raccoon_transport-*.whl raccoon-*.whl
+> pip install --break-system-packages raccoon-cli
 > ```
+
+If you explicitly need release artifacts instead of PyPI, use the wheels from:
+
+> **[github.com/htl-stp-ecer/raccoon-cli/releases](https://github.com/htl-stp-ecer/raccoon-cli/releases)**
 
 > **"raccoon: command not found"** after installing? Make sure Python's script directory is in your `$PATH`.
 
@@ -150,7 +152,7 @@ If raccoon warns about a version mismatch between your laptop and the robot, run
 raccoon update
 ```
 
-This checks both sides against the latest release and updates anything that's out of date. It requires the [GitHub CLI (`gh`)](https://cli.github.com/) to be installed and authenticated.
+This checks both sides against the current bundle target and updates anything that's out of date.
 
 ---
 
@@ -206,7 +208,7 @@ raccoon create mission M01SmokeMission
 Open the generated file in `src/missions/m01_smoke_mission.py` and add a simple sequence:
 
 ```python
-from libstp import *
+from raccoon import *
 
 
 class M01SmokeMission(Mission):

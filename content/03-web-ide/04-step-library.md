@@ -8,7 +8,7 @@ weight: 5
 
 ## Step Library (Right)
 
-A searchable panel listing all steps available from libstp. Steps are grouped by category (motion, sensors, calibration, etc.).
+A searchable panel listing all steps available from `raccoon`. Steps are grouped by category (motion, sensors, calibration, etc.).
 
 - **Filter** by typing in the search box at the top
 - **Drag** any step onto the flowchart canvas to add it to the mission

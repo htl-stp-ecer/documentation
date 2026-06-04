@@ -8,7 +8,7 @@ weight: 13
 
 # UI Steps & Screens
 
-The Wombat controller has a touchscreen. LibSTP lets you display custom screens on it — progress indicators, sensor readings, confirmation dialogs, input forms, and live visualizations. This is how calibration wizards, wait-for-button prompts, and debug dashboards work under the hood.
+The Wombat controller has a touchscreen. `raccoon` lets you display custom screens on it — progress indicators, sensor readings, confirmation dialogs, input forms, and live visualizations. This is how calibration wizards, wait-for-button prompts, and debug dashboards work under the hood.
 
 You can use the built-in screens for common tasks, or build your own custom screens with a full widget toolkit.
 
@@ -47,7 +47,7 @@ Your Python code sends a widget tree to BotUI via Raccoon Transport. BotUI rende
 The fastest way to show UI — no custom screens needed. These are methods on `UIStep`:
 
 ```python
-from libstp import UIStep
+from raccoon import UIStep
 
 class MyMissionStep(UIStep):
     async def _execute_step(self, robot):
@@ -79,12 +79,12 @@ Each helper displays a pre-built screen, waits for the user to interact, and ret
 
 ## Built-In Screens
 
-LibSTP ships with ready-to-use screens for common patterns. Import them from `libstp.ui.screens`:
+`raccoon` ships with ready-to-use screens for common patterns. Import them from `raccoon.ui.screens`:
 
 ### Message & Confirmation
 
 ```python
-from libstp.ui.screens import MessageScreen, ConfirmScreen
+from raccoon.ui.screens import MessageScreen, ConfirmScreen
 
 class MyStep(UIStep):
     async def _execute_step(self, robot):
@@ -111,7 +111,7 @@ class MyStep(UIStep):
 ### Progress & Status
 
 ```python
-from libstp.ui.screens import ProgressScreen, StatusScreen
+from raccoon.ui.screens import ProgressScreen, StatusScreen
 
 class MyStep(UIStep):
     async def _execute_step(self, robot):
@@ -141,7 +141,7 @@ class MyStep(UIStep):
 ### Input Screens
 
 ```python
-from libstp.ui.screens import NumberInputScreen, SliderInputScreen, ChoiceScreen
+from raccoon.ui.screens import NumberInputScreen, SliderInputScreen, ChoiceScreen
 
 class MyStep(UIStep):
     async def _execute_step(self, robot):
@@ -181,7 +181,7 @@ class MyStep(UIStep):
 ### Wait-for-Button Screen
 
 ```python
-from libstp.ui.screens import WaitForButtonScreen
+from raccoon.ui.screens import WaitForButtonScreen
 
 class MyStep(UIStep):
     async def _execute_step(self, robot):
@@ -199,9 +199,9 @@ For anything beyond the built-in screens, create your own by extending `UIScreen
 ### Minimal Example
 
 ```python
-from libstp import UIStep, UIScreen
-from libstp.ui.widgets import *
-from libstp.ui.events import on_click
+from raccoon import UIStep, UIScreen
+from raccoon.ui.widgets import *
+from raccoon.ui.events import on_click
 
 
 class GreetingScreen(UIScreen):
@@ -337,7 +337,7 @@ class MonitorStep(UIStep):
 
 ## Widget Reference
 
-All widgets are imported from `libstp.ui.widgets`.
+All widgets are imported from `raccoon.ui.widgets`.
 
 ### Display Widgets
 
@@ -396,7 +396,7 @@ All widgets are imported from `libstp.ui.widgets`.
 Bind screen methods to user interactions:
 
 ```python
-from libstp.ui.events import (
+from raccoon.ui.events import (
     on_click,         # Button tapped
     on_change,        # Input value changed
     on_slider,        # Slider moved

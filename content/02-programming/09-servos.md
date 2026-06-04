@@ -15,7 +15,7 @@ Servos are position-controlled actuators used for arms, claws, shields, and othe
 ### Plain Servo
 
 ```python
-from libstp import Servo
+from raccoon.hal import Servo
 
 my_servo = Servo(port=0)
 ```
@@ -25,7 +25,8 @@ Use plain servos when you only need one or two positions, or when you compute an
 ### Servo with Presets (Recommended)
 
 ```python
-from libstp import Servo, ServoPreset
+from raccoon.hal import Servo
+from raccoon.step.servo import ServoPreset
 
 claw = ServoPreset(
     Servo(port=2),
@@ -44,7 +45,7 @@ arm = ServoPreset(
 )
 ```
 
-`ServoPreset` creates callable methods for each position name. The angle values (0–180) correspond to the servo's physical range.
+`ServoPreset` creates callable methods for each position name.
 
 ### Servo Offsets
 
@@ -61,6 +62,47 @@ claw = ServoPreset(
 This is useful when replacing a broken servo. A new servo mounted on the same shaft may land a few teeth off from the original, causing all positions to be shifted by the same amount. Since all positions are just angle values, adding a constant offset shifts every position by the same amount — no need to re-tune each angle individually.
 
 > **Tip:** When choosing your servo angles, try to avoid values very close to 0 or 180. Keeping some margin (e.g. 10–170) leaves room to apply a positive or negative offset when a servo needs to be swapped at competition — without hitting the physical limits.
+
+## What The Software Allows vs What The Hardware Tolerates
+
+This distinction matters a lot:
+
+- the software servo API accepts arbitrary degree values
+- the step layer does **not** clamp commands to `0..180`
+- the HAL stores the exact commanded degree value and forwards it to the platform
+
+So yes, you can command values below `0` or above `180` if your mechanism and servo happen to tolerate it.
+
+That does **not** mean it is safe or repeatable.
+
+### Overtravel / beyond-180 operation
+
+Some hobby servos can physically rotate beyond the nominal `0..180` range, and some mechanisms are intentionally tuned to use that extra travel. In practice:
+
+- two supposedly identical servos will often not tolerate the same extra travel
+- end-stop behavior changes across manufacturers and even between units
+- using negative angles or angles above `180` increases the risk of gear strain, buzzing, overheating, and self-damage
+- replacing a servo mid-competition may invalidate all the extra-range values you tuned before
+
+Treat overtravel as a hardware-specific calibration trick, not as a portable semantic range.
+
+Recommended rule:
+
+- use conservative in-range values for normal robots
+- only use out-of-range values when you have physically tested that exact servo + linkage
+- leave safety margin instead of tuning right against a hard stop
+
+### Offset is not a safety system
+
+`offset` is only a constant angle shift. It is useful when a replacement servo is mounted a few teeth differently than the old one.
+
+It does **not** guarantee:
+
+- safe operation near hard stops
+- that two servos share the same usable overtravel
+- that a servo with the same model number has the same real zero point
+
+If you are already relying on `-10` or `195` degree style commands, a changed offset can push the mechanism into a stop much more easily.
 
 ## Usage in Missions
 
@@ -111,6 +153,57 @@ Turn off all servo outputs (servos go limp):
 ```python
 fully_disable_servos()
 ```
+
+## Servo Power States
+
+Servo power/control on Wombat has more than one useful state.
+
+### Normal enabled state
+
+Any regular servo step such as `servo(...)`, `slow_servo(...)`, `ShakeServo`, or a `ServoPreset` position automatically enables the target servo before sending the command.
+
+When a servo is re-enabled, the HAL preserves the last commanded angle and re-applies it.
+
+### Per-servo disable
+
+The raw HAL also exposes:
+
+```python
+Defs.claw.device.disable()
+Defs.claw.device.enable()
+```
+
+or for plain servos:
+
+```python
+my_servo.disable()
+my_servo.enable()
+```
+
+This is low-level hardware control, not a high-level mission step. Use it when you need direct access, for example during experiments or calibration tooling.
+
+### Fully disabled / limp mode
+
+`fully_disable_servos()` sends the platform into the fully-disabled servo mode for every servo port:
+
+- no PWM signal is sent
+- the servos stop actively holding position
+- the mechanism can be moved freely by hand
+
+This is the best way to make an arm or claw go limp intentionally.
+
+That is useful for:
+
+- manual mechanism setup
+- releasing servo load at the end of a run
+- avoiding holding current and heat while idle
+- calibration workflows
+
+The next normal servo command will re-enable the affected servo automatically.
+
+### Safety note
+
+A limp servo is no longer holding the mechanism. Arms, claws, or linkages may fall under gravity as soon as power is removed. Use this deliberately, especially on multi-link arms.
 
 ## Real-World Patterns
 
@@ -168,6 +261,15 @@ To find the right angle values for each position:
 4. Enter that angle in your `ServoPreset` positions
 
 Repeat for each named position. The angles depend on how the servo is mounted — there's no universal "up" or "down" angle.
+
+If you are probing the safe range of a mechanism:
+
+1. start conservatively, away from hard stops
+2. approach limits in small increments
+3. listen for buzzing or stalling
+4. back off and keep margin instead of using the absolute maximum travel
+
+Do not assume that because one servo tolerated `190` degrees, the replacement one will too.
 
 ## Timing Considerations
 

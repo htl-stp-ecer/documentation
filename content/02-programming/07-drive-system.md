@@ -105,12 +105,14 @@ For most robots, `kV=1.0` with zero PID is a reasonable starting point. Add PID 
 
 Kinematics defines the relationship between chassis velocity and wheel speeds.
 
+The overview on this page is enough for tuning and basic setup. For the full control/data flow, forward and inverse formulas, and the exact role of `Drive`, `IKinematics`, and `MotorAdapter`, see [Motion Flow and Kinematics]({{< ref "19-motion-flow-and-kinematics" >}}).
+
 ### Differential Drive
 
 Two motors, one on each side:
 
 ```python
-from libstp import DifferentialKinematics
+from raccoon import DifferentialKinematics
 
 kinematics = DifferentialKinematics(
     left_motor=defs.front_left_motor,
@@ -125,12 +127,27 @@ kinematics = DifferentialKinematics(
 - Wheels opposite directions → robot spins in place
 - **Cannot strafe sideways**
 
+Inverse kinematics:
+
+```text
+w_left  = (vx - wz * wheelbase / 2) / wheel_radius
+w_right = (vx + wz * wheelbase / 2) / wheel_radius
+```
+
+Forward kinematics:
+
+```text
+vx = (w_left + w_right) * wheel_radius / 2
+wz = (w_right - w_left) * wheel_radius / wheelbase
+vy = 0
+```
+
 ### Mecanum Drive
 
 Four mecanum wheels that enable omnidirectional movement:
 
 ```python
-from libstp import MecanumKinematics
+from raccoon import MecanumKinematics
 
 kinematics = MecanumKinematics(
     front_left_motor=defs.front_left_motor,
@@ -147,6 +164,46 @@ kinematics = MecanumKinematics(
 - All wheels inward → robot strafes right
 - Diagonal pattern → robot drives at an angle
 - **Full omnidirectional movement**
+
+The mecanum model defines:
+
+```text
+L = (wheelbase + track_width) / 2
+```
+
+Inverse kinematics:
+
+```text
+w_fl = (vx + vy - L * wz) / wheel_radius
+w_fr = (vx - vy + L * wz) / wheel_radius
+w_bl = (vx - vy - L * wz) / wheel_radius
+w_br = (vx + vy + L * wz) / wheel_radius
+```
+
+Forward kinematics:
+
+```text
+vx = (w_fl + w_fr + w_bl + w_br) * wheel_radius / 4
+vy = (w_fl - w_fr - w_bl + w_br) * wheel_radius / 4
+wz = (-w_fl + w_fr - w_bl + w_br) * wheel_radius / (4 * L)
+```
+
+### Sign conventions and wheel ordering
+
+The kinematics layer uses the same chassis-space convention as the underlying library:
+
+- `vx` = forward in m/s
+- `vy` = right in m/s
+- `wz` = counter-clockwise in rad/s
+
+For mecanum, wheel ordering is:
+
+1. front-left
+2. front-right
+3. back-left
+4. back-right
+
+Those conventions are assumed consistently by the kinematics models, drive layer, and odometry.
 
 ### Measuring Wheel Radius and Wheelbase
 

@@ -20,7 +20,7 @@ The Wombat uses an **InvenSense MPU-9250**, a nine-axis MEMS sensor package that
 | Accelerometer | Linear acceleration along each axis | m/s² |
 | Magnetometer (AK8963) | Magnetic field strength along each axis | µT |
 
-The chip is connected to the **STM32 coprocessor** via SPI. The STM32 reads the sensor, runs orientation estimation firmware, and forwards the results to the Raspberry Pi over a shared SPI buffer at approximately 75 Hz. User programs on the Pi access these values through the libstp HAL.
+The chip is connected to the **STM32 coprocessor** via SPI. The STM32 reads the sensor, runs orientation estimation firmware, and forwards the results to the Raspberry Pi over a shared SPI buffer at approximately 75 Hz. User programs on the Pi access these values through the `raccoon` HAL.
 
 ### Axes and Orientation
 
@@ -32,7 +32,7 @@ The IMU defines three axes relative to the Wombat's board:
 
 For a robot sitting flat on a table, the gyroscope's Z axis measures yaw — the rotation the robot performs when turning in place. That is the axis the drive system uses for heading estimation.
 
-The **sign convention** used by libstp is counter-clockwise positive (CCW = positive, CW = negative). This is the standard mathematical convention. The firmware reports heading in a clockwise-positive convention, so `getHeading()` internally negates the firmware value before returning it.
+The **sign convention** used by `raccoon` is counter-clockwise positive (CCW = positive, CW = negative). This is the standard mathematical convention. The firmware reports heading in a clockwise-positive convention, so `getHeading()` internally negates the firmware value before returning it.
 
 ## The Digital Motion Processor (DMP)
 
@@ -88,7 +88,7 @@ Adding the magnetometer (9-axis Mahony) reduces static yaw drift to under 0.2 °
 | Raw gyro integration | 27 °/h | 30° | Simplest; no correction |
 | Mahony 9-axis (with magnetometer) | **0.19 °/h** | 113° | Best static; degrades under fast rotation |
 
-**For Botball competition use, the DMP is the right choice.** Matches involve fast turns and the 12° dynamic MAE is far better than the alternatives. The DMP is what libstp uses by default.
+**For Botball competition use, the DMP is the right choice.** Matches involve fast turns and the 12° dynamic MAE is far better than the alternatives. The DMP is what `raccoon` uses by default.
 
 ## Calibration
 
@@ -156,7 +156,7 @@ The calibration scripts are Python-based and run offline on data collected from 
 Most missions do not need to read the IMU directly — the motion system handles it. But if you need raw sensor values:
 
 ```python
-from libstp.hal import IMU
+from raccoon.hal import IMU
 
 imu = IMU()
 
@@ -184,7 +184,7 @@ imu.set_yaw_rate_axis_mode("world_z")
 yaw_rate = imu.get_yaw_rate()
 ```
 
-The firmware-computed heading (`get_heading()`) is the value used by the motion system. It is the DMP quaternion integrated into a scalar heading, converted from firmware's clockwise-positive convention to libstp's CCW-positive convention.
+The firmware-computed heading (`get_heading()`) is the value used by the motion system. It is the DMP quaternion integrated into a scalar heading, converted from firmware's clockwise-positive convention to `raccoon`'s CCW-positive convention.
 
 ### Turn Axis Modes
 
@@ -200,7 +200,7 @@ By default the system tracks yaw rotation as the world-Z axis — which is corre
 This is configured on the odometry level and is passed to the IMU automatically:
 
 ```python
-from libstp import Stm32OdometryConfig
+from raccoon import Stm32OdometryConfig
 
 config = Stm32OdometryConfig()
 config.turn_axis = "body_z"  # Use raw body Z for a tilted robot

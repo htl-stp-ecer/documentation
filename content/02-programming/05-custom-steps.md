@@ -20,7 +20,7 @@ From the Ecer2026 ConeBot — a motor-driven container that moves down until a l
 
 ```python
 # src/steps/cone_container_steps.py
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 
@@ -95,8 +95,8 @@ For steps that need custom logic, extend the `Step` base class directly.
 Add `@dsl_step` to your class so the code generator creates a factory function and builder for it (see [Steps DSL]({{< ref "04-steps" >}}) for how this works):
 
 ```python
-from libstp import Step, GenericRobot
-from libstp.step.annotation import dsl_step
+from raccoon import Step, GenericRobot
+from raccoon.step.annotation import dsl_step
 
 
 @dsl_step(tags=["custom"])
@@ -118,7 +118,7 @@ The `@dsl_step` decorator generates:
 If you don't need a generated builder (e.g., the step has no parameters), you can use `@dsl` instead to just register it for discovery without code generation:
 
 ```python
-from libstp.step.annotation import dsl
+from raccoon.step.annotation import dsl
 
 @dsl(tags=["custom"])
 class SimpleStep(Step):
@@ -131,8 +131,8 @@ class SimpleStep(Step):
 
 ```python
 import asyncio
-from libstp import Step, GenericRobot, AnalogSensor
-from libstp.step.annotation import dsl_step
+from raccoon import Step, GenericRobot, AnalogSensor
+from raccoon.step.annotation import dsl_step
 
 
 @dsl_step(tags=["sensor", "wait"])
@@ -172,9 +172,9 @@ wait_for_analog_range(Defs.light_sensor, min_value=1000, max_value=2000).skip_ti
 For steps that need a tight control loop, use `MotionStep` as your base. It provides a fixed-rate 100 Hz update loop:
 
 ```python
-from libstp import GenericRobot
-from libstp.step.annotation import dsl_step
-from libstp.step.motion.motion_step import MotionStep
+from raccoon import GenericRobot
+from raccoon.step.annotation import dsl_step
+from raccoon.step.motion.motion_step import MotionStep
 
 
 @dsl_step(tags=["motion", "custom"])
@@ -243,7 +243,7 @@ Function-based steps can reference `Defs` directly (they're coupled to your robo
 
 ```python
 # Portable: works with any servo
-from libstp import ServoPreset
+from raccoon import ServoPreset
 
 def grab_with(claw_preset: ServoPreset, arm_preset: ServoPreset) -> Sequential:
     return seq([

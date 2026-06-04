@@ -167,7 +167,7 @@ When the timer fires, the framework hands control to a special mission — the *
 A shutdown mission is just a regular `Mission` subclass with a short, safe sequence:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 

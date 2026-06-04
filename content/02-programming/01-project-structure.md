@@ -173,11 +173,11 @@ if __name__ == "__main__":
 Here's what the generated code looks like:
 
 ```python
-from libstp import (
+from raccoon import (
     DigitalSensor, IRSensor, Motor, MotorCalibration,
     SensorGroup, Servo, ServoPreset,
 )
-from libstp import IMU as Imu
+from raccoon import IMU as Imu
 
 
 class Defs:
@@ -220,7 +220,7 @@ See [Robot Definition]({{< ref "02-robot-definition" >}}) for details on each co
 Here's what the generated code looks like:
 
 ```python
-from libstp import (
+from raccoon import (
     DifferentialKinematics, Drive, FusedOdometry,
     GenericRobot, PidGains, Feedforward,
     # ... more imports ...

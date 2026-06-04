@@ -8,7 +8,7 @@ weight: 3
 
 # Robot Definition
 
-Before you write a single mission, you need to tell LibSTP what hardware your robot has and how it's arranged. This is configured in `raccoon.project.yml` — the Raccoon CLI then generates two Python files from it:
+Before you write a single mission, you need to tell `raccoon` what hardware your robot has and how it's arranged. This is configured in `raccoon.project.yml` — the Raccoon CLI then generates two Python files from it:
 
 - **`defs.py`** — hardware inventory (motors, servos, sensors)
 - **`robot.py`** — how those parts work together (kinematics, drive, odometry)
@@ -24,7 +24,7 @@ The `Defs` class is a flat list of every physical component on your robot. Each 
 ### Motors
 
 ```python
-from libstp import Motor, MotorCalibration
+from raccoon import Motor, MotorCalibration
 
 front_left_motor = Motor(
     port=0,                    # Wombat motor port (0-3)
@@ -46,7 +46,7 @@ front_left_motor = Motor(
 Servos can be created plain or with named presets:
 
 ```python
-from libstp import Servo, ServoPreset
+from raccoon import Servo, ServoPreset
 
 # Plain servo — you specify angles in your mission code
 plain_servo = Servo(port=0)
@@ -79,8 +79,8 @@ Defs.arm.up(300)       # Moves to angle 105 at 300 degrees/sec (slow servo)
 ### Sensors
 
 ```python
-from libstp import IRSensor, DigitalSensor, AnalogSensor, SensorGroup
-from libstp import IMU as Imu
+from raccoon import IRSensor, DigitalSensor, AnalogSensor, SensorGroup
+from raccoon import IMU as Imu
 
 # Inertial measurement unit (one per robot, no port needed)
 imu = Imu()
@@ -120,7 +120,7 @@ Defs.front.lineup_on_black()            # Align both sensors on a black line
 The `RobotDefinitionsProtocol` expects specially-named attributes in your `Defs` class:
 
 ```python
-from libstp import DigitalSensor, AnalogSensor
+from raccoon import DigitalSensor, AnalogSensor
 
 button = DigitalSensor(port=10)                    # Required — exact name
 wait_for_light_sensor = AnalogSensor(port=2)       # Optional — exact name

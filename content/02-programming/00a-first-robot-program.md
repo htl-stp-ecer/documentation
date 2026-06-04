@@ -40,7 +40,7 @@ raccoon create mission MyFirstMission
 Replace the contents with:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 
@@ -275,7 +275,7 @@ Here's a complete project with setup, main mission, and shutdown — the pattern
 Runs before the match starts. Calibrates and homes all servos:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 
@@ -297,7 +297,7 @@ class M00SetupMission(Mission):
 The actual task — drive to an object, pick it up, bring it back:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 
@@ -333,7 +333,7 @@ class M01GrabObjectMission(Mission):
 Runs when the match timer expires. Stop everything safely:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
 

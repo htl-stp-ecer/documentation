@@ -8,11 +8,11 @@ weight: 6
 
 # API Reference
 
-Full auto-generated documentation for the LibStp library, built from source on every release.
+Full auto-generated documentation for the `raccoon` library surface, built from source on every release.
 
 ## Available Steps
 
-All steps available in the LibStp DSL, grouped by category. These are the building blocks you use to compose robot missions.
+All steps available in the `raccoon` DSL, grouped by category. These are the building blocks you use to compose robot missions.
 
 [View Available Steps]({{< relref "01-available-steps" >}})
 

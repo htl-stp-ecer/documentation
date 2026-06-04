@@ -33,8 +33,15 @@ raccoon-cli is the command-line tool for managing robot projects. It handles eve
 
 All commands support `-h` / `--help` for usage details.
 
+## Deep Dives
+
+- [Versioning And Upgrades]({{< ref "07-versioning-and-upgrades" >}})
+- [Troubleshooting And Recovery]({{< ref "08-troubleshooting-and-recovery" >}})
+- [sync]({{< ref "09-sync" >}})
+- [logs]({{< ref "10-logs" >}})
+
 ## Installation
 
 See the [Quick Start]({{< ref "/00-quick-start" >}}) for install instructions.
 
-**Requires Python 3.11+.**
+**Requires Python 3.13+.**
