@@ -14,6 +14,22 @@ raccoon lcm <subcommand> [options]
 
 LCM (Lightweight Communications and Marshalling) is the publish-subscribe message bus that raccoon uses internally to pass sensor readings, motor commands, and odometry data between processes on the Pi at runtime. The `raccoon lcm` command group lets you observe, record, and replay that traffic from your laptop — without modifying your robot code.
 
+## What LCM is and why it matters
+
+raccoon runs multiple processes on the Pi simultaneously: `raccoon-server`, `src/main.py`, and any project services (e.g. a camera daemon). LCM is the inter-process message bus connecting them. Every sensor reading, motor command, and odometry update flows through LCM channels as typed messages.
+
+`raccoon lcm spy` lets you watch this stream live — equivalent to a scope on the Pi's internal data bus. `raccoon lcm record` captures it for later analysis. `raccoon lcm playback` replays a captured session so you can test mission code against real sensor data without the robot present.
+
+```mermaid
+graph LR
+    A[stm32_data_reader<br/>sensor process] -->|SENSOR_IR, ENCODER| B[LCM bus on Pi]
+    C[src/main.py<br/>mission code] -->|MOTOR_CMD| B
+    B -->|ODOMETRY| C
+    D[raccoon lcm spy<br/>on laptop] -.->|subscribe all| B
+    E[raccoon lcm record] -.->|capture to .jsonl| B
+    F[raccoon lcm playback] -.->|republish recorded| B
+```
+
 All `raccoon lcm` subcommands require an active connection to a Pi. Run `raccoon connect` first.
 
 ## Subcommands at a glance

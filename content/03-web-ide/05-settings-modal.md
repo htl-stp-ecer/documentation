@@ -3,12 +3,12 @@ title: "Settings, Robot Config, and Map Editing"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 6
+weight: 8
 ---
 
 ## Settings, Robot Config, and Map Editing
 
-Robot configuration is split across three distinct UI surfaces. Understanding which surface owns which settings prevents a lot of confusion:
+A common source of confusion: "where do I configure X?" Robot configuration is split across **three distinct UI surfaces**, each owning a different category of settings. Understanding the split is the key insight:
 
 | Surface | How to open | Owns |
 |---------|------------|------|
@@ -163,3 +163,11 @@ Click the **flag icon** (🚩) in the Table Visualization panel header to enter 
 | **θ (deg)** | Starting heading in degrees (0 = facing right, 90 = facing up) |
 
 You can also **click directly on the table canvas** in start-pose mode to place the robot visually. The X/Y fields update to reflect the click position. Changes are saved to the project automatically (debounced 300 ms after the last edit).
+
+---
+
+## Cross-references
+
+- [Step Library]({{< ref "04-step-library" >}}) — refreshing the step index (Settings → Project tab)
+- [Tool Panels]({{< ref "06-floating-panels" >}}) — Table Visualization where map editing lives
+- [Run Configurations]({{< ref "11-run-configurations" >}}) — the run-config dialog (separate from Settings)

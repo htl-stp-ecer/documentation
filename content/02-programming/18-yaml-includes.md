@@ -3,11 +3,34 @@ title: "YAML Includes"
 author: "Docs Bot"
 date: 2026-06-18
 draft: false
-weight: 23
+weight: 24
 description: "Exact semantics of !include and !include-merge, including recursive resolution and write-back behavior."
 ---
 
 # YAML Includes
+
+## Concept: Why Config Is Split Across Files
+
+RaccoonOS projects split configuration across several files not just for tidiness, but because **different tools own different files**:
+
+- `raccoon.project.yml` — the root; references all sections via `!include`
+- `config/robot.yml` — motion PID, kinematics, shutdown timer; edited by the IDE PID tuner
+- `config/hardware.yml` — sensor, motor, servo definitions; the codegen reads this to generate `defs.py`
+- `config/motors.yml` / `config/servos.yml` — merged into `hardware.yml` via `!include-merge`; calibration steps write directly to these files
+- `config/missions.yml` — mission order; the mission list editor writes here
+
+The loader resolves the full tree transparently so your Python code can read `["definitions", "left_motor", "calibration", "ticks_to_rad"]` without caring which physical file stores it. The **write-back** system preserves ownership — a calibration update writes to `motors.yml`, not `raccoon.project.yml`, even though the read path went through the root.
+
+```mermaid
+graph TD
+    ROOT["raccoon.project.yml"] -->|"!include"| ROBOT["config/robot.yml"]
+    ROOT -->|"!include"| HW["config/hardware.yml"]
+    ROOT -->|"!include"| MISSIONS["config/missions.yml"]
+    HW -->|"!include-merge '_motors'"| MOTORS["config/motors.yml"]
+    HW -->|"!include-merge '_servos'"| SERVOS["config/servos.yml"]
+    MOTORS -.->|"calibration writes back here"| MOTORS
+    SERVOS -.->|"servo tuning writes back here"| SERVOS
+```
 
 Raccoon project configuration is not just split across files for convenience. The loader is explicitly include-aware, recursive, and write-aware.
 
@@ -60,6 +83,16 @@ Semantics:
 - its top-level keys are promoted into the parent mapping
 
 That is why motors and servos appear at the same level as sensor definitions in the resolved `definitions:` map.
+
+#### The Underscore-Prefix Convention
+
+All competition projects use underscore-prefixed merge keys (`_motors`, `_servos`). This is a deliberate convention, not a requirement:
+
+- the leading `_` signals "this key is a merge anchor, not a real hardware definition"
+- it prevents confusion if someone scans the `definitions:` namespace — prefixed names stand out as structural keys
+- the generated `defs.py` never references these merge keys; they dissolve at resolution time
+
+If you omit the underscore (`motors: !include-merge 'motors.yml'`), the behavior is identical — but the key `motors` would be invisible in the resolved namespace (since `!include-merge` discards it), which can be confusing when reading the file later.
 
 ## Resolution depth
 

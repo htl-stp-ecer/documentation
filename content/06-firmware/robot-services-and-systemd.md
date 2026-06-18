@@ -1,6 +1,6 @@
 ---
 title: "Robot Services And systemd"
-author: "OpenAI Codex"
+author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 7
@@ -9,7 +9,38 @@ description: "What long-lived services actually run on the robot, why they exist
 
 # Robot Services And systemd
 
+## Concept
+
 The robot is not just "your Python program." Several long-lived processes and systemd units exist underneath it, and understanding them is critical when debugging startup, sensors, or background daemons.
+
+The service topology has three layers:
+
+```mermaid
+graph TD
+    subgraph Platform["Platform services (always on)"]
+        LCM["lcm-loopback-multicast.service\noneshot: enables multicast on lo"]
+        READER["stm32_data_reader.service\nSPI bridge, LCM publisher, MotorWatchdog, UartMonitor"]
+        UI["flutter-ui.service\nBotUI touchscreen frontend"]
+    end
+
+    subgraph Project["Project services (per-project)"]
+        VISION["raccoon-project-&lt;id&gt;-vision.service\nexample: camera / YOLO daemon"]
+        OTHER["raccoon-project-&lt;id&gt;-&lt;name&gt;.service\nany other declared daemon"]
+    end
+
+    subgraph UserCode["User code (transient)"]
+        MISSION["raccoon run\nPython mission runner process"]
+    end
+
+    LCM -->|"Requires/After"| READER
+    READER -->|"raccoon_ring SHM"| VISION
+    READER -->|"raccoon_ring SHM"| MISSION
+    VISION -->|"LCM detections channel"| MISSION
+```
+
+The platform services run regardless of what project is loaded. The `stm32_data_reader.service` is always-on infrastructure — it maintains the SHM ring files so that any process that subscribes to `raccoon/*` channels sees live sensor data without any setup. The MotorWatchdog runs inside this process, not in user code, so it cannot be accidentally omitted.
+
+Project services are declared in `raccoon.project.yml` under `services:` and are deployed by the toolchain when you sync a project. The vision daemon in drumbot is a real example of this pattern: the camera daemon survives robot-program restarts, avoiding the multi-second warm-up cost of reopening `/dev/video0` on every run.
 
 This page documents the units that are actually shipped in this repo and the service-layer components layered on top of them.
 
@@ -214,18 +245,36 @@ UART monitoring is enabled by default (`uart.enabled = true` in `wombat::Configu
 
 ## Project-owned services
 
-Projects can declare their own daemons in `raccoon.project.yml` under `services:`.
-
-Example:
+Projects can declare their own daemons in `raccoon.project.yml` under `services:`. The following is a complete real example adapted from the drumbot competition project, which runs a long-lived camera/YOLO daemon as a project service:
 
 ```yaml
-services:
-  vision:
-    module: src.daemons.vision
-    restart: always
-    after_sync: restart_if_changed
-    required_for_run: true
+# config/services.yml (drumbot, adapted)
+vision:
+  module: src.daemons.vision     # Python module to run as daemon
+  restart: always                 # always restart on crash
+  restart_sec: 1                  # wait 1 s before restart
+  after_sync: restart_if_changed  # only restart when watched files changed
+  required_for_run: true          # abort 'raccoon run' if this daemon fails
+  watch:
+    - src/daemons/vision.py
+    - src/hardware/usb_camera.py
+    - src/service/color_detection_service.py
 ```
+
+The key design: the daemon owns the camera (`/dev/video0`). The robot mission program is a thin client that subscribes to the daemon's LCM detection channel. Restarting the robot program does not tear down the camera and does not cause the multi-second warm-up required to re-initialize the sensor. Use this pattern for any hardware that has a significant startup cost or that must not be exclusively opened twice.
+
+### `watch:` and `after_sync` interaction
+
+The `watch:` field and `after_sync: restart_if_changed` work together:
+
+- Without `watch:`: the toolchain hashes the entire project. Any file sync may trigger a restart.
+- With `watch: [file1, file2]`: the toolchain hashes only those listed files. The daemon only restarts if one of those files changed since the last sync.
+
+This is essential for a camera daemon. Without `watch:`, every `raccoon run` (which syncs Python mission files) would restart the camera, blowing the warm-up budget.
+
+### `required_for_run`
+
+When `required_for_run: true`, the toolchain checks that the service is healthy before allowing `raccoon run` to proceed. If the daemon crashed or failed to start, the run is aborted with an error. Do not ignore `required_for_run` failures — they mean a dependency your missions need is not ready.
 
 Important schema rules enforced by the current implementation:
 
@@ -275,6 +324,26 @@ raccoon logs services show <service-name>
 
 The service list includes: active state, sub-state, main PID, restart count, activation timestamp, and whether the service is required for run.
 
+## LCM transport from project services: `get_transport()`
+
+Project daemons and `RobotService` subclasses that need to publish or subscribe to LCM channels should use `get_transport()` from the `raccoon` package — not the low-level `raccoon_transport.Transport` class directly.
+
+```python
+from raccoon import RobotService, get_transport
+
+class ColorDetectionService(RobotService):
+    def start_camera(self):
+        # get_transport() returns the shared transport singleton.
+        # Do not construct a new Transport() — that creates a second connection.
+        self._transport = get_transport()
+        self._transport.subscribe("raccoon/cam/detections", self._on_detections)
+        self._transport.subscribe("raccoon/cam/status", self._on_status)
+```
+
+`get_transport()` is exported directly from `raccoon` (confirmed: `raccoon/__init__.py` line 114). Using it ensures the daemon and the mission runner share the same transport instance and the same raccoon_ring SHM files. Constructing a separate `Transport()` object can create duplicate subscriptions and ring-file conflicts.
+
+This is how the drumbot vision daemon and its `ColorDetectionService` client communicate across the process boundary: the daemon publishes detections; `ColorDetectionService` subscribes in the same robot process that runs missions.
+
 ## Practical debugging workflow
 
 When a subsystem looks dead, narrow it by layer:
@@ -299,3 +368,9 @@ The engineering shape here is deliberate:
 - Project daemons are first-class deployable services instead of ad-hoc shell hacks.
 
 That separation makes the platform debuggable. A robot can fail partially instead of failing as one giant opaque process.
+
+## Related pages
+
+- [Data Pipeline](../data-pipeline/) — how `stm32_data_reader.service` fits into the sensor data path
+- [Build and Flash](../build-flash/) — how to build and deploy the `stm32-data-reader` binary
+- [Architecture Overview](../architecture/) — the full responsibility split between STM32 and Pi

@@ -14,6 +14,18 @@ raccoon wizard [--dry-run]
 
 An interactive, step-by-step setup assistant that writes — or updates — the hardware-specific sections of `raccoon.project.yml`. Run it when you first wire up your robot, and again whenever you change drivetrain hardware or need to recalibrate encoder ticks. You do not need to edit the YAML file by hand.
 
+## What the wizard writes (and what it leaves alone)
+
+The wizard performs a **partial update** of `raccoon.project.yml`. It touches only:
+
+- `name`
+- `robot.drive.kinematics` (drivetrain type, wheel radius, track width, wheelbase, motor references)
+- `definitions` — motor, IMU, and button entries
+
+It explicitly leaves everything else untouched: `shutdown_in`, `vel_config`, `odometry`, `motion_pid`, `physical`, extra sensors, servos, run configurations. This makes it safe to re-run the wizard on an existing project after a hardware change without losing advanced config you added by hand.
+
+After the wizard, use the [Web IDE]({{< ref "16-raccoon-server" >}}) Device tab to set sensor positions, rotation centre, and start pose — these are not configurable from the wizard.
+
 ## When to use it
 
 - Configuring a new robot from scratch.

@@ -3,12 +3,31 @@ title: "Custom Steps"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 9
+weight: 10
 ---
 
 # Custom Steps
 
-When the built-in steps don't cover what you need, you can create your own reusable steps. There are two approaches: **function-based** (simple, recommended) and **class-based** (for complex behavior).
+## Concept: When to Write Custom Steps
+
+The built-in step library covers the most common competition needs — line following, wall alignment, servo presets, motor control. Custom steps fill the gaps: mechanisms without limit switches, scan-while-driving routines, heading-hold controllers, project-specific DSL wrappers.
+
+There are three approaches, in order of complexity:
+
+1. **Function-based steps** (recommended) — a regular Python function that returns a composition of existing steps. No class needed.
+2. **Class-based steps** — extend `Step` for steps with their own async logic.
+3. **Motion steps** — extend `MotionStep` for tight 100 Hz control loops (PID controllers, sensor servoing).
+
+```mermaid
+flowchart TD
+    Q{What does the step need?}
+    Q -->|"Reuse existing steps in a named pattern"| A[Function-based step\nReturn seq() / parallel()]
+    Q -->|"Custom async logic: scanning, waiting, sampling"| B[Step class\n_execute_step()]
+    Q -->|"100 Hz control loop: PID, sensor servoing"| C[MotionStep class\non_update() returning bool]
+    A --> D[Import and call\nlike any built-in]
+    B --> D
+    C --> D
+```
 
 ## Function-Based Custom Steps (Recommended)
 
@@ -45,6 +64,25 @@ class M020CollectMission(Mission):
             drive_backward(10),
         ])
 ```
+
+### Example: Motor-Timed Mechanism (No Limit Switch)
+
+When a mechanism is too simple to justify limit switches, use `set_motor_velocity()` + `wait_for_seconds()` + `motor_passive_brake()` wrapped in a named function. Adapted from the Ecer2026 ConeBot:
+
+```python
+def down_cone_container_timed():
+    return seq([
+        set_motor_velocity(Defs.cone_container_motor, velocity=-1700),
+        wait_for_seconds(0.4),
+        motor_passive_brake(Defs.cone_container_motor),
+        drive_forward(cm=10),
+        set_motor_velocity(Defs.cone_container_motor, velocity=1700),
+        wait_for_seconds(0.2),
+        motor_passive_brake(Defs.cone_container_motor),
+    ])
+```
+
+The velocity of `-1700` is in raw BEMF ticks — check your motor's `ticks_to_rad` calibration to convert to real units. Time-based control is the right trade-off when the mechanical stroke is consistent and sensor wiring is impractical.
 
 ### Example: Grab and Lift
 
@@ -83,6 +121,24 @@ def align_and_mark() -> Sequential:
         mark_heading_reference(),
     ])
 ```
+
+## Registering Steps for WebIDE Discovery: `@dsl`
+
+If you want your step function to appear in the BotUI step palette (and in API reference listings), decorate it with `@dsl`:
+
+```python
+from raccoon import *
+from raccoon.step.annotation import dsl
+
+
+@dsl(tags=["custom", "arm"])
+def grab_and_lift(delay: float = 0.2) -> Sequential:
+    return seq([...])
+```
+
+Steps without `@dsl` still work perfectly in mission code — they're just invisible to the discovery system. Use `@dsl` for steps you want other team members to find in the UI; leave it off for internal helpers.
+
+> **`@dsl(hidden=True)`** registers the step for metadata purposes but hides it from the palette. Useful for UIStep subclasses that are invoked programmatically, not by drag-and-drop.
 
 ## Class-Based Custom Steps
 
@@ -147,6 +203,91 @@ class SimpleStep(Step):
         pass
 ```
 
+### `_execute_step` vs `run_step`
+
+When wrapping a built-in step inside a custom step's `_execute_step`, there are two ways to call it:
+
+| Method | When to use |
+|--------|------------|
+| `await step.run_step(robot)` | The outer step; calls timing instrumentation and resource validation |
+| `await step._execute_step(robot)` | When wrapping from *inside* a custom step — skips timing and resource re-validation |
+
+Use `_execute_step` when you are implementing a higher-level step that drives a built-in step as an internal implementation detail — you don't want the inner step to also emit timing records or validate resources a second time. The Ecer2026 PackingBot uses this pattern in its `EtScanAlign` step:
+
+```python
+async def _execute_step(self, robot) -> None:
+    scan_step = turn_left(self.scan_degrees, self.speed)
+    sample_task = asyncio.create_task(sample_loop())
+    try:
+        await scan_step._execute_step(robot)   # not run_step — no double instrumentation
+    finally:
+        sampling = False
+        await sample_task
+```
+
+### Concurrent Sensor Sampling with `asyncio.create_task()`
+
+Custom steps that need to sample a sensor *while* another step runs use `asyncio.create_task()` to start a background sampling loop, then `await` the inner step, and clean up in a `finally` block. This is the three-phase **scan / analyze / act** pattern:
+
+```python
+import asyncio
+from raccoon import Step, GenericRobot
+from raccoon.step.annotation import dsl_step
+
+
+@dsl_step(tags=["sensor"])
+class EtScanAlign(Step):
+    """Turn while sampling a distance sensor, find the object center,
+    then rotate to face it."""
+
+    def __init__(self, scan_degrees: float = 90, speed: float = 0.4, threshold: float = 1500):
+        super().__init__()
+        self.scan_degrees = scan_degrees
+        self.speed = speed
+        self.threshold = threshold
+        self._samples: list[tuple[float, float]] = []
+
+    def _generate_signature(self) -> str:
+        return f"EtScanAlign(deg={self.scan_degrees}, spd={self.speed:.1f})"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        self._samples = []
+        sampling = True
+
+        # Sampling closure — runs concurrently with the turn step
+        async def sample_loop():
+            while sampling:
+                heading = robot.defs.imu.get_heading()
+                value = robot.defs.et_sensor.read()
+                self._samples.append((heading, value))
+                await asyncio.sleep(0.01)
+
+        # Phase 1: Scan — turn while sampling
+        scan_step = turn_left(self.scan_degrees, self.speed)
+        sample_task = asyncio.create_task(sample_loop())
+        try:
+            await scan_step._execute_step(robot)   # inner step
+        finally:
+            sampling = False
+            await sample_task   # drain the last sample
+
+        # Phase 2: Analyze — find object center from samples
+        target = self._find_center()
+        if target is None:
+            return
+
+        # Phase 3: Act — turn to face the object
+        current = robot.defs.imu.get_heading()
+        # ... compute error and turn ...
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive"})
+```
+
+*(Adapted from the Ecer2026 PackingBot's `EtScanAlign`.)*
+
+The key pattern: `asyncio.create_task()` starts the sampling loop concurrently with `_execute_step`; the `finally:` block guarantees the task is stopped and drained even if the inner step raises an exception.
+
 ### Example: Wait Until Sensor Threshold
 
 ```python
@@ -190,7 +331,7 @@ seq([
 wait_for_analog_range(Defs.light_sensor, min_value=1000, max_value=2000).skip_timing()
 ```
 
-### Example: Custom Motion Step (100 Hz Loop)
+## Custom Motion Steps (100 Hz Loop)
 
 For steps that need a tight control loop, use `MotionStep` as your base. It provides a fixed-rate update loop. The default rate is **100 Hz** — controlled by the class attribute `hz: int = 100`. Override it in your subclass to use a different rate (e.g. `hz = 50` for slower control loops that don't need full 100 Hz precision):
 
@@ -245,6 +386,111 @@ The `hz` class attribute controls how often `on_update` is called. The framework
 | `50` | 20 ms | Slower control loops, vision-based feedback |
 | `25` | 40 ms | Very slow processes (e.g., temperature sensors) |
 
+### Real Example: HoldHeading — A MotionStep that Never Finishes
+
+The most instructive real-world `MotionStep` is the Ecer2026 ConeBot's `HoldHeading`, which continuously corrects the robot's heading to maintain a fixed bearing. It is designed to run inside `parallel()` and never finish on its own (it returns `False` from `on_update` always) — the parallel block ends when the sibling step finishes.
+
+```python
+import math
+from raccoon.foundation import ChassisVelocity
+from raccoon.robot.heading_reference import HeadingReferenceService
+from raccoon.step.motion.motion_step import MotionStep
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from raccoon.robot.api import GenericRobot
+
+
+class HoldHeading(MotionStep):
+    """Continuously corrects angular velocity to maintain a fixed heading.
+    Designed for use inside parallel() — it never finishes on its own."""
+
+    def __init__(self, target_deg: float = 0.0, kp: float = 5.0) -> None:
+        super().__init__()
+        self._target_deg = target_deg
+        self._kp = kp
+
+    def _generate_signature(self) -> str:
+        return f"HoldHeading(target={self._target_deg:.1f}, kp={self._kp})"
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        # Fetch the built-in heading reference service
+        self._service = robot.get_service(HeadingReferenceService)
+        # Read the robot's PID config for clamping
+        self._max_w = robot.motion_pid_config.angular.max_velocity
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        error_deg = self._service.compute_turn(self._target_deg)
+        error_rad = math.radians(error_deg)
+        w = self._kp * error_rad
+        w = max(-self._max_w, min(self._max_w, w))
+        robot.drive.set_velocity(ChassisVelocity(0, 0, w))
+        robot.drive.update(dt)
+        return False   # never finishes — always runs until parallel() cancels it
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive"})
+```
+
+Usage:
+
+```python
+parallel(
+    hold_heading(target_deg=0, kp=5.0),  # keeps heading at 0° while sibling runs
+    seq([
+        drive_forward(50),
+        turn_left(90),
+    ]),
+)
+```
+
+This example shows five patterns at once:
+- Accessing a built-in service via `robot.get_service(HeadingReferenceService)`
+- Reading motion config from inside a step: `robot.motion_pid_config.angular.max_velocity`
+- Setting drive velocity directly: `robot.drive.set_velocity(ChassisVelocity(vx, vy, wz))`
+- Advancing the drive model: `robot.drive.update(dt)` — required every tick when calling `set_velocity` directly
+- Returning `False` always — the "never-finish, use in parallel" design
+
+The `TYPE_CHECKING` import guard prevents a circular import: the `HoldHeading` class only needs `GenericRobot` for type annotations, not at runtime.
+
+### Project-Level `@dsl_step` Codegen
+
+Teams can apply raccoon's own `@dsl_step` decorator to project-owned step classes and run `raccoon codegen` to generate the corresponding `*_dsl.py` builder file. Mission code imports from that generated file, exactly as it does for raccoon's built-in steps.
+
+The Ecer2026 ClawBot demonstrates this pattern — `src/steps/line_follow.py` defines a family of custom step classes with `@dsl_step`, and `src/steps/line_follow_dsl.py` next to it is the auto-generated output:
+
+```python
+# src/steps/line_follow.py  (hand-written)
+from raccoon.step.annotation import dsl_step
+
+@dsl_step(tags=["motion", "line-follow"])
+class LateralFollowLineSingle(MotionStep):
+    def __init__(self, sensor, speed: float = 1.0, side: LineSide = LineSide.RIGHT, ...):
+        ...
+```
+
+```python
+# src/steps/line_follow_dsl.py  (generated — DO NOT EDIT)
+def lateral_follow_line_single(sensor, speed=1.0, side=LineSide.RIGHT, ...) -> ...:
+    ...
+```
+
+```python
+# In mission code — import from the generated file
+from src.steps.line_follow_dsl import lateral_follow_line_single
+
+class M040CollectBotguyMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            lateral_follow_line_single(
+                sensor=Defs.front.left,
+                speed=-0.6,
+                side=LineSide.LEFT,
+                kp=0.4,
+            ).until(after_cm(30)),
+        ])
+```
+
 ## Resource Declarations
 
 When you create class-based steps, declare what hardware resources they use. This enables the framework to validate parallel blocks — if two steps use the same resource, they can't run in parallel.
@@ -293,3 +539,9 @@ def grab_with(claw_preset: ServoPreset, arm_preset: ServoPreset) -> Sequential:
 # Usage:
 grab_with(Defs.claw, Defs.arm)
 ```
+
+## Related Pages
+
+- **[Steps DSL]({{< ref "04-steps" >}})** — how `@dsl_step`, `@dsl`, and code generation work
+- **[Missions]({{< ref "03-missions" >}})** — using custom steps inside missions with `seq()`, `parallel()`, `background()`
+- **[Advanced Topics]({{< ref "11-advanced" >}})** — asyncio threading model, monkey-patching, robot services

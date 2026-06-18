@@ -1,7 +1,7 @@
 ---
 title: "Contributors"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 99
 layout: "list"

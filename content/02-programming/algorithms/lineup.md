@@ -10,6 +10,27 @@ weight: 2
 
 Lineup aligns the robot square on a black line. Unlike iterative correction approaches that repeatedly measure and adjust, the lineup algorithm computes the exact correction angle in a **single drive pass** using basic trigonometry. This makes it fast — alignment completes with almost no time lost.
 
+## Concept
+
+The dual-sensor lineup algorithm exploits a simple geometric fact: when the robot approaches a line at an angle, its two sensors do not cross the line at the same time. The distance driven between the two crossings — the **stagger** — directly encodes the misalignment angle.
+
+```mermaid
+flowchart TD
+    A[Drive forward at full speed] --> B{First sensor crosses line?}
+    B -- No --> A
+    B -- Yes --> C[Record odometry position]
+    C --> D{Second sensor crosses line?}
+    D -- No --> A
+    D -- Yes --> E[Record second odometry position]
+    E --> F[Compute stagger distance = pos2 − pos1]
+    F --> G[angle = atan\nstagger / sensor_gap]
+    G --> H[Turn by computed angle]
+    H --> I[Drive forward until both sensors see white]
+    I --> J[Robot is squared on the line]
+```
+
+This is pure geometry — no PID, no tuning, no iteration. One pass gives the exact correction.
+
 ## Quick Start
 
 ```python
@@ -185,6 +206,33 @@ All strafe variants take `front_sensor`, `back_sensor`, and `detection_threshold
 | `strafe_left_lineup_on_white` | Strafe left | White | Front + Back |
 | `forward_single_lineup` | Forward | Black | One |
 | `backward_single_lineup` | Backward | Black | One |
+
+## Real-World Usage Pattern
+
+Lineup is typically used immediately before a pickup or delivery to guarantee the robot is square. The pattern is: drive to approximately the right position, then lineup, then proceed:
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+class M020DeliverMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # Drive roughly to the target
+            drive_forward(cm=60),
+            turn_right(90),
+
+            # Square up on the delivery line.
+            # No tuning needed — geometry handles the correction.
+            forward_lineup_on_black(Defs.front.left, Defs.front.right),
+
+            # Now the robot is square — place the object
+            Defs.arm_servo.down(),
+            Defs.claw_servo.open(),
+        ])
+```
+
+For mecanum robots, combine strafe lineup with `mark_heading_reference()` to recover any heading drift before the lined-up phase. See [Wall Alignment]({{< ref "wall-alignment" >}}) for the analogous heading-reset pattern.
 
 ## Tips
 

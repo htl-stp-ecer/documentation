@@ -3,7 +3,7 @@ title: "Python Code Editor"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 11
+weight: 13
 ---
 
 ## Overview
@@ -14,6 +14,15 @@ The center panel of the Web IDE can switch between two views:
 - **Code** — a full Python source code editor backed by CodeMirror 6
 
 Both views operate on the same mission. Switching between them at any time is non-destructive: the flowchart represents the mission's logical structure, and the code view shows (and lets you directly edit) the Python source file that is generated from or backing that mission.
+
+## The flowchart and code relationship
+
+The flowchart and the Python file are **two representations of the same mission**. The flowchart is the source of truth for missions you build visually:
+
+- **Saving the flowchart** → IDE backend code-generates the `.py` file from the node graph (overwrites any manual edits)
+- **Saving in the code editor** → saves the `.py` file directly (does not regenerate the flowchart)
+
+This means the code view is intentionally a **power-user escape hatch**. Use it when you need to add things that have no flowchart equivalent: imports, helper functions, module-level constants, or complex expressions. After saving manual code edits, avoid re-saving from the flowchart view unless you want those edits overwritten.
 
 ---
 
@@ -113,3 +122,10 @@ The flowchart is the primary interface for most editing. Use the code editor whe
 - You are copying code between projects or pasting from an external editor
 
 Because the code and flowchart share the same source file, edits in one are visible to the other after saving and reloading. In normal use the flowchart code-generates into the Python file; if you edit the Python file directly, those edits may be overwritten the next time the flowchart is saved or code-gen runs. Treat direct code edits as intentional and permanent overrides of the generated logic.
+
+---
+
+## Cross-references
+
+- [Flowchart Editor]({{< ref "03-flowchart-editor" >}}) — the primary editing surface
+- [Architecture]({{< ref "0a-architecture" >}}) — how flowchart saves become Python files

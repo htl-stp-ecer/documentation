@@ -3,7 +3,7 @@ title: "Smooth Path and Spline Motion"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 26
+weight: 27
 ---
 
 # Smooth Path and Spline Motion
@@ -148,9 +148,56 @@ smooth_path(
 
 This is a shortcut for users who have a sequence of steps but want spline-smooth motion without manually listing waypoints. Under the hood it extracts waypoints from the compiled plan and passes them to `SplinePath`.
 
-### Heading Drift Correction
+### `heading=` Parameter on Segments
 
-Each linear segment inside `smooth_path()` holds an absolute world-frame heading captured from `robot.localization.get_pose()` at segment start. This means accumulated heading drift is naturally absorbed between segments — you do not need explicit heading correction steps between drives.
+Each drive step inside `smooth_path()` accepts a `heading=` parameter that pins that segment to an **absolute heading** (degrees from the heading reference). This eliminates the need for explicit `turn_to_heading_*` calls between segments on mecanum robots:
+
+```python
+# Without heading= : need explicit turn steps between segments
+smooth_path(
+    drive_backward(cm=10),
+    turn_to_heading_left(90),     # explicit turn
+    drive_forward(cm=80),
+)
+
+# With heading= : each segment holds its absolute heading, no turn steps needed
+smooth_path(
+    drive_backward(heading=90).until(
+        after_cm(10) + over_line(Defs.front.left)
+    ),
+    drive_forward(cm=80, heading=0),
+)
+```
+
+**Real example (adapted from the clawbot, ramp mission):**
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+smooth_path(
+    # Hold 90° while driving backward past a line
+    drive_backward(heading=90).until(
+        after_cm(10) + over_line(Defs.front.left)
+    ),
+    # Hold 0° for the long forward segment — no turn step needed
+    drive_forward(cm=80, heading=0),
+
+    # background() is accepted inside smooth_path()
+    background(arm.move_angles(-50, 80, -80)),
+
+    # Hold 0° while strafing left until sensor or timeout
+    strafe_left(heading=0).until(
+        on_black(Defs.front.left) | after_seconds(2)
+    ),
+)
+```
+
+`mark_heading_reference()` must have been called before any segment uses `heading=`. The values use the same convention as `turn_to_heading_right()` / `turn_to_heading_left()`.
+
+### Heading Drift Correction (Without `heading=`)
+
+If you don't specify `heading=` on a segment, each linear segment inside `smooth_path()` still holds an absolute world-frame heading captured from odometry at segment start. This means accumulated heading drift is naturally absorbed between segments — you do not need explicit heading correction steps between drives when `heading=` is not specified.
 
 ### `smooth_path()` Parameters
 
@@ -291,3 +338,9 @@ spline((30, 0), (50, 20), absolute_heading=True)
 | **Best for** | Migrating existing `seq()` code; complex side-action timing | Precision curved paths where waypoint coordinates are known |
 
 Use `smooth_path()` when you already have a sequence of steps and want to eliminate stops. Use `spline()` when you know the geometric waypoints and need a smooth curve through them.
+
+## Related Pages
+
+- [Drive System]({{< ref "07-drive-system" >}}) — `drive_angle()`, `heading=` parameter, and arc steps
+- [Odometry]({{< ref "08-odometry" >}}) — heading reference system and `mark_heading_reference()`
+- [Localization and Resync]({{< ref "22-localization-resync" >}}) — `robot.localization.get_pose()` used for heading hold in smooth_path

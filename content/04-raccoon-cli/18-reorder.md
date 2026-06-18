@@ -14,6 +14,12 @@ raccoon reorder missions [ORDER...]
 
 Changes the execution order of missions in your project and automatically renumbers all mission files, class names, and imports to match the new order. Use it when you want to rearrange missions without manually editing YAML and renaming files by hand.
 
+## Why this is necessary
+
+Mission files use a naming convention where the numeric prefix encodes execution order: `m010_drive_mission.py` → `M010DriveMission`. This prefix appears in three places simultaneously — the filename, the class name inside the file, and the import in `src/main.py`. Manually reordering missions means updating all three consistently across potentially many files. `raccoon reorder missions` does this atomically with a two-phase rename to avoid conflicts when two missions swap numbers.
+
+> Before reordering, commit or create a checkpoint. The operation modifies multiple files and is easier to verify if you can diff the result.
+
 ## Why renumbering matters
 
 Mission files follow a strict naming convention: `m010_drive_forward_mission.py` contains the class `M010DriveForwardMission`. The numeric prefix determines execution order. When missions are reordered, their prefix numbers must be updated consistently across:

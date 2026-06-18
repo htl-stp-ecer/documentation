@@ -10,6 +10,34 @@ weight: 5
 
 The Calibration Board is an external USB-C–connected daughterboard that carries additional sensors used for precision odometry and IMU calibration. It connects via a serial bridge (`raccoon-calib-bridge`) that publishes sensor data and accepts calibration commands over LCM.
 
+## Concept
+
+### Why a Separate Board?
+
+The Wombat's built-in IMU gives heading and orientation, but it cannot measure lateral displacement directly. The Calibration Board adds a **PAA5100 optical-flow sensor** (like the sensor in a computer mouse, facing down at the floor) and an **ICM-42688-P 6-DoF IMU**. Together these two sensors feed a position estimator that reports robot pose in 2D without wheel encoders — useful for mecanum-drive robots where wheel-encoder odometry is unreliable.
+
+BotUI is the calibration interface for these sensors. The values you save here are written to the board's own flash memory and are loaded automatically by the raccoon odometry subsystem when the board is connected.
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Board as Calibration Board<br/>(PAA5100 + ICM-42688-P)
+    participant Bridge as raccoon-calib-bridge<br/>(USB serial daemon)
+    participant Ring as raccoon_ring bus<br/>(shared memory)
+    participant BotUI as BotUI<br/>(Flutter)
+
+    Board->>Bridge: raw sensor frames (USB serial)
+    Bridge->>Ring: publish on calib_board/* channels
+    Ring->>BotUI: TransportService streams live data
+    BotUI->>Ring: publish calibration commands
+    Ring->>Bridge: subscribe calib commands
+    Bridge->>Board: write to flash (serial)
+    Board-->>Bridge: echo confirmation
+    Bridge-->>Ring: publish confirmation
+    Ring-->>BotUI: display PASS / FAIL
+```
+
 The board's **Calib Board** tile is always visible on the Sensors & Actors selection screen. Its visual state tells you whether the board is reachable:
 
 | Tile state | Meaning |
@@ -260,3 +288,5 @@ For a freshly assembled or repositioned robot, perform calibration in this order
 4. **Odometry verification** — Open the Odometry screen and drive the robot in a known shape (e.g. a square) to verify the fused pose matches reality.
 
 All calibration values are written to the calibration board's own flash memory and persist across reboots without any action required in BotUI.
+
+> **Cross-link:** The raccoon odometry subsystem that consumes these values is described in the [Programming — Odometry]({{< ref "/02-programming/08-odometry" >}}) page.

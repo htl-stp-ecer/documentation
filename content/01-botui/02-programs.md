@@ -12,6 +12,28 @@ The Programs screen lists all executable robot programs stored on the Pi. Tap an
 
 ![IMG: A list of all programs](/images/botui/programs/program-list.png)
 
+## Concept
+
+A "program" in BotUI is any directory under the programs folder that contains a `run.sh` script. BotUI does not know about raccoon missions, steps, or Python — it simply launches `run.sh` and streams the process output to a terminal widget. The raccoon toolchain (`raccoon sync`) is responsible for placing the right code there; BotUI just exposes a launch button and a console.
+
+The one thing BotUI adds on top of raw script execution is **sync state visibility**: the version chip on each program tile shows whether the code was pushed by the raccoon toolchain and when. This is the primary competition-day check that you are running the code you think you are.
+
+### Program Launch Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> ProgramList: open Programs screen
+    ProgramList --> ActionScreen: tap program tile
+    ActionScreen --> ArgOverlay: program declares typed args
+    ArgOverlay --> ArgOverlay: submit one arg, more remain
+    ArgOverlay --> Launching: all args submitted
+    ActionScreen --> Launching: Start (no args)
+    ActionScreen --> AdvancedOverlay: tap Advanced
+    AdvancedOverlay --> Launching: Start with flags
+    Launching --> RunScreen: process started (xterm)
+    RunScreen --> [*]: back button pressed\n(process killed)
+```
+
 ## Project Descriptors
 
 BotUI discovers programs by scanning the programs directory for subdirectories. Each subdirectory is treated as one program. BotUI reads metadata from project descriptor files in the following priority order:
@@ -73,5 +95,7 @@ In addition to **Start**, the program run screen also has an **Advanced** button
 After toggling the desired flags, tap **Start** inside the Advanced overlay to launch with those flags applied. Tap **Cancel** to dismiss the overlay without launching.
 
 Use `--no-calibrate` when you need a fast restart during testing and the calibration step has already been completed in an earlier run. Use `--dev` to activate verbose logging or other developer conveniences your program implements.
+
+> **Note:** `--dev` and `--no-calibrate` are forwarded to `run.sh` as command-line arguments. They only have an effect if `run.sh` reads and acts on `$@`. The raccoon scaffold's `run.sh` passes all arguments to the Python entry point, where `--no-calibrate` suppresses `SetupMission.sequence()` calibration steps.
 
 ![IMG: Shows functions for programs](/images/botui/programs/program-details.png)

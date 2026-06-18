@@ -3,12 +3,21 @@ title: "Project Structure"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 3
+weight: 4
 ---
 
 # Project Structure
 
-Every robot project follows the same file layout. This page explains what each file does and how the pieces fit together.
+## Concept
+
+Every raccoon project has the same file layout: YAML config declares what hardware you have, the CLI generates Python from it, and your missions describe what the robot does. Understanding this split is the key to working efficiently — when something is wrong with hardware behavior, you fix the YAML and re-run; when something is wrong with the robot's actions, you fix the mission.
+
+The three categories of files:
+- **YAML config** (`raccoon.project.yml`, `config/*.yml`) — edit freely; the CLI reads these
+- **Generated Python** (`src/hardware/defs.py`, `src/hardware/robot.py`) — never edit; the CLI overwrites these
+- **Mission/step Python** (`src/missions/*.py`, `src/steps/*.py`) — edit freely; the CLI never touches these
+
+Everything else on this page explains what lives where and why.
 
 ## See It First
 
@@ -261,31 +270,69 @@ class Robot(GenericRobot):
 
 > **`FusedOdometry` is not imported.** Odometry is now platform-managed. The generated `robot.py` exposes an `odometry` `@property` that calls `Platform.create_odometry(self.kinematics)` lazily on first access. You do not select `FusedOdometry` or `Stm32Odometry` in the YAML — that choice is made by the platform driver. If you add `odometry:` to `robot.yml`, the codegen logs a warning and ignores it.
 
+> **Migration:** If you have an older `robot.py` that imports `FusedOdometry`, run `raccoon codegen` to regenerate it. Keeping a stale generated file causes an `ImportError` on current raccoon-lib versions.
+
 See [Robot Definition]({{< ref "02-robot-definition" >}}) for the full breakdown.
 
 ## How It All Connects
 
 ```mermaid
-graph LR
-    YAML["raccoon.project.yml"] -->|read by| CLI["Raccoon CLI"]
-    YAML -->|read by| UI["BotUI"]
-    CLI -->|generates| DEFS["defs.py"]
-    CLI -->|generates| ROBOT["robot.py"]
-    DEFS -->|imported by| ROBOT
-    ROBOT -->|imported by| MAIN["main.py"]
-    ROBOT -->|references| MISSIONS["missions"]
-    MISSIONS -->|may use| STEPS["steps"]
-    MAIN -->|"robot.start()"| RUN["Runtime"]
+graph TD
+    YAML["raccoon.project.yml\n(+ config/*.yml)"]
+    CLI["Raccoon CLI\nraccoon run / raccoon codegen"]
+    DEFS["src/hardware/defs.py\nGENERATED — do not edit"]
+    ROBOT["src/hardware/robot.py\nGENERATED — do not edit"]
+    MAIN["src/main.py"]
+    MISSIONS["src/missions/*.py\nyours to write"]
+    STEPS["src/steps/*.py\nyours to write"]
+    RUN["robot.start()\n→ setup → wait → missions → shutdown"]
+
+    YAML -->|"codegen reads"| CLI
+    CLI -->|"generates"| DEFS
+    CLI -->|"generates"| ROBOT
+    DEFS -->|"imported by"| ROBOT
+    ROBOT -->|"imported by"| MAIN
+    ROBOT -->|"references"| MISSIONS
+    MISSIONS -->|"may import"| STEPS
+    MAIN -->|"calls"| RUN
 
     style YAML fill:#FFA726,color:#fff
+    style CLI fill:#42A5F5,color:#fff
+    style DEFS fill:#AB47BC,color:#fff
+    style ROBOT fill:#AB47BC,color:#fff
     style MAIN fill:#4CAF50,color:#fff
     style MISSIONS fill:#66BB6A,color:#fff
     style STEPS fill:#66BB6A,color:#fff
+    style RUN fill:#FF7043,color:#fff
 ```
 
 The YAML configuration is the **single source of truth** for your robot's hardware and drive setup. The Raccoon CLI generates `defs.py` and `robot.py` from it automatically — these files are overwritten on every code generation run. **Never edit `defs.py` or `robot.py` by hand.** If you need to change motors, servos, kinematics, or PID config, edit `raccoon.project.yml` and let the CLI regenerate the Python files.
 
 Mission files (`missions/*.py`) and custom step files (`steps/*.py`) are yours to write and edit freely — code generation does not touch them.
+
+### Splitting hardware config across files
+
+Large projects split hardware config into sub-files using `!include-merge`:
+
+```yaml
+# config/hardware.yml
+button:
+  type: DigitalSensor
+  port: 10
+imu:
+  type: IMU
+front_right_ir_sensor:
+  type: IRSensor
+  port: 0
+
+# These two keys pull in motors.yml and servos.yml as if the keys were defined inline.
+# The underscore prefix (_motors, _servos) is a merge-anchor convention —
+# those keys are not exposed to codegen; only the merged-in definitions are.
+_motors: !include-merge 'motors.yml'
+_servos: !include-merge 'servos.yml'
+```
+
+After merging, the codegen sees `front_left_motor`, `front_right_motor`, etc. directly in the hardware namespace, as if they had been defined in `hardware.yml` directly. See [YAML Includes]({{< ref "18-yaml-includes" >}}) for the full `!include` / `!include-merge` reference.
 
 ## Naming Conventions
 
@@ -333,27 +380,41 @@ All Python files use lowercase with underscores. No hyphens, no spaces:
 
 ### Mission Numbering
 
-Missions use a **three-digit** zero-padded prefix as a naming convention. The CLI regex is `^[Mm](\d{3})` — exactly three digits after the `M`:
+Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`, `M010`, `M999`). `raccoon create mission` always generates three-digit prefixes. Tooling and documentation assume this format — using two-digit prefixes like `M00` or `M01` can cause unexpected ordering behavior and should be avoided in new projects.
 
 | Range | Purpose |
 |-------|---------|
 | `m000` | Reserved — setup mission |
-| `m010`–`m990` | Main missions (increment by 10) |
+| `m010`–`m998` | Main missions |
 | `m999` | Reserved — shutdown mission |
 
 `raccoon create mission MyMission` assigns the next available number (starting at `M010`, then `M020`, `M030`, etc.) and creates the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
 
-Execution order is determined by the `missions:` list in `raccoon.project.yml`, not the file number:
+**Inserting missions between existing ones** — you are not limited to decade steps. Non-decade numbers like `M001`, `M025`, or `M027` are valid. The CLI only requires three digits; the gap between `M020` and `M030` is yours to use:
 
 ```yaml
 missions:
-  - M000SetupMission: setup       # Runs as setup mission (before start signal)
-  - M010GrabPomsMission           # First main mission
-  - M020DriveToBasketMission      # Second main mission
-  - M999ShutdownMission: shutdown # Runs as shutdown mission (after timeout or completion)
+  - M000SetupMission: setup
+  - M010GrabPomsMission
+  - M025SecondPickupMission      # inserted mid-competition at M025
+  - M030DriveToBasketMission
+  - M999ShutdownMission: shutdown
 ```
 
-The YAML list order defines the sequence. The number is purely for human readability and file sorting. A mission named `m042_foo.py` that appears first in the YAML list runs first.
+Execution order is determined **solely** by the `missions:` list in `raccoon.project.yml`, not the file number. The number is purely for human readability and file sorting. A mission named `m042_foo.py` that appears first in the YAML list runs first.
+
+**Temporarily disabling missions** — YAML comments are the safest way to disable a mission mid-competition without deleting it:
+
+```yaml
+missions:
+  - M000SetupMission: setup
+  - M010GrabPomsMission
+  #- M020HazardousMission        # ← disabled: commented out, easy to re-enable
+  - M030DriveToBasketMission
+  - M999ShutdownMission: shutdown
+```
+
+Comment the line out and the mission is skipped; uncomment it and it runs again. No file deletion, no class-name changes.
 
 ### Hardware Naming Pattern
 

@@ -1,12 +1,46 @@
 ---
 title: "SPI Communication Protocol"
-author: "OpenAI Codex"
+author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 2
 ---
 
 # SPI Communication Protocol
+
+## Concept
+
+The SPI link is the only shared boundary between the Raspberry Pi and the STM32. Everything the Pi knows about motors, sensors, and the IMU comes from this link. Every command the Pi sends to the STM32 goes through it.
+
+The protocol is a single full-duplex packed struct exchange. There is no framing, no handshake, no length negotiation — just two fixed-size structs, one going in each direction simultaneously, every ~5 ms. The Pi is always the master; the STM32 is always the slave.
+
+The naming convention is from the STM32's perspective:
+- **`TxBuffer`** — what the STM32 *transmits* to the Pi (sensor data, motor telemetry, IMU, odometry)
+- **`RxBuffer`** — what the STM32 *receives* from the Pi (motor commands, servo positions, PID gains, kinematics config)
+
+```mermaid
+sequenceDiagram
+    participant Pi as Raspberry Pi (SPI master)
+    participant STM as STM32F427 (SPI slave)
+
+    Note over Pi,STM: Every ~5 ms (stm32-data-reader main loop)
+
+    Pi->>STM: spi_update() ioctl(SPI_IOC_MESSAGE)
+    Note over Pi,STM: Full-duplex: Pi sends RxBuffer while receiving TxBuffer
+
+    STM-->>Pi: TxBuffer (sensor data, motor pos, IMU, odometry)
+    Pi-->>STM: RxBuffer (motor commands, servo angles, PID gains)
+
+    STM->>STM: HAL_SPI_TxRxCpltCallback fires
+    STM->>STM: Validate transferVersion == 21
+    STM->>STM: Apply update flags (PID, kinematics, position reset...)
+    STM->>STM: Next BEMF cycle applies new motor commands (≤1250 µs)
+
+    Pi->>Pi: SpiReal::readSensorData() unpacks TxBuffer
+    Pi->>Pi: DataPublisher publishes to raccoon/* LCM channels
+```
+
+A version mismatch (`TRANSFER_VERSION` in the received `TxBuffer` does not equal 21) triggers an automatic firmware reflash and retry on the Pi side — it is treated as a repairable deployment problem, not a silent ignore.
 
 The canonical SPI protocol definition lives in:
 
@@ -351,8 +385,10 @@ Speed Mode is not just a higher-level library flag. It changes which SPI command
 - speed mode changes valid motor-command semantics at the SPI boundary
 - motor position reset is on-STM32 via the `motorPositionReset` bitmask; there are no Pi-side software position offsets
 
-## Related files
+## Related files and pages
 
-- shared header: `stm32-data-reader/shared/spi/pi_buffer.h`
+- Shared header: `stm32-data-reader/shared/spi/pi_buffer.h` — the authoritative source of truth for all struct layouts
 - Pi SPI implementation: `stm32-data-reader/src/wombat/hardware/Spi.cpp`
 - BEMF offset calibration: `stm32-data-reader/firmware/Firmware/src/Sensors/bemf.c`
+- [Motor Control](../motor-control/) — how motor modes and PID are applied once commands arrive
+- [Data Pipeline](../data-pipeline/) — how sensor data flows from SPI through LCM to Python

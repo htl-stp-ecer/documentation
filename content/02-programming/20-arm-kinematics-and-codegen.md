@@ -3,30 +3,35 @@ title: "Arm Kinematics and Code Generation"
 author: "OpenAI Codex"
 date: 2026-06-18
 draft: false
-weight: 25
+weight: 26
 ---
 
 # Arm Kinematics and Code Generation
 
-The arm system is intentionally split across two environments:
+## Concept: Two Approaches to Arm Control
 
-- the **toolchain** does the heavy math on the development machine
-- the **runtime library** executes pre-solved servo angles on the robot
+Moving a robot arm to a useful position requires solving **inverse kinematics (IK)**: given a desired tip position in 3D space, what angles should each joint be at? IK is mathematically expensive and can fail (unreachable target, multiple solutions). Running it on the Wombat at match time would require `ikpy`, add startup latency, and risk in-match failures on unsolvable targets.
 
-That design is why the arm feature is practical on the Wombat. The robot does not need `numpy`, `scipy`, or `ikpy` to move to named arm positions during a match.
+RaccoonOS offers two distinct approaches:
 
-## The Real Pipeline
+1. **Codegen IK (default):** You author named arm positions in YAML as Cartesian coordinates (`{x, y, z}`). The `raccoon codegen` command runs IK offline on your development machine, validates every position against workspace limits and forbidden zones, and emits the solved servo angles directly into `defs.py`. At runtime, the robot just does table lookups — no math, no dependencies, no surprises.
+
+2. **Project-side hand-coded IK (advanced):** For arms whose geometry does not fit the `ArmChain` model, or when runtime IK is genuinely needed (e.g., arm follows a sensor-determined object), you can implement your own kinematics in project Python. This is what the clawbot does.
+
+The key insight is: **most arms only need a handful of named positions** (home, grab, drop, handoff). Pre-solving them at build time costs nothing and gives you compile-time safety.
+
+## The Codegen Pipeline
 
 ```mermaid
 graph LR
-    A["raccoon.project.yml<br/>definitions.arm: ArmChain"] --> B["raccoon codegen"]
-    B --> C["ArmChainGenerator"]
-    C --> D["ikpy chain + IK solve"]
-    D --> E["joint angles<br/>mathematical space"]
-    E --> F["joint_to_servo_deg()<br/>servo command space"]
-    F --> G["generated defs.py<br/>ArmPreset(...)"]
-    G --> H["runtime mission code<br/>Defs.arm.home()"]
-    H --> I["parallel servo steps"]
+    A["raccoon.project.yml<br/>arm: ArmChain + positions"] --> B["raccoon codegen"]
+    B --> C["ArmChainGenerator<br/>builds ikpy chain"]
+    C --> D["IK solve per position<br/>Cartesian → joint angles"]
+    D --> E["joint_to_servo_deg()<br/>joint space → servo space"]
+    E --> F["workspace + forbidden-zone<br/>validation"]
+    F --> G["defs.py emits<br/>ArmPreset(positions={...})"]
+    G --> H["mission code calls<br/>Defs.arm.home()"]
+    H --> I["parallel() servo steps<br/>no math at runtime"]
 ```
 
 For named positions, inverse kinematics runs during code generation. The generated `defs.py` contains literal servo angles. At runtime, `ArmPreset` only looks up those angles and issues servo steps.
@@ -322,6 +327,115 @@ That is why editing an arm in the Web IDE and generating code from the CLI can s
 - Use `servo_range_deg` to encode physical servo orientation and inversion.
 - Prefer named positions for competition code.
 - Use workspace guards and forbidden zones early. They are cheap mechanical safety.
+
+## Alternative: Project-Side Hand-Coded IK
+
+When `ArmChain` codegen does not fit your arm — for example, a three-DOF arm with an unusual joint geometry, or a robot where the arm pose needs to respond to a sensor value at runtime — you can implement kinematics entirely in project Python.
+
+The clawbot demonstrates this pattern. The key architecture is:
+
+```mermaid
+graph LR
+    A["ArmKinematics<br/>.forward() / .inverse()"] --> B["calibration table<br/>interpolation"]
+    B --> C["servo positions<br/>(raw values)"]
+    C --> D["MoveBuilder(StepBuilder)<br/>._build() returns parallel()"]
+    D --> E["seq() / parallel()<br/>in mission code"]
+```
+
+### What This Looks Like in Practice
+
+```python
+# src/kinematics/arm.py (adapted from the clawbot)
+from raccoon import servo, slow_servo, parallel, StepBuilder
+from src.hardware.defs import Defs
+
+class ArmKinematics:
+    def __init__(self, l1=12.5, l2=24.0, z0=13.3):
+        self.l1, self.l2, self.z0 = l1, l2, z0
+
+    def forward(self, base_deg, shoulder_deg, elbow_deg):
+        """Return (x, y, z) in cm from joint angles."""
+        ...
+
+    def inverse(self, x, y, z):
+        """Return list of (base, shoulder, elbow) solutions."""
+        ...
+
+    def to_servo_values(self, base_deg, shoulder_deg, elbow_deg):
+        """Map joint angles to raw servo positions via calibration table."""
+        bv = _interp(_base_cal(), base_deg)
+        sv = _interp(_shoulder_cal(), shoulder_deg)
+        ev = _interp(_elbow_cal(), elbow_deg)
+        return bv, sv, ev
+
+    def move_angles(self, base_deg, shoulder_deg, elbow_deg, speed=None):
+        """Return a raccoon step — usable directly in seq() or parallel()."""
+        bv, sv, ev = self.to_servo_values(base_deg, shoulder_deg, elbow_deg)
+        if speed is None:
+            return parallel(
+                servo(Defs.arm_base, bv),
+                servo(Defs.arm_shoulder, sv),
+                servo(Defs.arm_elbow, ev),
+            )
+        return parallel(
+            slow_servo(Defs.arm_base, bv, speed),
+            slow_servo(Defs.arm_shoulder, sv, speed),
+            slow_servo(Defs.arm_elbow, ev, speed),
+        )
+
+    def move_to(self, x, y, z, speed=None):
+        """Return a MoveBuilder that selects the best IK solution."""
+        return MoveBuilder(self, x, y, z, speed)
+
+
+class MoveBuilder(StepBuilder):
+    """Extends StepBuilder so it integrates with seq()/parallel() directly."""
+
+    def upper_arm(self, angle, precision=0.5):
+        """Prefer IK solution with upper arm near this angle."""
+        self._upper_arm_deg = angle
+        return self
+
+    def _build(self):
+        bv, sv, ev = self._kin.to_servo_values(*self._select_solution())
+        return parallel(
+            servo(Defs.arm_base, bv),
+            servo(Defs.arm_shoulder, sv),
+            servo(Defs.arm_elbow, ev),
+        )
+
+
+arm = ArmKinematics()   # module-level singleton
+```
+
+Mission code then reads naturally:
+
+```python
+from src.kinematics.arm import arm
+
+seq([
+    arm.move_angles(-12, 90, 0),           # direct joint angles
+    arm.move_to(20, 0, 15),               # IK, shortest-path solution
+    arm.move_to(20, 0, 15).upper_arm(45), # IK, prefer upper arm at 45°
+    arm.move_angles(-90, 53, -83, speed=200),  # eased motion
+])
+```
+
+### Key Design Points
+
+- `MoveBuilder` extends `StepBuilder` — this is what makes `arm.move_to(...)` work inside `seq()` and `parallel()` without any special casing. The framework calls `_build()` at the moment it constructs the step tree.
+- Calibration tables (joint angle → servo value) live in `Defs` alongside the hardware definitions. This keeps them co-located with the hardware they describe and survives a full re-calibration.
+- The `to_servo_values()` linear interpolation naturally handles non-linear servo linkages: you measure a few reference points (joint angle, servo value) and let the interpolator fill in between.
+- `move_angles()` returns a ready-to-use raccoon step; `move_to()` returns a `MoveBuilder` that resolves to a step at build time.
+
+### When to Use Each Approach
+
+| Situation | Use |
+|-----------|-----|
+| Standard arm, a few named positions | `ArmChain` + codegen — simplest, safest |
+| Three or more DOF, complex geometry | Start with `ArmChain` first; fall back to hand-coded IK if codegen fails to converge |
+| Arm pose must depend on sensor feedback at runtime | Hand-coded IK with `MoveBuilder(StepBuilder)` |
+| Need to interpolate between poses smoothly | Hand-coded IK with your own path planner |
 
 ## Related Pages
 

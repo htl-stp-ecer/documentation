@@ -12,6 +12,36 @@ From unboxed hardware to a driving robot in as few steps as possible.
 
 ---
 
+## The zero-to-running-robot journey
+
+Before diving into steps, here is the full picture of what you are about to do and where each piece fits:
+
+```mermaid
+flowchart TD
+    A([Flash SD card]) --> B([Power on & network])
+    B --> C([Install raccoon-cli])
+    C --> D([Create project])
+    D --> E([Connect to robot])
+    E --> F([Update firmware])
+    F --> G([Configure hardware])
+    G --> H([raccoon run])
+    H --> I([Write missions])
+    I --> H
+
+    click B "/01-botui" "BotUI docs"
+    click D "/02-programming/01-project-structure" "Project structure"
+    click G "/02-programming/02-robot-definition" "Robot definition"
+    click I "/02-programming/03-missions" "Missions"
+
+    style A fill:#f5f5f5,stroke:#555
+    style H fill:#d4edda,stroke:#27ae60
+    style I fill:#d4edda,stroke:#27ae60
+```
+
+The loop at the end is your normal development cycle: write code, run it on the robot, observe, refine. Everything else (flash, connect, update) is one-time setup.
+
+---
+
 ## What You Need
 
 **Hardware:**
@@ -117,7 +147,26 @@ raccoon create project MyRobot
 cd MyRobot
 ```
 
-→ See [Project Structure]({{< ref "/02-programming/01-project-structure" >}}) for an explanation of what gets created.
+The `raccoon create project` wizard asks for your drivetrain type, motor ports, and other basics. This generates the complete project skeleton:
+
+```
+MyRobot/
+├── raccoon.project.yml       # top-level config — includes all sub-configs
+├── config/
+│   ├── hardware.yml          # sensors, motors, servos
+│   ├── motors.yml            # motor port assignments and calibration
+│   ├── missions.yml          # ordered list of missions to run
+│   └── robot.yml             # kinematics, PID, physical dimensions
+└── src/
+    ├── main.py               # entry point: Robot().start()
+    ├── hardware/
+    │   ├── defs.py           # auto-generated hardware definitions
+    │   └── robot.py          # auto-generated robot class
+    └── missions/
+        └── m000_setup_mission.py
+```
+
+→ See [Project Structure]({{< ref "/02-programming/01-project-structure" >}}) for a full explanation of every generated file.
 
 ---
 
@@ -251,10 +300,40 @@ Your robot is running. Here's where to go from here:
 | Make it drive accurately | [Calibration]({{< ref "/02-programming/10-calibration" >}}) |
 | Add sensors, servos, and other hardware | [Robot Definition]({{< ref "/02-programming/02-robot-definition" >}}) — edit `raccoon.project.yml` |
 | Writing real missions | [Missions]({{< ref "/02-programming/03-missions" >}}) |
+| Stop conditions, chaining, timing | [Stop Conditions]({{< ref "/02-programming/04a-stop-conditions" >}}) |
 | Sensors, servos, drive system | [Programming Guide]({{< ref "/02-programming" >}}) |
 | Configure sensor positions visually | [Web IDE]({{< ref "/03-web-ide" >}}) — run with `raccoon web` |
 | All CLI commands explained | [raccoon-cli reference]({{< ref "/04-raccoon-cli" >}}) |
 | What you can do from the touchscreen | [BotUI]({{< ref "/01-botui" >}}) |
+
+---
+
+## A real first mission from a competition robot
+
+The examplebot (a real competition entry) uses this exact pattern for a simple three-mission run. Its setup mission homes the arm, calibrates sensors, and waits for the light — all in one method:
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+
+class M000SetupMission(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # Home hardware to known starting positions
+            Defs.arm_servo.up(),
+            Defs.claw_servo.open(),
+
+            # Calibrate distance accuracy and IR sensors.
+            # distance_cm=50 gives more accurate results than the default 30 cm.
+            calibrate(distance_cm=50),
+
+            # wait_for_light() is injected automatically by SetupMission
+            # after sequence() returns — do not call it here.
+        ])
+```
+
+The robot then drives, grabs an object, and returns — building up from `drive_forward` to `parallel()` and `.until()` stop conditions. When you are ready to build a real mission sequence, the [Programming Guide]({{< ref "/02-programming" >}}) has everything.
 
 ---
 

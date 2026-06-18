@@ -11,6 +11,85 @@ description: "Named bundles of raccoon run flags declared in raccoon.project.yml
 
 A *run configuration* is a named bundle of `raccoon run` flags and environment variables stored in your project. It works like a PyCharm run configuration: pick a name and get a fixed set of options automatically.
 
+## Concept: why they exist
+
+During development you constantly switch between two very different execution modes:
+
+- **Competition mode** — full calibration, wait-for-light start, all checkpoints active. Correct for competition but painful when iterating: each run requires a calibration drive and a physical light trigger.
+- **Dev mode** — button start, stored calibration, checkpoint waiting skipped. Fast feedback, but you must remember to switch back before competition.
+
+Without run configurations you must type `--dev --no-calibrate --no-checkpoints` for every dev run and risk forgetting a flag. With configurations you name the mode once in YAML and invoke it by name.
+
+### Where the YAML lives
+
+Real competition bots separate run configurations into their own file and include it from the root config:
+
+```yaml
+# raccoon.project.yml (from the clawbot)
+run_configurations: !include config/run-configurations.yml
+```
+
+```yaml
+# config/run-configurations.yml
+default:
+  description: Standard run (codegen + calibrate + checkpoints)
+  target: auto
+  dev: false
+  no_calibrate: false
+  no_checkpoints: false
+  env: {}
+
+dev:
+  description: 'Fast iteration: --dev --no-calibrate --no-checkpoints'
+  dev: true
+  no_calibrate: true
+  no_checkpoints: true
+```
+
+This keeps `raccoon.project.yml` readable while the detailed flag set lives in a dedicated file that can be diffed independently.
+
+## Concept: environment variables as feature flags
+
+The `env:` field makes run configurations a natural place for feature flags. The drumbot competition bot uses this to switch between real and fake hardware services without changing mission code:
+
+```yaml
+# config/run-configurations.yml (from the drumbot)
+dev:
+  description: 'Fast iteration: --dev --no-checkpoints'
+  dev: true
+  no_checkpoints: true
+  env:
+    DRUMBOT_NO_POSITION_HOLD: '1'
+    DRUMBOT_DETECTION_DEBUG: '0'
+
+dev-fake:
+  description: 'Fast iteration with fake camera service'
+  dev: true
+  no_checkpoints: true
+  env:
+    DRUMBOT_NO_POSITION_HOLD: '1'
+    DRUMBOT_FAKE_CAMERA: '1'   # triggers fake service injection in main.py
+```
+
+In `main.py`:
+
+```python
+if os.getenv("DRUMBOT_FAKE_CAMERA") == "1":
+    from src.service.fake_color_detection_service import install_fake_color_service
+    install_fake_color_service(robot)
+```
+
+Switching from `raccoon run dev` to `raccoon run dev-fake` swaps the entire camera subsystem — no code edit needed.
+
+The drumbot also hides the default framework presets that do not apply to this project:
+
+```yaml
+# raccoon.project.yml
+hidden_run_configurations:
+  - default
+  - simulated
+```
+
 ```bash
 raccoon run dev          # activates the "dev" configuration
 raccoon run simulated    # activates the "simulated" configuration
@@ -173,3 +252,9 @@ raccoon run competition
 raccoon run record
 raccoon run simulated  # error: hidden
 ```
+
+## Related pages
+
+- [raccoon run]({{< ref "03-run" >}}) — the full run reference including `--no-mN` mission skipping
+- [create]({{< ref "01-create" >}}) — how run configurations are added to a new project
+- [raccoon-server]({{< ref "16-raccoon-server" >}}) — the Pi daemon that executes the run

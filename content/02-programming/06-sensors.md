@@ -3,12 +3,38 @@ title: "Sensors"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 10
+weight: 11
 ---
 
 # Sensors
 
 `raccoon` supports four sensor types: **IR line sensors**, **digital sensors**, **analog sensors**, and a **camera** interface. All sensors are declared in `defs.py` and accessed throughout your mission code.
+
+## Concept: How Sensors Fit In
+
+Sensors in raccoon are passive data sources — they don't drive motors or run steps. Their values are read as:
+
+1. **Stop conditions** — `.until(on_black(sensor))` fires when a threshold is crossed
+2. **`SensorGroup` shortcuts** — pre-bound helpers like `.drive_until_black()` that wire common motion+sensor combos together
+3. **Direct reads** — `sensor.read()` / `sensor.probabilityOfBlack()` for custom logic in `run()` callbacks or custom steps
+
+```mermaid
+graph LR
+    SN["Sensor\n(IRSensor / AnalogSensor / DigitalSensor)"]
+    SG["SensorGroup\n(bundles 1–2 IR sensors)"]
+    SC["Stop condition\n(on_black, on_white, on_analog_above…)"]
+    ST["Step DSL\n(drive_forward, lineup, follow_line…)"]
+
+    SN --> SG
+    SN --> SC
+    SG --> ST
+    SC --> ST
+
+    style SN fill:#42A5F5,color:#fff
+    style SG fill:#66BB6A,color:#fff
+    style SC fill:#FF7043,color:#fff
+    style ST fill:#AB47BC,color:#fff
+```
 
 ## IR Sensors (Line Detection)
 
@@ -217,7 +243,9 @@ Parameters for `drive_to_analog_target()`:
 | `set_name` | `str` | `"default"` | Which calibration point to target |
 | `timeout_cm` | `float \| None` | `None` | Max distance before giving up |
 
-The direction (forward or backward) is chosen automatically at runtime by comparing the current reading to the stored target. Use a slow speed (`0.2`–`0.3`) for precise positioning; the default 0.3 is a safe starting point.
+The direction (forward or backward) is chosen automatically at runtime by comparing the current reading to the stored target — the step drives toward the target value, not a hardcoded direction. Use a slow speed (`0.2`–`0.3`) for precise positioning; the default 0.3 is a safe starting point.
+
+> **Direction inference edge case:** In some configurations the automatic direction inference can be wrong (e.g., non-monotonic sensor response or an inverted analog wiring). The cube-bot codebase implements a `DriveToAnalogTargetBidirectional` custom step that accepts an explicit direction override for these cases. If `drive_to_analog_target` drives the wrong way, add an explicit check of the current sensor reading before calling it, or implement a similar explicit-direction variant.
 
 ## Camera Sensor
 
@@ -310,6 +338,28 @@ Use it like an analog sensor — read raw values with `distance.read()` (or the 
 
 `SensorGroup` is a convenience wrapper that pre-binds common step patterns to your sensors. It accepts `left` and/or `right` IR sensors and stores default threshold, speed, and PID gain values so you don't have to repeat them on every call.
 
+> **Import path:** `SensorGroup` is NOT exported from the top-level `raccoon` namespace in all configurations. If `from raccoon import SensorGroup` fails, use the explicit path: `from raccoon.step.motion.sensor_group import SensorGroup`.
+
+**Single-sensor groups are valid.** You don't need both a left and right sensor — many real robots have only one IR sensor on a side. Omit the sensor you don't have:
+
+```python
+# Single right sensor only — fully functional for all right-sensor methods
+front = SensorGroup(right=front_right_ir)
+
+# In mission code:
+front.drive_until_black()           # uses front.right sensor
+front.strafe_right_until_black()    # uses front.right by default
+```
+
+Real example (conebot configuration):
+
+```yaml
+# config/hardware.yml
+front:
+  type: SensorGroup
+  right: front_right_ir_sensor    # no left: — that's fine
+```
+
 ### Constructor Parameters
 
 ```python
@@ -394,3 +444,12 @@ drive_forward(speed=0.3).until(
 Parameters:
 - `threshold_tps`: Speed below this (ticks per second) counts as stalling
 - `duration`: Must stall for this many seconds to trigger
+
+Stall detection is the underlying mechanism used by `wall_align_backward()` / `wall_align_forward()` — those steps drive into a wall and detect the stop via stall or acceleration threshold. See [Localization and Resync]({{< ref "22-localization-resync" >}}) for `align_to_wall_resync()`, which combines wall-align with a pose observation.
+
+## Related Pages
+
+- [Drive System]({{< ref "07-drive-system" >}}) — how IR sensor stop conditions connect to motion steps
+- [Line Following]({{< ref "algorithms/line-following" >}}) — detailed PID algorithm and all line-follow variants
+- [Odometry]({{< ref "08-odometry" >}}) — how sensor-based landmarks correct accumulated drift
+- [Calibration]({{< ref "10-calibration" >}}) — calibrating IR thresholds with `calibrate()` and `switch_calibration_set()`

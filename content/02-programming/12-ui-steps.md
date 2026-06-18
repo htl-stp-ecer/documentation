@@ -3,7 +3,7 @@ title: "UI Steps & Screens"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 17
+weight: 18
 ---
 
 # UI Steps & Screens
@@ -11,6 +11,31 @@ weight: 17
 The Wombat controller has a touchscreen. `raccoon` lets you display custom screens on it — progress indicators, sensor readings, confirmation dialogs, input forms, and live visualizations. This is how calibration wizards, wait-for-button prompts, and debug dashboards work under the hood.
 
 You can use the built-in screens for common tasks, or build your own custom screens with a full widget toolkit.
+
+## Concept: How Screens Work
+
+A `UIStep` is an async step that shows a screen, waits for user interaction, and then continues. The screen itself is a Python object that builds a widget tree; `raccoon` serializes that tree to JSON and sends it to the BotUI Flutter app running on the Wombat touchscreen. Events (button taps, slider changes) come back the same way and fire your `@on_click` / `@on_change` handlers.
+
+The most important rule: **`await self.show(screen)`** suspends the step until `screen.close(result)` is called. This makes user interaction feel synchronous — your step code reads top-to-bottom, each `show()` waits for its answer, and then execution continues.
+
+```mermaid
+sequenceDiagram
+    participant Step as UIStep._execute_step
+    participant Screen as UIScreen
+    participant LCM as Raccoon Transport
+    participant UI as BotUI (touchscreen)
+
+    Step->>Screen: show(screen)
+    Screen->>LCM: widget tree (JSON)
+    LCM->>UI: screen_render message
+    Note over UI: User sees screen and interacts
+    UI->>LCM: screen_render/answer (click / value)
+    LCM->>Screen: event dispatch
+    Screen->>Screen: @on_click handler runs
+    Screen->>Step: close(result)
+    Step->>Step: result = await show(...)
+    Note over Step: execution continues
+```
 
 ## Architecture
 
@@ -715,6 +740,39 @@ class WaitForLightStep(UIStep):
 
 ---
 
+## Competition Pattern: Calibration Surface Selection
+
+Competition robots that traverse ramps or multiple surfaces need the operator to confirm which calibration set to activate before the match. A `ChoiceScreen` inside the setup mission handles this cleanly:
+
+```python
+from raccoon import UIStep, switch_calibration_set
+from raccoon.ui.screens import ChoiceScreen, MessageScreen
+
+class SelectSurfaceStep(UIStep):
+    """Let the operator choose the starting surface before arming."""
+    async def _execute_step(self, robot):
+        surface = await self.show(ChoiceScreen(
+            title="Starting Surface",
+            message="Which surface is the robot currently on?",
+            choices=[
+                ("default", "Ground level", "Standard table surface"),
+                ("upper",   "Upper deck",   "Elevated platform / ramp"),
+            ],
+        ))
+        if surface == "upper":
+            switch_calibration_set("upper")
+        else:
+            switch_calibration_set("default")
+
+        await self.show(MessageScreen(
+            title="Ready",
+            message=f"Using '{surface}' IR calibration.",
+            icon_name="check_circle",
+        ))
+```
+
+This runs as a step inside `SetupMission.sequence()`. Because the choice is made by a human before arming, it is safe from false positives — and the `ChoiceScreen` return is a plain string (`"default"` or `"upper"`), not a wrapped object.
+
 ## When to Use UI Steps
 
 | Situation | Use |
@@ -728,5 +786,6 @@ class WaitForLightStep(UIStep):
 | Visual feedback during autonomous | `self.showing(ProgressScreen(...))` context manager |
 | Multi-step wizard | Chain multiple `self.show()` calls with different screens |
 | Pause setup timer during armed state | `set_setup_timer_paused(True)` / `set_setup_timer_paused(False)` |
+| Select calibration surface before arming | `ChoiceScreen` in `SetupMission.sequence()` |
 
 > **Tip:** Start with the quick helpers (`message`, `confirm`, `input_number`). Only build custom screens when you need live sensor data, complex layouts, or multi-step flows.

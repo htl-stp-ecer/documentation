@@ -3,14 +3,41 @@ title: "Drive System"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 11
+weight: 12
 ---
 
 # Drive System
 
 The drive system translates high-level velocity commands ("go forward at 0.2 m/s") into individual motor speeds. It handles PID control, feedforward compensation, and kinematics — all at 100 Hz.
 
-You rarely interact with the drive system directly. The [Steps DSL]({{< ref "04-steps" >}}) calls it for you. This page explains how it works under the hood, and how to tune it when your robot isn't driving straight or overshooting targets.
+You rarely interact with the drive system directly. The [Steps DSL]({{< ref "04-steps" >}}) calls it for you. This page explains how it works under the hood, how to use `drive_angle()` for diagonal mecanum motion, the `heading=` parameter for drift-free long drives, the low-level `ChassisVelocity` API for custom steps, and how to tune the system when your robot isn't driving straight or overshooting targets.
+
+## Concept: From Command to Wheels
+
+When you call `drive_forward(50)`, a chain of layers converts that intent into physical motor commands:
+
+```mermaid
+flowchart TD
+    A["drive_forward / strafe / drive_angle\n(mission code)"]
+    B["Motion profile\n(trapezoidal velocity)"]
+    C["PID + feedforward\n(track desired velocity)"]
+    D["Inverse kinematics\n(chassis → wheel speeds)"]
+    E["STM32 firmware\n(per-wheel velocity PIDs)"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E -.->|"encoder feedback"| C
+
+    style A fill:#42A5F5,color:#fff
+    style B fill:#66BB6A,color:#fff
+    style C fill:#AB47BC,color:#fff
+    style D fill:#FF7043,color:#fff
+    style E fill:#37474F,color:#fff
+```
+
+On a real Wombat the Pi-side PID is bypassed — the STM32 runs its own inner velocity loop. On a mock/simulator the Pi-side PID is active. Either way, your step code stays the same. See [Motion Flow and Kinematics]({{< ref "19-motion-flow-and-kinematics" >}}) for the full control-stack breakdown.
 
 ## Architecture
 
@@ -302,6 +329,134 @@ Parameters:
 
 `drive_arc_segment` is the idiomatic factory for fixed-curve motion when you know how far you want to travel rather than the turning radius. It raises `ValueError` if `heading_degrees` is zero (which would imply infinite radius — use `drive_forward` instead) or if `distance_cm` is not positive.
 
+## Heading Hold During Linear Motion
+
+Every linear drive step (`drive_forward`, `drive_backward`, `strafe_left`, `strafe_right`) accepts an optional `heading=` parameter. When supplied, the controller locks the robot to that **absolute heading** (degrees from the heading reference) for the duration of the step, instead of holding whatever heading the robot happened to have at the start.
+
+This is the correct tool for long drives where small drift would accumulate enough to miss a target:
+
+```python
+# Without heading= : holds the heading at step start (relative mode)
+# After 200 cm of drift the robot may be 5–10° off
+drive_backward(cm=200)
+
+# With heading=180 : locks to 180° absolute for the entire drive
+# Drift is corrected actively by IMU feedback
+drive_backward(cm=200, heading=180)
+```
+
+**When to use `heading=`:**
+- Drives longer than about 50 cm on a mecanum robot (lateral drift couples into rotation)
+- Any drive that follows a wall-align or `mark_heading_reference()` where you want that orientation maintained
+- Inside `smooth_path()` per-segment to avoid explicit `turn_to_heading` steps between segments
+
+**Prerequisites:** `mark_heading_reference()` must have been called before any step that uses `heading=`. The value is interpreted in the same frame as `turn_to_heading_right()` / `turn_to_heading_left()`.
+
+**Real example (adapted from the conebot, ramp-return mission):**
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+class M050DriveToStartingBoxMission(Mission):
+    def sequence(self):
+        return seq([
+            switch_calibration_set("upper"),        # elevated surface thresholds
+            drive_backward(cm=30),
+            turn_to_heading_right(180),
+            drive_backward(cm=200, heading=180),    # 200 cm: heading hold prevents drift
+        ])
+```
+
+The `heading=` parameter is also accepted as a builder method:
+
+```python
+drive_forward(25).heading(90)   # equivalent to drive_forward(25, heading=90)
+```
+
+## Diagonal Motion (`drive_angle`)
+
+`drive_angle()` drives a mecanum robot in any body-frame direction — not just forward, backward, or sideways. The angle is measured in the robot frame from forward, clockwise:
+
+```
+     0° = forward
+    90° = pure right
+  -90° = pure left  (or 270°)
+   180° = backward
+```
+
+```python
+from raccoon.step.motion import drive_angle
+
+# Drive forward-right at 45 degrees for 30 cm
+drive_angle(45, cm=30)
+
+# Drive backward-left at 130° until sensor fires
+drive_angle(130).until(on_black(Defs.front.left))
+
+# Full parameter form
+drive_angle(angle_deg=90, cm=20, speed=0.7)
+```
+
+Parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `angle_deg` | `float` | required | Travel angle in degrees (0 = forward, 90 = right, 180 = backward, -90 = left) |
+| `cm` | `float \| None` | `None` | Distance to travel. Omit for condition-only mode. |
+| `speed` | `float` | `1.0` | Fraction of max speed, 0.0–1.0 |
+| `until` | `StopCondition` | `None` | Stop condition for early termination |
+
+Either `cm` or `until` must be provided — passing neither raises `ValueError`.
+
+**Requires** a mecanum or omni-wheel drivetrain. Calling `drive_angle` on a differential robot raises an error.
+
+Convenience variants `drive_angle_left(angle_deg)` and `drive_angle_right(angle_deg)` exist for clarity — left takes a positive angle measured to the left, right takes a positive angle measured to the right. Both wrap `drive_angle()` internally.
+
+**Real example (adapted from the packingbot):**
+
+```python
+# Fixed-distance diagonal approach
+drive_angle(120, 19)                                      # backward-left 19 cm
+
+# Condition-only diagonal — stops at first black line
+drive_angle(angle_deg=110).until(on_black(Defs.front.left))
+```
+
+## Low-Level Drive API (`ChassisVelocity`)
+
+In normal mission code you never need to touch the drive API directly — step builders handle it. But when writing a custom `MotionStep` (for example a heading-hold controller), you can command the drive layer directly:
+
+```python
+from raccoon.foundation import ChassisVelocity
+from raccoon.step.motion.motion_step import MotionStep
+
+class HoldHeading(MotionStep):
+    def on_start(self, robot):
+        from raccoon.robot.heading_reference import HeadingReferenceService
+        self._service = robot.get_service(HeadingReferenceService)
+        self._max_w = robot.motion_pid_config.angular.max_velocity
+
+    def on_update(self, robot, dt):
+        error_deg = self._service.compute_turn(self._target_deg)
+        import math
+        w = self._kp * math.radians(error_deg)
+        w = max(-self._max_w, min(self._max_w, w))
+        robot.drive.set_velocity(ChassisVelocity(0, 0, w))  # vx, vy, wz
+        robot.drive.update(dt)
+        return False  # never finishes — use inside parallel()
+```
+
+The three key methods on `robot.drive`:
+
+| Method | Description |
+|--------|-------------|
+| `robot.drive.set_velocity(ChassisVelocity(vx, vy, wz))` | Set desired body-frame velocity (m/s, m/s, rad/s) |
+| `robot.drive.update(dt)` | Advance the controller by `dt` seconds — must be called every `on_update` tick |
+| `robot.drive.hard_stop()` | Immediately command zero velocity |
+
+`ChassisVelocity(vx, vy, wz)` uses the same axes as the rest of the system: `vx` = forward, `vy` = right, `wz` = counter-clockwise. This is the complete production-code pattern from the conebot's `HoldHeading` step — the only place in competition code where the low-level drive API is called directly.
+
 ## Speed Mode
 
 `set_speed_mode()` toggles the firmware's BEMF closed-loop velocity control on or off. In normal mode (SpeedMode disabled), the STM32 measures wheel velocity via back-EMF and uses it to maintain accurate cm distances and angles. SpeedMode disables these measurements, granting roughly 10% additional top speed at the cost of distance and angle precision.
@@ -486,3 +641,11 @@ All individual phase factories accept `persist=True` (default), which writes the
 | Robot is sluggish | `max_velocity` too low or `acceleration` too low | Increase values or re-run characterization |
 | Robot jerks when starting | `kS` (static friction feedforward) too low | Increase kS |
 | SpeedMode motions don't stop | Distance/angle goal used while SpeedMode is active | Add `.until(condition)` or call `set_speed_mode(False)` first |
+
+## Related Pages
+
+- [Sensors]({{< ref "06-sensors" >}}) — stop conditions that terminate drive steps
+- [Odometry]({{< ref "08-odometry" >}}) — how heading reference and pose tracking work
+- [Motion Flow and Kinematics]({{< ref "19-motion-flow-and-kinematics" >}}) — full control-stack breakdown
+- [Smooth Path and Spline Motion]({{< ref "21-smooth-path" >}}) — velocity-continuous multi-segment paths with `heading=` per segment
+- [Localization and Resync]({{< ref "22-localization-resync" >}}) — correcting drift at known landmarks

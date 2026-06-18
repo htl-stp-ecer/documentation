@@ -3,7 +3,7 @@ title: "Localization Replay"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 13
+weight: 15
 ---
 
 ## Overview
@@ -16,6 +16,35 @@ This is useful for:
 - Verifying that the particle filter converged correctly
 - Reviewing path deviations between planned and actual routes
 - Sharing post-run analysis with teammates
+
+## How it works
+
+Recording is enabled by the `record_localization: true` flag in a run configuration. When a real run completes:
+
+1. The IDE backend emits a `run_recorded` WebSocket event
+2. The Angular frontend's `LocalizationReplayService` receives it via `requestAutoLoad()`
+3. An Angular `effect()` in `ProjectView` watches the auto-load signal, switches the bottom panel to Table Visualization, and loads the recording
+
+The recording file (`localization.jsonl`) lives on the **laptop disk** at `.raccoon/runs/<timestamp>/localization.jsonl`. It is never stored on the robot.
+
+*Full pipeline from a real run to rendered replay in the Table Visualization panel.*
+
+```mermaid
+flowchart TD
+    A([Real run with\nrecord_localization: true]) --> B[raccoon-lib particle filter\nwrites localization.jsonl\n.raccoon/runs/timestamp/]
+    B --> C[IDE backend emits\nrun_recorded WS event\nwith run_id]
+    C --> D[LocalizationReplayService\nrequestAutoLoad]
+    D --> E[ProjectView effect\nopens Table Visualization panel]
+    E --> F[GET /api/v1/runs/uuid/run_id/localization\nstreamed JSONL response]
+    F --> G[parseJsonlStream\nreads header + frames in chunks]
+    G --> H{Frame type?}
+    H -- kind=header --> I[Store ReplayHeader\nrobot dims, sensors, tick_hz]
+    H -- kind=frame --> J[Append ReplayFrame\npose, particles, observations]
+    I & J --> K[RAF playback loop\nadvances currentFrameIndex\nat record_hz × speed]
+    K --> L[Table Visualization renders\npose rect · particle cloud\npath trail · sensor hits]
+```
+
+Add `record_localization: true` to your competition run configuration and it records automatically every run — see [Run Configurations]({{< ref "11-run-configurations" >}}) for how to set this up.
 
 ---
 
@@ -243,3 +272,11 @@ Response:
 
 - The player renders at browser requestAnimationFrame rate (~60 fps)
 - At very high playback speeds (10×+) multiple frames advance per render tick, which can appear skippy. This is expected; reduce the speed for frame-accurate review
+
+---
+
+## Cross-references
+
+- [Run Configurations]({{< ref "11-run-configurations" >}}) — enabling `record_localization: true`
+- [Tool Panels]({{< ref "06-floating-panels" >}}) — Table Visualization panel overview
+- [Running a Mission]({{< ref "07-running-a-mission" >}}) — auto-open behavior after a recorded run

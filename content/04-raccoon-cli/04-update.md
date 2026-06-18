@@ -14,6 +14,17 @@ raccoon update
 
 Updates raccoon on both your laptop and the robot to the latest release.
 
+## The bundle model
+
+raccoon does not update packages independently. Instead it fetches a **bundle manifest** — a JSON file in the `raccoon-image` repository that declares which exact component versions belong together as a known-good set. Updating means "bring all components to the versions declared in this bundle."
+
+This matters for two reasons:
+
+1. You can never accidentally update one component without updating the others it depends on.
+2. A package that is *newer* than the bundle target is treated as "ahead of bundle" and left alone — it has not been tested with the rest of the current bundle.
+
+For the full explanation of version layers (packages, bundle, format_version), see [Versioning And Upgrades]({{< ref "07-versioning-and-upgrades" >}}).
+
 ## What it does
 
 1. Fetches the **bundle manifest** from the `raccoon-image` GitHub repository. The bundle is a JSON file that defines which component versions belong together as a known-good set (e.g. `bundles/latest.json`).

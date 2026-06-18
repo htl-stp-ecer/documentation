@@ -3,12 +3,39 @@ title: "Missions"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 5
+weight: 6
 ---
 
 # Missions
 
-A mission is a self-contained task your robot performs — "drive to the cone and pick it up", "follow the line to the basket", "go home". Missions are composed of steps arranged in sequences.
+## Concept: What a Mission Is
+
+A mission is a self-contained task: "drive to the cone and pick it up", "follow the line to the basket", "go home". In RaccoonOS, a match is a **sequence of missions** — the runner executes them in declaration order, one at a time. When a mission's `sequence()` returns, the next mission starts immediately.
+
+The overall shape of every match looks like this:
+
+```mermaid
+flowchart TD
+    A([Robot starts]) --> B[M000 SetupMission\nHomes hardware, calibrates, waits for light]
+    B --> C{Start signal received}
+    C --> D[M010 First mission]
+    D --> E[M020 Second mission]
+    E --> F[...]
+    F --> G[M999 ShutdownMission\nParks motors, retracts arms]
+    G --> H([Match over])
+
+    style B fill:#4CAF50,color:#fff
+    style G fill:#F44336,color:#fff
+    style D fill:#42A5F5,color:#fff
+    style E fill:#42A5F5,color:#fff
+    style F fill:#42A5F5,color:#fff
+```
+
+Every robot has exactly one setup mission (M000), zero or more game missions (M010–M990), and exactly one shutdown mission (M999). This triple role — setup / game / shutdown — is why the framework recognizes three-digit mission prefixes with slots for insertion (`M010, M020, …`) without renumbering.
+
+> **Execution order comes from `missions.yml`, not from class-name prefixes.** The number in the name is a convention for readability and sorting on disk. The runner reads the list in `config/missions.yml` and respects exactly that order.
+
+> **You can comment out a mission in `missions.yml` to disable it without deleting code.** This is a standard competition workflow — use YAML `#` comments when you want to quickly enable or disable a task mid-competition.
 
 ## Writing a Mission
 
@@ -247,6 +274,44 @@ seq([
 
 If a background step finishes before `wait_for_background()` is reached, the wait returns immediately.
 
+#### Cross-Mission Background Synchronization
+
+Named background tasks are **run-scoped, not mission-scoped**. A task started with `background(step, name="x")` at the end of one mission can be awaited with `wait_for_background("x")` at the start of the *next* mission. This is the standard idiom for overlapping arm motion with a mission transition — the arm keeps moving while the runner starts loading the next mission.
+
+The following is adapted from the Ecer2026 ClawBot — M030 kicks off a tray-return background move, and M040 awaits it at its own beginning while already doing other work:
+
+```python
+# --- M030CollectDrumsMission ---
+class M030CollectDrumsMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # ... collect drums ...
+            return_tray_to_tray_holder_phase1(),
+            # Kick off phase 2 in the background — it will continue into M040
+            background(
+                return_tray_to_tray_holder_phase2(),
+                name="return_tray",
+            ),
+        ])
+
+
+# --- M040CollectBotguyMission ---
+class M040CollectBotguyMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            drive_backward().until(on_white(Defs.front.left)),
+            backward_line_follow().until(
+                after_cm(30) + over_line(Defs.front.right) + after_cm(2)
+            ),
+            line_follow().until(on_black(Defs.front.right)),
+            # Now wait for the tray return that was started in M030
+            wait_for_background("return_tray"),
+            # ... continue ...
+        ])
+```
+
+The key insight: `background()` and `wait_for_background()` work across mission boundaries because background handles are keyed by name in the robot's run context, which persists for the entire match.
+
 ### Timeout Steps
 
 Wrap any step with a hard time limit using `timeout()`. If the step completes within the budget it finishes normally; if it exceeds the limit, the step is cancelled and `TimeoutError` propagates up the sequence, stopping the mission:
@@ -278,6 +343,18 @@ timeout_or(
 ```
 
 `timeout_or()` never raises — if the primary step times out, the fallback runs and the sequence continues normally.
+
+**Real example:** The Ecer2026 ClawBot wraps a sensor-guided forward step with a tight timeout to guard against missing the line — if the line isn't found within 0.5 seconds, the sequence moves on rather than driving indefinitely:
+
+```python
+parallel(
+    timeout(
+        drive_forward().until(on_black(Defs.front.left)),
+        seconds=0.5,
+    ),
+    arm.move_angles(-90, 40, -30),
+)
+```
 
 | Function | Timeout behavior |
 |----------|-----------------|
@@ -403,6 +480,22 @@ seq([
 ])
 ```
 
+**Why `defer()` instead of `if_then()`?** The key difference is when the step tree is *built* vs when it *runs*. The entire `seq([...])` list is constructed before the mission starts — any Python that reads sensor state at module level runs too early. `defer()` receives a factory function that is called at the moment the step executes, so it always sees live robot state.
+
+**Real example from the PackingBot** — a sensor-gated strafe that only fires if the robot detects it landed in the wrong position:
+
+```python
+def drive_if_sensor_triggered(sensor):
+    def _build(robot):
+        if sensor.read() > 500:     # live sensor read at execution time
+            return seq([drive_forward(35)])
+        else:
+            return seq([])           # no-op branch
+    return defer(_build)
+```
+
+The comment in the source is explicit: "`defer` = evaluate `_build` function at runtime and not compile-time." When in doubt, use `if_then()` for simple boolean branches and `defer()` when you need to inspect any live state to pick among multiple step trees.
+
 ## Setup Mission
 
 ### Extending `SetupMission`
@@ -430,6 +523,36 @@ class M000SetupMission(SetupMission):
 ```
 
 > `calibrate()` defaults to `distance_cm=30.0`. The example above passes `50` explicitly for a more accurate run — pass whatever distance your table allows.
+
+**Full competition setup pattern** (adapted from the Ecer2026 ConeBot): disable servos so the operator can reposition them, gate on a button press, release any actuated motors, home all servos, calibrate for both table surfaces, then activate the ground-level calibration set:
+
+```python
+class M000SetupMission(SetupMission):
+    setup_time = 120
+
+    def sequence(self) -> Sequential:
+        return seq([
+            # 1. Go limp — operator repositions mechanisms physically
+            fully_disable_servos(),
+            wait_for_button("Move Servos"),
+
+            # 2. Release motor so container can be set manually
+            motor_off(Defs.cone_container_motor),
+
+            # 3. Home all servos to known positions
+            Defs.claw_servo.closed(),
+            Defs.cone_arm_servo.container_pos(),
+
+            # 4. Calibrate IR sensors for both floor and ramp surfaces in one pass
+            calibrate(distance_cm=50, calibration_sets=["default", "upper"]),
+            switch_calibration_set("default"),  # start on ground level
+
+            # 5. Park arm for competition start
+            Defs.cone_arm_servo.handl_hight(),
+        ])
+```
+
+The `fully_disable_servos()` → `wait_for_button()` → servo homing sequence is the standard idiom for robots where the arm needs to be repositioned by the operator before the match.
 
 ### `setup_time`: Countdown Timer
 
@@ -504,6 +627,24 @@ class QuickTestSetup(SetupMission):
 
 The default `pre_start_gate()` delegates to the robot's built-in wait-for-light / wait-for-button logic defined in `robot.physical`.
 
+**Extending the gate without replacing it:** The most useful override pattern is adding behavior *before* the standard wait-for-light, then explicitly calling back into the base class to preserve the gate. This is how the Ecer2026 DrumBot injects a custom calibration step before the light:
+
+```python
+class M000SetupMission(SetupMission):
+    setup_time = 120
+
+    def sequence(self) -> Sequential:
+        return seq([...])
+
+    async def pre_start_gate(self, robot) -> None:
+        # Run our project-specific calibration gate first
+        await calibration_gate().run_step(robot)
+        # Then hand off to the standard wait-for-light — DON'T skip this
+        await robot._pre_start_gate()
+```
+
+Call `robot._pre_start_gate()` (single underscore — it is a protected method on `GenericRobot`) to invoke the built-in gate. If you omit this call, the robot will not wait for the start light and the match will begin immediately after your setup sequence.
+
 ## Mission Time Budget
 
 Each mission can declare a `time_budget` (seconds) as a class-level attribute. If the mission runs longer than its budget, the `WatchdogManager` cancels it and routes through the shutdown path — the shutdown mission still runs, subsequent missions do not.
@@ -543,3 +684,10 @@ Missions execute in list order. If mission 1 finishes, mission 2 starts immediat
 The **shutdown mission always runs** — both when all main missions complete normally and when the `shutdown_in` timer fires mid-mission. Use it for guaranteed cleanup (park motors, retract arms, turn off LEDs) regardless of how the match ended. Do not rely on it as an error-only path; it executes unconditionally.
 
 > If the `shutdown_in` timer fires during a mission, that mission is cancelled first, and then the shutdown mission runs.
+
+## Related Pages
+
+- **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** — full reference for `.until()` conditions and operators
+- **[Steps DSL]({{< ref "04-steps" >}})** — how step builders, `@dsl_step`, and `@dsl` work
+- **[Custom Steps]({{< ref "05-custom-steps" >}})** — writing your own steps and motion steps
+- **[Synchronizing Two Robots]({{< ref "03a-synchronizing-robots" >}})** — `wait_for_checkpoint()` and cross-robot timing

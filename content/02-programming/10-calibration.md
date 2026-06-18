@@ -3,12 +3,32 @@ title: "Calibration"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 15
+weight: 16
 ---
 
 # Calibration
 
-Calibration measures your robot's actual hardware characteristics and stores correction factors. Without calibration, `drive_forward(25)` might actually drive 22 cm or 28 cm. After calibration, it drives 25 cm (within a few mm).
+## Concept: Why Calibration Exists
+
+Every physical motor and sensor is slightly different. Without calibration:
+
+- Two motors with the same model number have different `ticks_to_rad` ratios — the robot drifts left or right when it should drive straight.
+- Every IR sensor has a different baseline due to LED brightness variation — what reads as 1500 on one sensor reads as 2200 on another.
+- The game table surface at the competition venue is different from the surface you practiced on.
+
+Calibration bridges the gap between the nominal hardware specification and the actual hardware in front of you. It measures the real characteristics and stores correction factors. After calibration, `drive_forward(25)` reliably drives 25 cm on the real robot on the real table.
+
+```mermaid
+flowchart LR
+    A["Nominal spec\nticks_to_rad ≈ 0.0044"] --> B["Real motor\nmay differ 5–15%"]
+    B --> C["Calibration\nmeasures actual ratio"]
+    C --> D["Stored in\nraccoon.project.yml"]
+    D --> E["drive_forward(25)\nactually drives 25 cm"]
+    style A fill:#FF7043,color:#fff
+    style E fill:#4CAF50,color:#fff
+```
+
+There are three calibration targets: **distance** (motor encoding), **IR sensors** (surface thresholds), and **control loop** (PID gains, velocity profiles). Each has a specific step or command.
 
 ## What Gets Calibrated
 
@@ -219,12 +239,55 @@ class M000SetupMission(SetupMission):
             Defs.claw.closed(),
             Defs.arm.up(),
 
-            # Calibrate
+            # Calibrate both distance and IR sensors in one pass
             calibrate(distance_cm=50),
         ])
 ```
 
-The setup mission runs before the match start signal. Use it to calibrate and verify that sensors and servos are working.
+The setup mission runs before the match start signal. The `wait_for_light()` gate is injected automatically by `SetupMission` after `sequence()` returns — you do not call it yourself.
+
+### Competition Setup Mission — Full Flow
+
+Real competition bots do more in setup: release servos for manual positioning, release mechanism motors, and calibrate multiple surface types. Here is the complete conebot setup mission (a production example from competition):
+
+```python
+# src/missions/m000_setup_mission.py (adapted from the conebot)
+from raccoon import *
+from src.hardware.defs import Defs
+
+class M000SetupMission(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([
+            fully_disable_servos(),           # 1. Go limp — operator repositions mechanisms
+            wait_for_button("Move Servos"),   # 2. Operator physically sets starting positions
+
+            motor_off(Defs.cone_container_motor),  # 3. Release motor for manual container positioning
+
+            # 4. Home servos to known starting positions
+            Defs.claw_servo.closed(),
+            Defs.cone_arm_servo.container_pos(),
+
+            # 5. Calibrate distance and IR sensors for two surface types in one pass
+            calibrate(
+                distance_cm=50,
+                calibration_sets=["default", "upper"],
+            ),
+            switch_calibration_set("default"),     # 6. Activate ground-level thresholds for mission start
+
+            # 7. Move to competition starting pose
+            Defs.cone_arm_servo.handl_hight(),
+            Defs.cone_arm_servo.container_pos(),
+        ])
+```
+
+Key points in this flow:
+
+- `fully_disable_servos()` + `wait_for_button()` gives the operator a safe window to adjust mechanisms before homing.
+- `motor_off()` prevents a mechanism motor from fighting the operator during manual setup.
+- `calibrate(calibration_sets=["default", "upper"])` runs both surface calibrations back-to-back in one guided flow.
+- `switch_calibration_set("default")` ensures the right thresholds are active at competition start.
+
+The setup mission runs before the match start signal. `wait_for_light()` is injected automatically after `sequence()` returns.
 
 ## Calibration Data Storage
 
@@ -257,26 +320,59 @@ These files are managed automatically by the calibration system. You should not 
 
 ## Calibration Sets
 
-If your robot operates on surfaces at different heights (e.g., a ramp vs. the ground), sensors may need different thresholds. Use calibration sets:
+If your robot operates on surfaces at different heights (e.g., a ramp vs. the ground), sensors may need different thresholds. The reason is physical: an IR sensor held at the same angle detects different signal levels when the surface-to-sensor distance changes by even a few millimetres — and the thresholds for "black" vs "white" shift accordingly.
+
+```mermaid
+flowchart LR
+    A["Ground level\n'default' set"] -->|"robot ascends ramp"| B["Upper deck\n'upper' set"]
+    B -->|"robot descends ramp"| A
+    style A fill:#4CAF50,color:#fff
+    style B fill:#42A5F5,color:#fff
+```
+
+During setup, calibrate both surfaces. During missions, call `switch_calibration_set()` just before the robot transitions to a new surface:
 
 ```python
-# During setup: calibrate both surfaces
+# During setup: calibrate both surfaces in one guided flow
 calibrate(
     distance_cm=50,
     calibration_sets=["default", "upper"],
 )
+switch_calibration_set("default")  # Start with ground-level thresholds
 
-# During missions: switch between sets
-seq([
-    switch_calibration_set("default"),        # Ground level
-    Defs.front.drive_until_black(),
+# In the ramp mission: switch just before ascending
+switch_calibration_set("upper"),   # Elevated surface
+# ... line-follow on the ramp ...
 
-    drive_forward(50),                         # Drive up a ramp
-
-    switch_calibration_set("upper"),           # Elevated surface
-    Defs.front.follow_right_edge(30),
-])
+# After descending:
+switch_calibration_set("default"), # Back to ground-level thresholds
 ```
+
+### Real-World Multi-Zone Calibration (clawbot)
+
+The clawbot operates on both the main game table and a raised platform. The `racoon.calibration.yml` file stores separate per-port thresholds for each set:
+
+```yaml
+# racoon.calibration.yml (real values from the clawbot)
+root:
+  ir-calibration:
+    default_port0:
+      white_tresh: 256.269348
+      black_tresh: 3444.55005
+    default_port3:
+      white_tresh: 259.686859
+      black_tresh: 3335.55005
+    upper_port0:
+      white_tresh: 1671.15479   # ← substantially higher on elevated surface
+      black_tresh: 2878.54712
+    upper_port3:
+      white_tresh: 1172.46533
+      black_tresh: 3536.78955
+```
+
+Notice that `white_tresh` on `upper_port0` is 1671 vs 256 on the ground surface — a 6x difference. Without separate calibration sets, line following on the ramp would be unreliable. The calibration system stores these automatically; you do not edit the YAML by hand.
+
+`switch_calibration_set()` is a step that can appear anywhere in a mission sequence — not just at the start. Call it at the exact point where the robot transitions to a different surface.
 
 ## Skipping Calibration (--no-calibrate)
 
@@ -449,6 +545,30 @@ where roller slip means the chassis travels less than the ideal kinematics predi
 trials automatically return to the start position between runs, so the robot stays near its
 starting point during the entire phase.
 
+## The `analog_sensors` List: Required for IR Calibration
+
+The code generator produces a class-level `analog_sensors` list on `Defs`. This list must include every `IRSensor` (and `AnalogSensor`) that participates in IR calibration. The calibration infrastructure uses it to discover which sensors to sample:
+
+```python
+# src/hardware/defs.py (auto-generated by codegen)
+class Defs:
+    front_left_light_sensor = IRSensor(port=0)
+    front_right_light_sensor = IRSensor(port=1)
+    rear_left_light_sensor = IRSensor(port=2)
+    wait_for_light_sensor = IRSensor(port=11)
+
+    analog_sensors = [
+        front_left_light_sensor,
+        front_right_light_sensor,
+        rear_left_light_sensor,
+        wait_for_light_sensor,
+    ]
+```
+
+If a sensor is missing from `analog_sensors`, the calibration step silently skips it — no error, no threshold stored — and subsequent `on_black()` / `over_line()` conditions on that sensor will use stale or zero thresholds. Add every IR sensor your missions use to this list.
+
+The list is generated automatically by the codegen tool from your `hardware.yml`. If you add a new sensor to `hardware.yml` and regenerate `defs.py`, the list is updated automatically. If you edit `defs.py` by hand, update the list manually.
+
 ## When to Re-Calibrate
 
 - **Different surface**: Game tables vary. Calibrate on the actual competition surface.
@@ -463,3 +583,11 @@ starting point during the entire phase.
 3. **Calibrate distance on a straight, flat section** with clear markings at the measured distance.
 4. **Drive over both black and white areas** during sensor calibration. The robot needs to see both surfaces to form two clusters.
 5. **Commit calibration files** to your repository so teammates can use the same values (but re-calibrate on the competition table).
+6. **Run `--no-calibrate` during development** to skip the interactive flow and load the last stored values. Run the full calibration on competition day.
+
+## Related Pages
+
+- [Servos]({{< ref "09-servos" >}}) — servo homing in the setup mission
+- [Motor Steps]({{< ref "09a-motor-steps" >}}) — `motor_off()` used in setup to release mechanisms
+- [Configuration Reference]({{< ref "13-configuration-reference" >}}) — where calibration values are stored in YAML
+- [IR Sensor Calibration (K-Means)]({{< ref "algorithms/ir-calibration" >}}) — how the clustering algorithm works

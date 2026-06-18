@@ -3,12 +3,42 @@ title: "Odometry"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 12
+weight: 13
 ---
 
 # Odometry
 
 Odometry tracks the robot's position and heading on the field. It answers the question: "Where am I, and which way am I facing?" The motion system uses odometry to know when the robot has traveled 25 cm or turned 90 degrees.
+
+## Concept: Coordinate Frames
+
+Understanding odometry requires keeping two frames clear:
+
+**Body frame** — fixed to the robot. `vx` points out the robot's nose, `vy` points to the robot's right, `wz` is counter-clockwise rotation looking down from above. This is what `drive_forward` and `strafe_right` operate in: commands are always relative to where the robot is currently pointing.
+
+**World frame** — fixed to the field. Origin is where the robot started (or the configured `start_pose`). `x` increases in the robot's initial forward direction, `y` increases to the robot's initial left. Heading is measured CCW from the initial forward direction.
+
+```mermaid
+graph TD
+    subgraph "World Frame (field-fixed)"
+        WO["Origin (start position)"]
+        WX["x → initial forward"]
+        WY["y → initial left"]
+        WH["heading θ (CCW from x-axis)"]
+    end
+    subgraph "Body Frame (robot-fixed)"
+        BX["vx → robot's nose"]
+        BY["vy → robot's right"]
+        BW["wz → CCW rotation"]
+    end
+
+    WO -.->|"odometry integrates\nbody-frame motion"| BX
+
+    style WO fill:#42A5F5,color:#fff
+    style BX fill:#66BB6A,color:#fff
+```
+
+Odometry is the bridge: it integrates body-frame incremental motion (from wheel encoders + IMU gyro) into a running world-frame pose estimate. **It accumulates drift** — errors in each increment add up over time. Use wall-align, line detection, or [Localization Resync]({{< ref "22-localization-resync" >}}) to correct accumulated drift at known landmarks.
 
 ## How It Works
 
@@ -162,6 +192,19 @@ seq([
 ])
 ```
 
+**Using `origin_offset_deg` for coordinate flips:**
+
+`origin_offset_deg` is most useful on ramp robots that descend a ramp and need to track headings relative to the lower surface. When the robot is at the top of the ramp pointing backward (180° from its initial orientation), you can bake in the flip:
+
+```python
+# At the top of the ramp, robot is pointing 180° from its initial direction.
+# Baking in -180 makes turn_to_heading_right(0) mean "face the direction
+# I was heading before the ramp" rather than "face my initial start direction".
+mark_heading_reference(origin_offset_deg=-180)
+```
+
+This is real-world usage from the packingbot: `mark_heading_reference(origin_offset_deg=-180)` recorded just before the ramp descent, so all `turn_to_heading_*` calls below used the inverted frame naturally.
+
 ### `turn_to_heading_right(degrees)`
 
 Turn to face a heading measured **clockwise** from the origin. Automatically chooses the shortest physical rotation:
@@ -217,6 +260,24 @@ sequenceDiagram
 
 `HeadingReferenceService` reads heading from `robot.odometry.get_pose().heading`. It does not communicate with the IMU directly — the IMU is an internal source that the odometry layer uses, but the service sees only the `IOdometry` interface.
 
+### `HeadingReferenceService.compute_turn()` — For Custom Steps
+
+When writing a custom `MotionStep` that needs to know the current heading error, call `compute_turn()` on the service directly instead of reading raw odometry angles:
+
+```python
+from raccoon.robot.heading_reference import HeadingReferenceService
+
+# Inside on_start():
+self._service = robot.get_service(HeadingReferenceService)
+
+# Inside on_update():
+error_deg = self._service.compute_turn(target_deg=0.0)
+# Returns signed degrees: positive = robot needs to turn CCW to reach target
+# Normalized to [-180, 180] for shortest-path; pass force_direction to override
+```
+
+`compute_turn(target_deg, force_direction=None)` reads the current world heading via the same odometry source that motion controllers use, so the computed error and the executed feedback share one frame. See [Drive System]({{< ref "07-drive-system" >}}) for the full `HoldHeading` example using this API.
+
 ### When to Use Heading References
 
 - After wall-aligning, mark the reference. All `turn_to_heading_*()` calls will be relative to that wall orientation.
@@ -255,3 +316,10 @@ Odometry drifts over time. Every measurement has small errors that accumulate:
 4. **Keep missions short**: Less driving = less accumulated error.
 5. **Don't rely on pure odometry for long distances**: After driving 2+ meters, re-align using a wall or line.
 6. **Use localization resync steps**: If the robot has a `Localization` service enabled, use `resync_at_start_pose()`, `find_line_resync()`, or `align_to_wall_resync()` to inject absolute pose observations and correct accumulated drift. See [Localization and Resync]({{< ref "22-localization-resync" >}}).
+
+## Related Pages
+
+- [Drive System]({{< ref "07-drive-system" >}}) — `heading=` parameter and low-level ChassisVelocity API
+- [Sensors]({{< ref "06-sensors" >}}) — IR sensors as absolute position landmarks
+- [Smooth Path]({{< ref "21-smooth-path" >}}) — per-segment `heading=` for drift-free multi-segment paths
+- [Localization and Resync]({{< ref "22-localization-resync" >}}) — particle-filter world-pose and resync steps

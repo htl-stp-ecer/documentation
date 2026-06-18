@@ -3,7 +3,7 @@ title: "Motion Flow and Kinematics"
 author: "OpenAI Codex"
 date: 2026-06-18
 draft: false
-weight: 24
+weight: 25
 ---
 
 # Motion Flow and Kinematics
@@ -18,6 +18,42 @@ This page describes the actual control stack that turns a mission step into moto
 6. Motor adapters convert wheel targets into firmware-facing units and send them to the platform.
 
 That separation is deliberate. Motion planning, drive control, wheel geometry, and hardware transport live in different layers so you can change one without rewriting the others.
+
+## Concept: Why Three Layers?
+
+A common misconception is that "tuning the PID" refers to one thing. There are actually three distinct control layers, each solving a different problem:
+
+| Layer | Problem | Tuned by |
+|-------|---------|---------|
+| **Motion layer** | "Am I on my planned trajectory?" (distance, heading PID) | `motion_pid_config` / `auto_tune()` |
+| **Drive layer** | "Are my wheel velocities tracking the commanded chassis velocity?" | `vel_config` (Pi-side, no-op on real hardware) |
+| **Kinematics layer** | "Which wheel speeds produce the desired chassis motion?" | geometry values (`wheel_radius`, `wheelbase`, `track_width`) |
+
+On real hardware only the motion layer and kinematics geometry matter for your tuning effort — the drive layer is bypassed. On a simulator or mock, all three are active.
+
+The data flow is strictly one-way downward with odometry feedback flowing back up:
+
+```mermaid
+sequenceDiagram
+    participant MC as Mission code
+    participant MP as Motion layer
+    participant DL as Drive layer
+    participant KL as Kinematics
+    participant FW as STM32 firmware
+
+    MC->>MP: drive_forward(50)
+    MP->>MP: Build trapezoidal profile
+    loop Each control tick (100 Hz)
+        MP->>MP: Compute chassis velocity setpoint (vx, vy, wz)
+        MP->>DL: set_velocity(vx, vy, wz)
+        DL->>FW: ChassisControlContext (real hardware)
+        FW->>KL: wheel angular velocities
+        KL-->>DL: encoder feedback
+        DL-->>MP: chassis velocity estimate
+        MP->>MP: Update PID toward profile
+    end
+    MP-->>MC: Step complete
+```
 
 ## Layer Boundaries
 
@@ -242,6 +278,8 @@ In that mode, the kinematics layer still preserves the wheel-ratio math, but the
 
 ## Related Pages
 
-- [Drive System]({{< ref "07-drive-system" >}})
-- [Odometry]({{< ref "08-odometry" >}})
-- [Configuration Reference]({{< ref "13-configuration-reference" >}})
+- [Architecture & Project Model]({{< ref "00b-architecture-concepts" >}}) — the full layered stack diagram (step DSL → motion controller → HAL → firmware)
+- [Drive System]({{< ref "07-drive-system" >}}) — tuning reference and the low-level ChassisVelocity API
+- [Odometry]({{< ref "08-odometry" >}}) — how pose estimation connects to motion feedback
+- [Smooth Path and Spline Motion]({{< ref "21-smooth-path" >}}) — velocity-continuous motion across segments
+- [Configuration Reference]({{< ref "13-configuration-reference" >}}) — `motion_pid`, `vel_config`, and axis constraints in `robot.yml`

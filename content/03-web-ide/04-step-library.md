@@ -3,20 +3,37 @@ title: "Step Library (Right)"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 5
+weight: 7
 ---
 
 ## Step Library (Right)
 
 The Step Library panel lists all steps available to your project — both built-in raccoon steps and any custom steps you have defined locally. Toggle it open with the grid icon at the top of the right tool stripe.
 
-### How steps are indexed
+## How step indexing works
 
-The step index is served by the **local IDE backend** (running on your laptop), not by the robot. This means:
+The step index is built and served by the **local IDE backend** (your laptop), not the robot. The `StepDiscoveryService` scans two places:
 
-- Steps are available **offline** once indexed — you do not need the robot to be connected to browse or search steps.
-- The index is built from your local project files and the raccoon library installed on your machine.
-- The "No cached steps yet" empty state appears only when the index has never been built, not when the robot is disconnected.
+1. The **installed raccoon package** on your machine — all built-in `@dsl`-decorated step functions
+2. Your **project's `src/` directory** — any custom step functions you have decorated with `@dsl`
+
+Only functions decorated with `@dsl` or `@dsl_step` appear in the Step Library. Unannotated helper functions are private and never shown.
+
+```mermaid
+graph TD
+    RLib["raccoon-lib<br/>@dsl steps"]
+    ProjSrc["Your project src/<br/>@dsl custom steps"]
+    SDS["StepDiscoveryService\n(IDE backend)"]
+    Idx["Step index\n(in-memory)"]
+    Browser["Step Library panel\n(browser)"]
+
+    RLib --> SDS
+    ProjSrc --> SDS
+    SDS --> Idx
+    Idx -- "/api/v1/steps" --> Browser
+```
+
+**Consequence:** Steps are available **offline** — you do not need the robot connected to browse or search. If steps are missing, you need to refresh the index, not connect to the robot.
 
 To build or refresh the index, open **Settings → Project tab** (⚙ gear in the navbar) and click **Refresh** under the Step Indexing section.
 
@@ -89,3 +106,37 @@ The Docs panel uses a ranked search algorithm — results are sorted by relevanc
 | Query word in full docstring | +2 per word |
 
 Steps that do not match all query tokens are excluded entirely.
+
+---
+
+## Making your custom steps appear in the library
+
+Decorate your step factory functions with `@dsl` (imported from `raccoon`):
+
+```python
+from raccoon import dsl, seq
+
+@dsl
+def my_custom_step(arg1: int, arg2: str = "default"):
+    """Do something custom.
+
+    Args:
+        arg1: First argument description.
+        arg2: Second argument description.
+    """
+    return seq([
+        # ... your step logic
+    ])
+```
+
+After adding `@dsl` to a function, click **Refresh** in **Settings → Project tab** to update the index. The step will appear in the Step Library under the tag group matching its first `tags` entry (or in **Other** if no tags are defined).
+
+Helper functions you do not want in the UI should remain unannotated — the IDE never shows them.
+
+---
+
+## Cross-references
+
+- [Settings Modal]({{< ref "05-settings-modal" >}}) — refreshing the step index
+- [Flowchart Editor]({{< ref "03-flowchart-editor" >}}) — dragging steps onto the canvas
+- [Architecture]({{< ref "0a-architecture" >}}) — where step indexing fits in the overall system

@@ -10,6 +10,8 @@ weight: 1
 
 `raccoon` is a modular robotics SDK written in C++20 with Python bindings. It runs on a Raspberry Pi inside the Wombat controller. You write mission code in Python; the heavy lifting (control loops at 100 Hz, kinematics math, motor drivers) happens in compiled C++ underneath.
 
+> **Always use `from raccoon import *`** in mission and step files. The older `from libstp import *` still works but emits a `DeprecationWarning` — `libstp` is a compatibility shim that will be removed in a future version. If you see `libstp` in older project files (such as the examplebot), replace the import with `raccoon`.
+
 ## The Layer Cake
 
 Every piece of robot code sits on a specific layer. Higher layers are simpler to use but less flexible. Lower layers give you full control.

@@ -14,6 +14,14 @@ raccoon validate [--no-python-compile]
 
 Checks that your project's configuration and source files are internally consistent. Use it to catch drift between `raccoon.project.yml`, mission files, and `src/main.py` before running on the robot.
 
+## When validation runs
+
+`raccoon validate` runs automatically before every command except the exempt list below. You rarely need to call it explicitly — it is already protecting you on every `raccoon run` and `raccoon sync`. The explicit command is useful when you want to check consistency without triggering a run.
+
+```
+exempt (no auto-validation): validate, create, connect, disconnect, update, doctor, migrate, web
+```
+
 ## Why it exists
 
 As a project grows — missions are added, renamed, moved, or deleted — it is easy for `raccoon.project.yml` and the file system to drift out of sync. A mission listed in config but missing on disk will cause a runtime failure; a mission file on disk that is not listed in config will silently never run. `raccoon validate` catches these mismatches ahead of time, in your terminal, before you waste time syncing and running.

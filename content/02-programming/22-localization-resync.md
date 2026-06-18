@@ -3,12 +3,80 @@ title: "Localization and Resync"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 27
+weight: 28
 ---
 
 # Localization and Resync
 
 Odometry accumulates drift over time. After driving 2+ meters, small encoder and IMU errors compound into position errors that can derail mission accuracy. The **localization system** maintains a parallel world-pose estimate using a particle filter, and **resync steps** let you inject absolute position observations at known field landmarks to correct accumulated drift in real time.
+
+## Concept: Why a Particle Filter?
+
+Raw odometry gives one best-guess pose. A particle filter maintains many candidate poses (particles) simultaneously, each weighted by how well it matches available observations. When a resync observation arrives (wall contact, line detection), particles near the expected landmark gain weight; particles far away lose weight. Resampling then collapses the cloud toward the high-weight region.
+
+The result is a world-pose estimate that is **more robust to single large errors** than correcting odometry directly — a single noisy measurement doesn't snap the estimate to a wrong value; it merely shifts the cloud distribution.
+
+```mermaid
+graph LR
+    subgraph "Resync sources"
+        SP["resync_at_start_pose\n(initial anchor)"]
+        WL["align_to_wall_resync\n(wall contact)"]
+        LN["find_line_resync\n(IR line detection)"]
+    end
+    subgraph "Localization filter"
+        PF["Particle filter\n(128 particles, 100 Hz)"]
+        POSE["robot.localization.get_pose()\n(weighted mean)"]
+    end
+    ODO["Odometry (predict)"]
+
+    ODO -->|"per-tick delta"| PF
+    SP -->|"sigma-weighted observation"| PF
+    WL -->|"sigma-weighted observation"| PF
+    LN -->|"sigma-weighted observation"| PF
+    PF --> POSE
+
+    style ODO fill:#42A5F5,color:#fff
+    style SP fill:#FF7043,color:#fff
+    style WL fill:#FF7043,color:#fff
+    style LN fill:#FF7043,color:#fff
+    style PF fill:#66BB6A,color:#fff
+    style POSE fill:#AB47BC,color:#fff
+```
+
+**The `sigma_*` parameters** control how hard each observation snaps the filter. A lower sigma means "I trust this observation more than my own estimate." Physical wall contact (`sigma_xy_cm=0.3–0.75`) is more reliable than manual start placement (`sigma_xy_cm=1.0–3.0`).
+
+## `start_pose` — Anchoring to a Known Competition Start
+
+Most competition robots start in a fixed, known position on the table. The `start_pose` field in `robot.yml` tells the localization system where the robot begins, so the filter starts anchored rather than at the origin:
+
+```yaml
+# config/robot.yml
+physical:
+  table_map: config/2026-game-table.ftmap
+  start_pose:
+    x_cm: 156.31
+    y_cm: 75.78
+    theta_deg: 0.31
+```
+
+Without `start_pose`, localization begins at `(0, 0, 0)`. If your robot starts at a known position, always set `start_pose` — it prevents an initial jump in the localization trace and makes the first `resync_at_start_pose()` call more effective.
+
+In mission code, `resync_at_start_pose()` with explicit expected coordinates anchors the particle cloud to the configured start location right after `wait_for_light()`:
+
+```python
+seq([
+    wait_for_light(),
+    mark_heading_reference(),
+    resync_at_start_pose(
+        expected_x_cm=156.31,
+        expected_y_cm=75.78,
+        expected_theta_deg=0.31,
+        sigma_xy_cm=1.5,       # allow ±1.5 cm start placement uncertainty
+        sigma_theta_deg=3.0,
+    ),
+    # rest of mission
+])
+```
 
 ## How It Works
 
@@ -294,3 +362,10 @@ raccoon run my_mission.py
 ```
 
 The recording captures per-tick particle clouds, observations, and world-pose estimates for post-run analysis.
+
+## Related Pages
+
+- [Odometry]({{< ref "08-odometry" >}}) — raw pose tracking, heading reference, drift sources
+- [Drive System]({{< ref "07-drive-system" >}}) — wall-align steps that feed into `align_to_wall_resync()`
+- [Sensors]({{< ref "06-sensors" >}}) — IR line detection used by `find_line_resync()`
+- [Configuration Reference]({{< ref "13-configuration-reference" >}}) — `start_pose` field in `robot.yml`

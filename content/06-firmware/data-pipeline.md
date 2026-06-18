@@ -6,6 +6,46 @@ draft: false
 weight: 5
 ---
 
+## Concept
+
+Every sensor reading your Python code receives, and every motor command your Python code sends, travels through a five-stage pipeline that spans two processors, two buses, and three IPC mechanisms.
+
+Understanding this pipeline helps you reason about **latency** (why sensor reads are always slightly stale), **reliability** (why retained channels exist), and **architecture** (why `from raccoon_transport import Transport` is the low-level API and `get_transport()` is what project services should use).
+
+```mermaid
+graph LR
+    subgraph STM32["STM32F427"]
+        HW["Physical sensor\nor motor"]
+        ISR["ADC / GPIO / IMU ISR\n(µs latency)"]
+        TX["txBuffer\n(volatile struct in RAM)"]
+    end
+
+    subgraph SPI["SPI2 Full-Duplex\n~5 ms cycle"]
+        WIRE["DMA transfer\nTxBuffer ⇄ RxBuffer"]
+    end
+
+    subgraph Reader["stm32-data-reader (C++)"]
+        UNPACK["SpiReal::readSensorData()\nunpack + unit convert"]
+        PUB["DataPublisher\nserialise to LCM"]
+    end
+
+    subgraph Transport["raccoon_ring SHM\n(/dev/shm/raccoon_ring_*)"]
+        RING["One ring file\nper channel"]
+    end
+
+    subgraph Lib["raccoon-lib (Python)"]
+        LCMR["LcmReader\nbackground thread"]
+        CACHE["mutex-protected cache"]
+        API["motor.get_position()\nanalog.read()\nimu.heading()"]
+    end
+
+    HW --> ISR --> TX
+    TX --> WIRE --> UNPACK --> PUB --> RING
+    RING --> LCMR --> CACHE --> API
+```
+
+The reverse direction (Python command → motor output) follows the same path in reverse: Python publishes to a `raccoon/motor/N/power_cmd` LCM channel, the reader's `CommandSubscriber` picks it up, writes the `RxBuffer`, and the next SPI transfer delivers it to the STM32.
+
 This page traces a complete data path from a physical sensor reading to a value accessed in user Python code, and a complete command path from Python code to motor movement.
 
 ## Sensor Data Path (STM32 → Python)
@@ -238,3 +278,9 @@ The `CommandSubscriber` tracks the timestamp of the most recently applied comman
 | **Total sensor→Python** | **< 12 ms** |
 
 Command latency follows the same path in reverse; the dominant factor is the BEMF cycle (up to 1250 µs per motor in round-robin, up to one full 4-motor rotation = 5 ms in worst case) from when the STM32 receives the new command to when the motor output actually changes.
+
+## Related pages
+
+- [SPI Communication Protocol](../spi-protocol/) — the wire format and all LCM channel names
+- [Motor Control](../motor-control/) — what happens inside each BEMF cycle
+- [Robot Services And systemd](../robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology

@@ -3,14 +3,14 @@ title: "Interface Overview"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 2
+weight: 4
 ---
 
 ## Interface Overview
 
-![Web IDE tour](/images/web-ide/webide-tour.gif)
+The Web IDE is built around a **tool-stripe + panel** layout. Panels are toggled on demand from icon strips on the left and right edges — there is no fixed three-column split. Only the panels you need are open at any time, giving the center editor maximum space.
 
-The Web IDE is built around a **tool-stripe + panel** layout. Rather than a fixed three-column split, panels are toggled on demand from icon strips on the left and right edges.
+![Web IDE tour](/images/web-ide/webide-tour.gif)
 
 ### Layout structure
 
@@ -40,6 +40,28 @@ The Web IDE is built around a **tool-stripe + panel** layout. Rather than a fixe
 | **Right panel** | Steps library, Step Docs, or Robot Config — collapsible, resizable |
 | **Bottom panel** | Logs, Table Visualization, or Arm Visualizer — collapsible, resizable |
 | **Global Navbar** | Settings, Timestamps, Undo/Redo (flowchart tools); run-target dropdown; Run / Debug / Stop buttons; battery indicator |
+
+```mermaid
+graph TD
+    Navbar["Global Navbar\n(always visible)"]
+
+    subgraph MainArea["Main area (below navbar)"]
+        LS["Left tool stripe\n· Missions (top)\n· Logs / Table / Arm (bottom)"]
+        LP["Left panel\nMissions list\n(collapsible)"]
+        Center["Center panel\nFlow tab · Code tab"]
+        RS["Right tool stripe\n· Steps / Docs / Robot (top)"]
+        RP["Right panel\nSteps · Docs · Robot\n(collapsible)"]
+        BP["Bottom panel\nLogs · Table · Arm\n(collapsible)"]
+    end
+
+    LS -- "toggle" --> LP
+    LS -- "toggle" --> BP
+    RS -- "toggle" --> RP
+    LP --> Center
+    Center --> BP
+```
+
+*Panel layout: stripes on both edges toggle the adjacent panels; only one bottom and one right panel is open at a time.*
 
 All panel widths and the active panel selection are persisted in `localStorage`, so the layout survives page reloads.
 
@@ -75,3 +97,14 @@ The IDE stores the following in `localStorage` so your workspace is restored aft
 | `webide-right-panel-width` | Width of the right panel in px |
 | `webide-active-bottom-panel` | Which bottom panel is open (`logs`, `table`, `arm`, or none) |
 | `webide-bottom-panel-height` | Height of the bottom panel in px |
+
+If your panel layout becomes corrupted (panels missing or wrong sizes), open the browser DevTools console and run `localStorage.clear()`, then reload.
+
+---
+
+## Next steps
+
+- [Mission Panel]({{< ref "02-mission-panel" >}}) — managing missions in the left panel
+- [Flowchart Editor]({{< ref "03-flowchart-editor" >}}) — editing missions in the center panel
+- [Step Library]({{< ref "04-step-library" >}}) — finding and adding steps from the right panel
+- [Running a Mission]({{< ref "07-running-a-mission" >}}) — using the Run/Debug controls in the navbar

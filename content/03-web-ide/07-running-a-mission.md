@@ -3,12 +3,50 @@ title: "Running a Mission"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 8
+weight: 10
 ---
 
-## Overview
+## Concept: How running works
 
-The Web IDE uses an IntelliJ/PyCharm-style run-configuration system. Instead of a simple "Sim on/off" toggle, you select a named run configuration from a dropdown in the top navbar, then press **Run** or **Debug**. There is no inline Sim toggle — that control was removed from the UI and `showLegacySimulateToggle()` always returns `false`.
+The Web IDE uses an **IntelliJ/PyCharm-style run-configuration model**. Instead of a "Sim on/off" toggle, you choose a named run configuration that encodes everything: where to run (simulated, local, remote robot), what flags to set, and which environment variables to inject.
+
+There is no inline Sim toggle in the current UI — it was removed. Run mode is controlled entirely by the active run configuration's `target` field.
+
+When you press **Run**, the IDE sends a request to the local IDE backend, which either:
+- spawns a local simulator process, or
+- invokes `raccoon run` on the laptop (which in turn syncs to and executes on the robot).
+
+The whole project runs (all missions in order), not just the selected one. The only exception is **Debug**, which always targets the single mission selected in the left panel.
+
+*End-to-end sequence for the three run paths: simulated, real robot, and debug.*
+
+```mermaid
+sequenceDiagram
+    participant UI as Angular Frontend
+    participant BE as IDE Backend<br/>(port 4200)
+    participant Sim as libstp Simulator
+    participant Pi as Wombat Pi<br/>(port 8421)
+
+    alt Normal run — simulated target
+        UI->>BE: WS /missions/{uuid}/run?simulate=real&run_config=simulated
+        BE->>Sim: spawn libstp subprocess
+        Sim-->>BE: sim_started / sim_pose events
+        BE-->>UI: sim_started, sim_pose, step, stdout, exit
+    else Normal run — real/remote target
+        UI->>BE: WS /missions/{uuid}/run?run_config=competition
+        BE->>Pi: raccoon run (SSH + sync)
+        Pi-->>BE: stdout, step, run_recorded events
+        BE-->>UI: stdout, step, run_recorded, exit
+    else Debug run — fast simulate (focused mission)
+        UI->>BE: WS /missions/{uuid}/run/{mission}?simulate=fast&debug=1
+        BE->>BE: heuristic fast simulator
+        BE-->>UI: step events (breakpoint state=waiting)
+        UI->>BE: WS send {type:debug, action:resume}
+        BE-->>UI: breakpoint state=resumed, step, exit
+    end
+```
+
+See [Architecture]({{< ref "0a-architecture" >}}) for the sequence diagram showing what happens end-to-end when you press Run.
 
 Run configurations are shared between the Web IDE and the `raccoon run` CLI. Any configuration you save in the IDE is written to `run_configurations:` in `raccoon.project.yml` and immediately available from the command line.
 
@@ -76,6 +114,18 @@ The debug button changes behaviour depending on `debugState`:
 | `running` | Debug (greyed out, disabled) | No action while running |
 | `paused` | Continue (step-forward icon) | Resume from the current breakpoint |
 
+*`debugState` transitions driven by WebSocket events from the IDE backend.*
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> running : press Debug\n(WebSocket open → simulate=fast)
+    running --> paused : breakpoint event\n(state=waiting)
+    paused --> running : press Continue\n(send resume via WebSocket)
+    running --> idle : exit event\nor error event
+    paused --> idle : exit event\nor error event
+```
+
 When execution pauses at a breakpoint, the step node in the flowchart is highlighted and the Continue button appears in place of the debug icon.
 
 ### Simulation modes in detail
@@ -115,3 +165,39 @@ You can also stop a run from the CLI using Ctrl+C in the terminal where `raccoon
 ## Localization recording
 
 Some configurations have `record_localization: true`. When a real run completes with recording enabled, the IDE receives a `run_recorded` event and automatically opens the **Table Visualization** panel, loading the `localization.jsonl` file for replay. See [Localization Replay](../12-localization-replay/) for details.
+
+---
+
+## Competition workflow tip
+
+For competition runs, use a dedicated run configuration with `target: remote` and `record_localization: true`. This ensures every run is recorded for post-run analysis without any manual steps:
+
+```yaml
+# in raccoon.project.yml
+run_configurations:
+  competition:
+    description: "Full competition run"
+    target: remote
+    record_localization: true
+    record_hz: 30
+```
+
+Then from the Web IDE: select **competition** in the run-configuration dropdown, press **Run**. The recording auto-loads in the Table Visualization panel after the run finishes.
+
+For quick iteration during development, use the built-in `dev` preset or create a custom one:
+
+```yaml
+  tune:
+    description: "Fast test — no calibration or checkpoints"
+    target: remote
+    no_calibrate: true
+    no_checkpoints: true
+```
+
+---
+
+## Cross-references
+
+- [Run Configurations]({{< ref "11-run-configurations" >}}) — creating and editing run configurations
+- [Localization Replay]({{< ref "12-localization-replay" >}}) — replaying a recorded run
+- [Architecture]({{< ref "0a-architecture" >}}) — what happens at the backend when you press Run

@@ -3,19 +3,62 @@ title: "Robot Definition"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 4
+weight: 5
 ---
 
 # Robot Definition
 
-Before you write a single mission, you need to tell `raccoon` what hardware your robot has and how it's arranged. This is configured in `raccoon.project.yml` — the Raccoon CLI then generates two Python files from it:
+## Concept
 
-- **`defs.py`** — hardware inventory (motors, servos, sensors)
-- **`robot.py`** — how those parts work together (kinematics, drive, odometry)
+Before you write a single mission, you need to tell `raccoon` what hardware your robot has and how it's arranged. The robot definition is split between two Python files, both generated from YAML:
+
+- **`defs.py`** (`Defs` class) — the hardware inventory: every motor, servo, and sensor as a class-level Python attribute, resolved to a port
+- **`robot.py`** (`Robot` class) — the integration layer: kinematics, drive controller, odometry, physical geometry, and mission list wired together
+
+The relationship looks like this:
+
+```mermaid
+graph LR
+    YAML["raccoon.project.yml\nconfig/*.yml"]
+    CODEGEN["raccoon codegen"]
+    DEFS["Defs class\ndefs.py"]
+    ROBOT["Robot(GenericRobot)\nrobot.py"]
+    MISSIONS["Mission code"]
+
+    YAML -->|"codegen reads"| CODEGEN
+    CODEGEN -->|"generates"| DEFS
+    CODEGEN -->|"generates"| ROBOT
+    DEFS -->|"class attribute\ndefs = Defs()"| ROBOT
+    ROBOT -->|"imported by"| MISSIONS
+    DEFS -->|"imported directly by"| MISSIONS
+
+    style YAML fill:#FFA726,color:#fff
+    style CODEGEN fill:#42A5F5,color:#fff
+    style DEFS fill:#AB47BC,color:#fff
+    style ROBOT fill:#AB47BC,color:#fff
+    style MISSIONS fill:#66BB6A,color:#fff
+```
+
+All hardware objects in `Defs` are **class-level attributes** (not instance attributes), so mission code can reference `Defs.front_left_motor` without instantiating `Defs`. The `Robot` class does `defs = Defs()`, but reading `Defs.some_sensor` directly from missions is equally correct.
 
 > **Important:** You define hardware in `raccoon.project.yml` and code generation produces `defs.py` and `robot.py` automatically. **Never edit these files by hand** — they are overwritten every time code generation runs. Always make changes in the YAML.
 
 This page explains what the generated code looks like and what each part means, so you understand what to configure in the YAML.
+
+### Readability aliases
+
+Large projects often add an `src/hardware/alias.py` with type-alias assignments to make mission code read more naturally:
+
+```python
+# src/hardware/alias.py
+from src.hardware.defs import Defs
+
+Servos = Defs   # Servos.claw.closed()
+Motors = Defs   # Motors.front_left_motor
+Sensor = Defs   # Sensor.front.right
+```
+
+All three names point to the same `Defs` class — no subclassing needed. (Pattern from clawbot and packingbot.)
 
 ## Hardware Definitions (`defs.py`)
 
@@ -153,13 +196,17 @@ definitions:
 
 ### The `analog_sensors` List
 
-Include all IR/analog sensors in an `analog_sensors` list. The calibration system uses this to know which sensors need calibrating:
+> **Required for IR calibration.** `analog_sensors` is part of `RobotDefinitionsProtocol`. If it is absent or incomplete, `calibrate()` silently skips IR calibration and your IR stop conditions will use uncalibrated thresholds.
+
+Include **every** IR/analog sensor that participates in calibration:
 
 ```python
 class Defs:
     # ... all your hardware above ...
     analog_sensors = [front_right_ir, front_left_ir]
 ```
+
+The codegen emits this list automatically from your YAML definitions. If you add a sensor manually to `defs.py` (which you should not), make sure to also add it to `analog_sensors`.
 
 ---
 
@@ -245,6 +292,76 @@ missions:
 ```
 
 All the PID values, axis constraints, kinematics parameters, and physical dimensions are set in the YAML. Code generation turns them into the Python `Robot` class. Auto-tune and calibration steps update these YAML values automatically.
+
+### Real mecanum config with `start_pose` and sensor positions
+
+Here is a complete mecanum `config/robot.yml` from a real competition robot (adapted from clawbot). It shows all the fields you need for a mecanum build — including `start_pose`, which sets the initial localization estimate when the robot starts:
+
+```yaml
+# config/robot.yml
+shutdown_in: 120
+drive:
+  kinematics:
+    type: mecanum
+    wheel_radius: 0.0375
+    track_width: 0.2
+    wheelbase: 0.125
+    front_left_motor: front_left_motor
+    front_right_motor: front_right_motor
+    back_left_motor: rear_left_motor
+    back_right_motor: rear_right_motor
+  vel_config:
+    vx:
+      pid: { kp: 0.001438, ki: 0.86309, kd: 0.000157 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+    vy:
+      pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+    wz:
+      pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+
+  # NOTE: Do NOT add an "odometry:" key — odometry is platform-managed.
+
+motion_pid:
+  distance: { kp: 5.1566, ki: 0.0, kd: 0.2592 }
+  heading:  { kp: 5.1566, ki: 0.0, kd: 0.2592 }
+  linear:
+    max_velocity: 0.2139
+    acceleration: 0.9402
+    deceleration: 1.6644
+  lateral:
+    max_velocity: 0.2209
+    acceleration: 0.6485
+    deceleration: 0.4498
+  angular:
+    max_velocity: 1.7687
+    acceleration: 6.9769
+    deceleration: 20
+
+physical:
+  width_cm: 23.5
+  length_cm: 26
+  table_map: config/2026-game-table.ftmap
+  rotation_center:
+    x_cm: 11.75
+    y_cm: 13.0
+  sensors:
+    - name: rear_left_light_sensor
+      x_cm: 1.0
+      y_cm: 1.8
+      clearance_cm: 0.0
+    - name: front_right_light_sensor
+      x_cm: 22.5
+      y_cm: 24.7
+      clearance_cm: 0.0
+  start_pose:
+    x_cm: 156.31
+    y_cm: 75.78
+    theta_deg: 0.31
+```
+
+**`start_pose`** sets the initial localization estimate (position + heading) when the robot starts. Without it, localization begins at the origin `(0, 0, 0°)`. For competition robots that start in a known position on the table, this prevents an initial position jump in the localization trace. Coordinates use the same frame as the `.ftmap` table map.
 
 ### Kinematics: Differential vs. Mecanum
 
@@ -356,7 +473,9 @@ class M000SetupMission(SetupMission):
         ])
 ```
 
-**`pre_start_gate` override** — by default the pre-start gate waits for the light sensor or button press. To skip it (e.g. in a testing scenario where you want to start immediately):
+**`pre_start_gate` override** — by default the pre-start gate waits for the light sensor or button press. There are two useful override patterns:
+
+**Skip the gate entirely** (e.g., headless testing):
 
 ```python
 class M000SetupMission(SetupMission):
@@ -366,6 +485,25 @@ class M000SetupMission(SetupMission):
     async def pre_start_gate(self, robot) -> None:
         pass   # Skip all waiting — start immediately after setup
 ```
+
+**Chain extra steps before the standard gate** — run custom calibration or a final check, then still wait for the light:
+
+```python
+class M000SetupMission(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([
+            Defs.arm.up(),
+            calibrate(distance_cm=50),
+        ])
+
+    async def pre_start_gate(self, robot) -> None:
+        # Run project-specific calibration gate first
+        await calibration_gate().run_step(robot)
+        # Then hand off to the built-in wait-for-light / wait-for-button gate
+        await robot._pre_start_gate()
+```
+
+> The `robot._pre_start_gate()` call is the key detail. Without it you lose the competition start signal — the robot would start immediately after your custom code. Always call it last when chaining. (Adapted from cube-bot's production setup mission.)
 
 ---
 
@@ -504,5 +642,13 @@ seq([
     Defs.arm.grab(),    # Move to grab position
 ])
 ```
+
+---
+
+## See Also
+
+- [Architecture & Project Model]({{< ref "00b-architecture-concepts" >}}) — the full `Defs`/`Robot` relationship diagram and the YAML→codegen→runtime lifecycle
+- [Configuration Reference]({{< ref "13-configuration-reference" >}}) — complete YAML key reference for all hardware types
+- [Arm Kinematics and Code Generation]({{< ref "20-arm-kinematics-and-codegen" >}}) — IK pipeline detail for `ArmChain`
 
 The `defs.pyi` stub file provides full IDE autocomplete for all named positions on `ArmPreset` instances.

@@ -21,6 +21,26 @@ Source of truth:
 - [migrate.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/migrate.py)
 - [project_services.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/project_services.py)
 
+## Repair order principle
+
+When several things are broken at once, the correct repair order matters. Debugging user code on top of a broken platform state wastes time. Always work from the infrastructure layer inward:
+
+```mermaid
+flowchart TD
+    A[Something broken] --> B[raccoon doctor]
+    B --> C{connected?}
+    C -- no --> D[raccoon connect IP]
+    D --> B
+    C -- yes --> E{packages ok?}
+    E -- no --> F[raccoon update]
+    F --> E
+    E -- yes --> G{format_version ok?}
+    G -- no --> H[raccoon migrate]
+    H --> G
+    G -- yes --> I[raccoon run + raccoon logs]
+    I --> J[debug mission/service code]
+```
+
 ## First-response checklist
 
 When something feels broken, start here:
@@ -335,3 +355,10 @@ When several things are broken at once, do them in this order:
 6. Only then debug mission code or service code.
 
 That order prevents you from debugging user code on top of a broken platform state.
+
+## Related pages
+
+- [doctor]({{< ref "11-doctor" >}}) — full reference for the health check command
+- [Versioning And Upgrades]({{< ref "07-versioning-and-upgrades" >}}) — bundle manifests, format_version, and migrations explained
+- [logs]({{< ref "10-logs" >}}) — browsing run logs and service journals
+- [checkpoint]({{< ref "12-checkpoint" >}}) — rolling back to a pre-run state

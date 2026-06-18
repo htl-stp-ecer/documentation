@@ -3,16 +3,20 @@ title: "Stop Conditions"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 8
+weight: 9
 ---
 
 # Stop Conditions
+
+## Concept
 
 Stop conditions control *when* a step finishes. Many steps (especially motion steps) can run indefinitely — `drive_forward(speed=0.8)` drives forever unless you tell it when to stop. That's what `.until()` does.
 
 ```python
 drive_forward(speed=0.8).until(on_black(Defs.front.right))
 ```
+
+Stop conditions are **first-class objects**, not just flags. They can be composed with `|`, `&`, and `+` operators, stored in variables, and reused across steps. This means you can build complex stop logic — "stop after crossing a line *and* traveling at least 10 cm, but no more than 60 cm in any case" — in a single readable expression without any custom code.
 
 ## Basic Conditions
 
@@ -123,6 +127,21 @@ drive_forward(speed=1.0).until(
 THEN is like AND but with a strict ordering: the first condition must become true before the second one is even checked. This is different from AND — with AND, both are checked simultaneously from the start; with THEN, the second condition is completely ignored until the first fires.
 
 > **`>` is deprecated — use `+` instead.** The `>` operator works for two-element chains (`A > B`), but Python expands longer chains like `a > b > c` into `(a > b) and (b > c)`, which produces incorrect behavior. The `+` operator does the same thing without this problem and works for any number of chained conditions.
+
+### `over_line()` as an Intermediate Condition
+
+`over_line(sensor)` is shorthand for `on_black(sensor) + on_white(sensor)` — it fires once the robot has fully *crossed* a line (detected black, then white). It works equally well in the middle of a `+` chain, not just at the end:
+
+```python
+# ConeBot M040 — drive backward over a line, then continue 20 cm past it:
+drive_backward().until(
+    after_cm(10)
+    + over_line(Defs.front.right)   # middle element — must cross a line
+    + after_cm(20)                  # then continue 20 cm past it
+)
+```
+
+This is a common mecanum idiom: the first `after_cm` skips noise at the start, `over_line` detects the actual crossing, and the final `after_cm` ensures the robot has truly cleared the line before stopping.
 
 ### Real Example: Driving Over a Line
 
@@ -272,6 +291,18 @@ drive_forward(speed=0.5).until(
 )
 ```
 
+### Single-Robot Timing Gate
+
+Use `wait_for_checkpoint()` inside a sequence to hold the robot until a safe time window, even without a partner robot. The ConeBot uses arithmetic in the argument for readability:
+
+```python
+drive_backward().until(after_cm(70)),
+wait_for_checkpoint(60 + 27),    # Hold until T=87s — other robots clear the area
+drive_backward().until(after_cm(30)),
+```
+
+See **[Synchronizing Two Robots]({{< ref "03a-synchronizing-robots" >}})** for the full timing-gate reference.
+
 ### Stall Detection with Timeout
 
 Detect a motor stall but don't wait forever:
@@ -281,3 +312,9 @@ drive_forward(speed=0.3).until(
     stall_detected(Defs.front_left_motor) | after_seconds(5)
 )
 ```
+
+## Related Pages
+
+- **[Steps DSL]({{< ref "04-steps" >}})** — how builders and `.until()` fit the overall step model
+- **[Missions]({{< ref "03-missions" >}})** — composing steps with `seq()`, `parallel()`, and control flow
+- **[Synchronizing Two Robots]({{< ref "03a-synchronizing-robots" >}})** — `wait_for_checkpoint()` as a timing gate

@@ -3,7 +3,7 @@ title: "Advanced Topics"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 16
+weight: 17
 ---
 
 # Advanced Topics
@@ -234,6 +234,102 @@ Steps should call service methods rather than managing state themselves. This ke
 
 The `HeadingReferenceService` is a built-in service that stores the marked heading reference. You can create your own services for any cross-mission state.
 
+#### HeadingReferenceService API
+
+`HeadingReferenceService` is the only built-in service you commonly call from custom steps:
+
+```python
+from raccoon.robot.heading_reference import HeadingReferenceService
+
+# In a MotionStep.on_start():
+service = robot.get_service(HeadingReferenceService)
+
+# Returns signed heading error in degrees (positive = turn right)
+error_deg = service.compute_turn(target_deg=0.0)
+```
+
+`compute_turn(target_deg)` returns the signed angular error between the current heading and `target_deg` in degrees — the exact input you need for a proportional controller. See [Custom Steps]({{< ref "05-custom-steps" >}}) for a complete `MotionStep` example that uses this.
+
+### Fake Service Injection for Testing
+
+When a hardware service is unavailable (no camera, no drum sensor), you can replace it with a fake implementation before `robot.start()`. The robot's service registry uses a plain dict, so you write into it directly:
+
+```python
+# From the drumbot — install a fake camera service for camera-free testing
+from src.service.color_detection_service import ColorDetectionService
+from src.service.fake_color_detection_service import FakeColorDetectionService
+
+def install_fake_color_service(robot):
+    fake = FakeColorDetectionService(robot)
+    robot._services[ColorDetectionService] = fake
+```
+
+In `main.py`, this is gated on an environment variable set in the run-configuration:
+
+```python
+import os
+if os.getenv("DRUMBOT_FAKE_CAMERA"):
+    from src.service.fake_color_detection_service import install_fake_color_service
+    install_fake_color_service(robot)
+
+robot.start()
+```
+
+The mission code calls `robot.get_service(ColorDetectionService)` as normal — it gets the fake. No mission code changes. The environment variable is set in a `run-configurations.yml` entry so switching from real to fake requires no code change, only a different run configuration.
+
+**Requirements:** The fake class must extend `RobotService` and implement the same interface as the real service. The injection must happen after the robot is constructed and before `robot.start()`. Injecting after `start()` is undefined behavior.
+
+## Monkey-Patching raccoon-lib Internals
+
+When a bug in raccoon-lib must be fixed before the next library deployment, teams ship a hotfix inside the project by monkey-patching a module-level function reference before any robot code runs. The pattern is used in real competition projects (cube-bot, drumbot):
+
+```
+src/patches/
+└── heading_frame.py   # one file per patched module
+```
+
+```python
+# src/patches/heading_frame.py
+"""Hotfix: HeadingReferenceService must read odometry, not localization.
+
+Bug: turn_to_heading computed the delta in the localization frame while
+the C++ TurnMotion regulates against odometry — causing heading errors
+equal to the localization/odometry offset. Fix is in raccoon-lib; this
+patch ships it ahead of the next lib deploy.
+"""
+import raccoon.robot.heading_reference as _hr
+
+def _world_heading_odom_first(robot) -> float:
+    odom = getattr(robot, "odometry", None)
+    if odom is None:
+        raise RuntimeError("HeadingReferenceService requires robot.odometry")
+    return float(odom.get_pose().heading)
+
+def apply() -> None:
+    _hr._world_heading = _world_heading_odom_first
+```
+
+In `main.py`, the patch is applied **before any other raccoon import**:
+
+```python
+# src/main.py — patch must come first, before Robot import
+from src.patches.heading_frame import apply as _apply_heading_patch
+_apply_heading_patch()
+
+from src.hardware.robot import Robot   # Robot and all raccoon internals imported after patch
+
+Robot().start()
+```
+
+**Why before the Robot import?** Python caches module objects. If `raccoon.robot.heading_reference` is imported before you patch `_world_heading`, the cached function reference is already bound in the module. Patching after the import replaces the name in the module dict, which works — but importing `Robot` first may trigger indirect imports that capture the old reference. Patching first avoids that subtlety entirely.
+
+**Conventions:**
+
+- One `src/patches/` file per patched module. The filename reflects what is being patched.
+- The file is self-contained: it includes a docstring explaining the bug, the fix, and the raccoon-lib issue/PR reference.
+- `apply()` is idempotent if possible (check whether the patch was already applied before replacing the reference).
+- Remove the patch file once the raccoon-lib version that contains the real fix is deployed.
+
 ## Robot Geometry
 
 The `RobotGeometry` mixin provides methods for computing sensor positions, wheel positions, and distances relative to the robot's center of rotation:
@@ -391,3 +487,9 @@ pip install .
 ```
 
 This builds the native extensions and installs the Python package locally. Useful for running tests against the mock driver.
+
+## Related Pages
+
+- [Custom Steps]({{< ref "05-custom-steps" >}}) — how to write `MotionStep` classes that use `robot.drive.set_velocity()` and `robot.get_service()`
+- [Configuration Reference]({{< ref "13-configuration-reference" >}}) — run configuration YAML for env-var feature flags
+- [Calibration]({{< ref "10-calibration" >}}) — the `pre_start_gate` pattern for multi-step setup calibration

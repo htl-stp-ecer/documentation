@@ -3,7 +3,7 @@ title: "Making Your Robot Competition Ready"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 20
+weight: 21
 ---
 
 # Making Your Robot Competition Ready
@@ -244,6 +244,64 @@ Before you travel, walk through this list once. Every item here is something we'
 - [ ] Confirm at least 2–3 successful test triggers before arming.
 - [ ] Press the button to arm. Do not touch the robot again.
 - [ ] Match starts. The robot runs. 120 seconds later, the shutdown mission fires and the robot safes itself.
+
+## Development-Mode Patterns
+
+These patterns are used during development and PID tuning — not at competition. They let you skip or extend the normal startup gate without permanently changing mission code.
+
+### Extending `pre_start_gate` Without Losing the Light Wait
+
+The default `pre_start_gate` on a `SetupMission` runs the built-in wait-for-light gate. If you need to run your own calibration steps _before_ the light wait, override `pre_start_gate` and call `robot._pre_start_gate()` at the end:
+
+```python
+class M000SetupMission(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # ... servo homing, calibration ...
+        ])
+
+    async def pre_start_gate(self, robot) -> None:
+        # Your custom gate first — e.g. a calibration confirmation screen
+        await calibration_gate().run_step(robot)
+        # Then the standard wait-for-light — do NOT skip this at competition
+        await robot._pre_start_gate()
+```
+
+This is the correct pattern for adding pre-start behavior without losing the light-sensor wait. The docs for `SetupMission` show how to skip the gate entirely; this shows how to **extend** it. (Adapted from real competition projects including packingbot and drumbot.)
+
+### Bypassing the Gate for Tuning Runs
+
+During PID tuning you often want the robot to start immediately without waiting for a light signal. Patch the method at the class level in `main.py` rather than modifying mission code:
+
+```python
+# src/main.py — tuning mode only, REMOVE before competition
+from raccoon.robot.api import GenericRobot
+
+async def _skip_pre_start_gate(self) -> None:
+    self.info("DEBUG: skipping pre-start gate (tuning run)")
+
+GenericRobot._pre_start_gate = _skip_pre_start_gate
+
+def main():
+    Robot().start()
+```
+
+Patching the class (not the instance) means it takes effect even though `Robot()` is constructed after the patch.
+
+### Overriding `shutdown_in` at Runtime for Long Tuning Sessions
+
+`robot.shutdown_in` can be overridden after construction but before `robot.start()`. This is useful when the standard 120-second match timer would kill a long auto-tune run:
+
+```python
+def main():
+    robot = Robot()
+    robot.shutdown_in = 900   # 15 minutes — for tuning only
+    robot.start()
+```
+
+The override is safe because `shutdown_in` is read by `robot.start()`, not at construction time.
+
+> **Before competition:** Remove the `_pre_start_gate` patch and restore `shutdown_in` to 120. These are not flags you want to forget. Consider using a run configuration (see `config/run-configurations.yml`) to keep tuning overrides separate from competition code.
 
 ## Related Topics
 

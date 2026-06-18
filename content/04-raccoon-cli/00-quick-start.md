@@ -10,6 +10,26 @@ weight: 1
 
 This page walks through the minimum steps to get a robot project running with the Raccoon CLI.
 
+## How the five steps connect
+
+```mermaid
+sequenceDiagram
+    participant L as Laptop
+    participant Pi as Wombat Pi
+
+    L->>L: pip install raccoon-cli
+    L->>L: raccoon create project MyRobot
+    L->>Pi: raccoon connect 192.168.4.1 (SSH key setup)
+    Pi-->>L: API token saved
+    L->>L: raccoon run (codegen locally)
+    L->>Pi: push files via rsync/SFTP
+    Pi->>Pi: execute src/main.py
+    Pi-->>L: stream stdout live
+    Pi-->>L: pull calibration/logs after run
+```
+
+After `raccoon connect` succeeds once, every subsequent `raccoon run` is fully automated — no password prompts, no manual file copying.
+
 ## Prerequisites
 
 - Python 3.13 or newer

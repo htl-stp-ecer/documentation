@@ -8,9 +8,32 @@ weight: 4
 
 # Wait for Light
 
-In Botball competitions, robots start when a light signal turns on. The robot must detect this light reliably — without false-triggering from ambient changes (people walking past, overhead lighting shifting) and without missing a weak signal. LibSTP's `wait_for_light` step solves this using a 1D Kalman filter for baseline tracking and a multi-phase workflow with a built-in test mode.
+In Botball competitions, robots start when a light signal turns on. The robot must detect this light reliably — without false-triggering from ambient changes (people walking past, overhead lighting shifting) and without missing a weak signal. raccoon's `wait_for_light` step solves this using a 1D Kalman filter for baseline tracking and a multi-phase workflow with a built-in test mode.
 
 The approach is based on the paper [*"Comprehensive Light-Start Methods in Botball"*](https://ecer.pria.at/archive/ecer-2024/papers/Comprehensive_Light-Start_Methods_in_Botball.pdf) by James Gosling, Matthias Rottensteiner, and Alexander Müllner (ECER 2023), which compares several noise reduction techniques and proposes the Kalman filter + downward-facing sensor combination used here.
+
+## Concept
+
+The fundamental problem is that a fixed trigger threshold breaks across venues (different lighting conditions). The Kalman-filter approach adapts: instead of "trigger below value X", the step triggers on "drop of N% below the current ambient baseline".
+
+```mermaid
+stateDiagram-v2
+    [*] --> WarmUp : step starts
+    WarmUp --> TestMode : warmup_seconds elapsed\nbaseline established
+    TestMode --> TestMode : lamp on → TEST TRIGGER\n(baseline continues updating)
+    TestMode --> Armed : operator presses button\nafter ≥1 test trigger
+    Armed --> NeedsClear : transition from test
+    NeedsClear --> Armed : sensor confirms lamp is OFF
+    Armed --> Started : lamp on AND confirm_count consecutive drops
+    Started --> [*]
+```
+
+| Phase | What happens |
+|-------|-------------|
+| **Warm-Up** | Read sensor at ~200 Hz, feed into Kalman filter. Process variance is high so baseline tracks fast. |
+| **Test Mode** | Operator can turn the lamp on and off to verify detection. The robot will NOT start. Each successful detection increments a counter shown on screen. |
+| **Armed** | After operator confirmation. A `needs_clear` gate prevents instant false-start if lamp is still on from the test phase. |
+| **Started** | `confirm_count` consecutive readings drop below `baseline × (1 − drop_fraction)`. Mission begins. |
 
 ## The Problem
 
@@ -95,6 +118,18 @@ calibrate(distance_cm=50, exclude_ir_sensors=[
 ])
 ```
 
+## Competition Workflow
+
+At competition, follow this sequence every time you arm the robot:
+
+1. **Setup mission runs** → servos home, calibration completes
+2. **Warm-up phase** (automatic, ~1 s) → Kalman baseline establishes
+3. **Test mode starts** → turn the lamp on/off at least once to confirm detection (you'll see the trigger count increment on the BotUI)
+4. **Press the button** to arm → `needs_clear` gate waits for the lamp to go off
+5. **Match start** → referee turns lamp on → robot starts immediately
+
+> **Competition tip:** If the test trigger count does not increment when you flash the lamp, check the sensor mount. The sensor should face **downward** toward the table surface — this reduces ambient noise by up to 76% compared to an upward or sideways mount. If it still doesn't trigger, lower `drop_fraction` to `0.10` (requires 10% drop instead of 15%).
+
 ## Legacy Method
 
 If the automatic method doesn't work for your setup (e.g. the sensor isn't mounted downward, or the lamp signal is too weak for flank detection), there's a manual fallback:
@@ -104,3 +139,9 @@ wait_for_light_legacy(Defs.wait_for_light_sensor)
 ```
 
 This runs the traditional two-step flow: the operator measures the sensor with the lamp off, then with it on, confirms the midpoint threshold, and the robot waits for the reading to cross it. It works, but requires manual interaction before every run.
+
+## Cross-links
+
+- The wait-for-light sensor does not use black/white IR calibration — exclude it from the `calibrate()` step with `exclude_ir_sensors=[Defs.wait_for_light_sensor]`
+- `wait_for_light()` is injected automatically by `SetupMission` when `wait_for_light_mode = "auto"` is set in `Defs` — you do not need to call it manually
+- See [Calibration]({{< ref "10-calibration" >}}) for the full setup mission lifecycle

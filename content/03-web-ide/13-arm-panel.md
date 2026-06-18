@@ -3,12 +3,14 @@ title: "Arm Visualizer Panel"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 14
+weight: 16
 ---
 
 ## Overview
 
-The **Arm Visualizer** is a 3D panel for inspecting and controlling robotic arm chains. It renders the arm's joint structure in a THREE.js WebGL scene and lets you:
+The **Arm Visualizer** is a 3D panel for inspecting and controlling robotic arm chains. FK/IK calculations run on the **local IDE backend** (your laptop), while live servo commands go to the **Pi server** (your robot). The panel is only useful when your project has an `ArmChain` definition.
+
+It renders the arm's joint structure in a THREE.js WebGL scene and lets you:
 
 - Move joints by setting individual joint angles (forward kinematics, FK)
 - Drag the end-effector or a joint node to a target position (inverse kinematics, IK)
@@ -79,6 +81,26 @@ The response contains:
 
 The 3D scene updates immediately to reflect the new pose.
 
+```mermaid
+sequenceDiagram
+    participant UI as Browser (ArmPanel)
+    participant IDE as IDE backend<br/>(laptop :4200)
+    participant Pi as Pi server<br/>(robot :8421)
+
+    UI->>IDE: POST /arm/fk { joint_angles_deg }
+    IDE-->>UI: frames, end_effector_cm, joint_axes, joint_segments
+    UI->>UI: updateArmFromFrames() → THREE.js scene redrawn
+
+    alt Live Preview enabled
+        UI->>IDE: POST /arm/command { joint_angles_deg }
+        IDE->>Pi: POST /api/v1/servo/set { positions }
+        Pi-->>IDE: 200 OK
+        IDE-->>UI: 202 Accepted
+    end
+```
+
+*FK and the live-preview proxy both go through the IDE backend. The browser never talks directly to the Pi for arm commands.*
+
 ---
 
 ## Inverse kinematics (IK)
@@ -112,6 +134,28 @@ Click a **joint sphere** or the **end-effector sphere** in the 3D scene to selec
 **Gizmo drag** — click and drag one of the colored axis arrows (red=X, green=Y, blue=Z) to constrain movement to that axis. The IK solver is called at up to ~12.5 calls/second (throttled to 80 ms) during drag.
 
 **Free drag** — click and drag the node directly. Movement is projected onto a plane perpendicular to the camera direction, passing through the node. The IK solver runs continuously during drag.
+
+```mermaid
+flowchart TD
+    PointerDown["pointerdown on\njoint/EE sphere"]
+    SelectNode["Select node\n(gizmo appears)"]
+    DragMove["pointermove\n(pointer captured)"]
+    Project["Project pointer onto\ndrag plane → target XYZ"]
+    Throttle["ikDragSubject\n(throttle 80 ms)"]
+    IKCall["POST /arm/ik\n{ target_cm, initial_angles }"]
+    FKCall["POST /arm/fk\n{ joint_angles_deg }"]
+    Render["THREE.js scene update\n(frames → mesh positions)"]
+
+    PointerDown --> SelectNode
+    SelectNode --> DragMove
+    DragMove --> Project
+    Project --> Throttle
+    Throttle --> IKCall
+    IKCall --> FKCall
+    FKCall --> Render
+```
+
+*Drag throttling caps IK calls to ~12.5/s to keep dragging smooth without flooding the backend.*
 
 **Keyboard nudge** — with a node selected, use arrow keys to nudge in X/Y, and Page Up/Down for Z:
 
@@ -218,3 +262,10 @@ All arm endpoints are on the **IDE backend** (laptop, port 4200) except `/comman
 | `DELETE /api/v1/projects/{uuid}/arm/positions/{name}` | IDE | Delete a named position |
 | `PATCH /api/v1/projects/{uuid}/arm/structure` | IDE | Update joint structure |
 | `POST /api/v1/device/arm/command` | Pi server | Send live servo command |
+
+---
+
+## Cross-references
+
+- [Architecture]({{< ref "0a-architecture" >}}) — why FK/IK is on the IDE backend but `/command` is on the Pi
+- [Tool Panels]({{< ref "06-floating-panels" >}}) — how to open the Arm Visualizer from the tool stripe

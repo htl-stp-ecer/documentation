@@ -3,7 +3,7 @@ title: "Projects List"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 9
+weight: 11
 ---
 
 ## Overview
@@ -85,3 +85,10 @@ Below the canvas the dialog shows a list of detected collision events. Each entr
 - The simulation data must be available for each project. If a project has no simulation data (no missions with path steps) it will show a load error.
 - Path timing is derived from the step-by-step simulation; missions with non-deterministic timing (e.g. sensor-triggered moves) will show the planned timing, not measured timing.
 - The tool requires at least two projects to be selected before it can run.
+
+---
+
+## Cross-references
+
+- [Starting the Web IDE]({{< ref "00-starting-the-web-ide" >}}) — `raccoon web` and the local backend port
+- [Architecture]({{< ref "0a-architecture" >}}) — what the local IDE backend owns vs. the Pi server

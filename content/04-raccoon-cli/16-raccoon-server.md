@@ -12,6 +12,30 @@ weight: 17
 
 `raccoon-server` is a separate entry point from `raccoon` — it is only installed and used on the Pi, not on your laptop.
 
+## Architecture: laptop CLI ↔ Pi daemon
+
+```mermaid
+graph LR
+    subgraph Laptop
+        CLI[raccoon CLI]
+    end
+    subgraph Pi
+        Server[raccoon-server<br/>HTTP/WebSocket :8421]
+        Main[src/main.py<br/>mission code]
+        LCM[LCM bus]
+    end
+
+    CLI -- sync files via rsync/SFTP --> Pi
+    CLI -- run/stop/logs via HTTP --> Server
+    Server -- spawns --> Main
+    Main -- sensor/motor data --> LCM
+    CLI -- raccoon lcm spy --> LCM
+```
+
+The server spawns `src/main.py` as a child process and streams its stdout back to the laptop in real time. When you press Ctrl-C, the CLI sends a shutdown signal through the server API — it does not kill the SSH session.
+
+> Note: `raccoon-server` is only relevant if you need to install or manage the daemon manually. When you run `raccoon run` from the laptop, the server is already running (installed by `sudo raccoon-server install` during initial setup) and the CLI talks to it automatically.
+
 ## Commands
 
 ### `raccoon-server start` — run in the foreground

@@ -15,6 +15,27 @@ raccoon connect <IP> --port 8421 --user pi
 
 Connects raccoon to your Wombat robot and sets up SSH key authentication so that every subsequent command (`run`, `sync`, `codegen`, etc.) works without prompting for a password.
 
+## How SSH key setup works
+
+```mermaid
+sequenceDiagram
+    participant L as Laptop
+    participant Pi as Wombat Pi
+
+    L->>Pi: check API server reachable at :8421
+    L->>Pi: try SSH key auth
+    alt key auth fails
+        L->>L: find or generate SSH key (Ed25519 / RSA)
+        L->>Pi: prompt password once → upload public key to authorized_keys
+        L->>Pi: verify key auth works
+    end
+    Pi-->>L: API access token (via SSH session)
+    L->>L: save token + address to config/connection.yml
+    L->>L: save Pi as "known Pi" in ~/.raccoon/config.yml
+```
+
+After this one-time handshake, every subsequent `raccoon run`, `raccoon sync`, and `raccoon shell` uses the stored key — no password ever again.
+
 ## What it does
 
 1. Checks that the robot's API server is reachable at `<IP>:8421`

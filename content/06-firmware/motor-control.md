@@ -6,6 +6,55 @@ draft: false
 weight: 3
 ---
 
+## Concept
+
+The STM32 runs a **hierarchical control loop** for each motor. At the bottom is open-loop PWM generation (~25 kHz). Above that is a back-EMF velocity measurement loop (200 Hz per motor in round-robin). Above that is a closed-loop velocity PID. Above that is a position trajectory generator. The Pi selects which level to engage by writing a 3-bit mode field into the SPI `RxBuffer`.
+
+The key insight behind the motor control design is that **all closed-loop work happens on the STM32**, not on the Pi. The Pi sends high-level commands (velocity setpoint, position target, chassis velocity vector) and the STM32 closes the loop within a single BEMF cycle (≤ 1250 µs). By the time the Pi's next SPI transfer arrives (5 ms later), the motor has already been updated four times.
+
+### Motor mode state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> OFF : power on / reset
+
+    OFF : MOT_MODE_OFF (0b000)\nDirection pins LOW, duty 0\nMotor coasts freely
+
+    BRAKE : MOT_MODE_PASSIV_BRAKE (0b001)\nDirection pins both HIGH\nMotor windings shorted — regenerative braking
+
+    PWM : MOT_MODE_PWM (0b010)\nOpen-loop duty −399 to +399\nNo encoder feedback
+
+    MAV : MOT_MODE_MAV (0b011)\nClosed-loop velocity PID\nSetpoint in BEMF ticks/s\nRequires BEMF enabled
+
+    MTP : MOT_MODE_MTP (0b100)\nSqrt-decel trajectory → velocity PID\nAbsolute position target\nDone flag set when within 40 ticks
+
+    CHASSIS : MOT_MODE_CHASSIS (0b101)\nPer-wheel target from chassis vector\n[vx, vy, wz] → fwd_matrix → per-wheel rad/s\nAll 4 motors share one chassis command
+
+    OFF --> PWM : set_motor_pwm()
+    OFF --> MAV : set_motor_velocity()
+    OFF --> MTP : set_motor_position()
+    OFF --> CHASSIS : set_chassis_velocity()
+    OFF --> BRAKE : motor_passive_brake()
+
+    PWM --> OFF : motor_off()
+    PWM --> BRAKE : motor_passive_brake()
+    PWM --> MAV : set_motor_velocity()
+    PWM --> MTP : set_motor_position()
+
+    MAV --> OFF : motor_off()
+    MAV --> BRAKE : motor_passive_brake()
+    MAV --> MTP : set_motor_position()
+    MAV --> PWM : set_motor_pwm()
+
+    MTP --> BRAKE : position reached (done flag)\nor motor_passive_brake()
+    MTP --> OFF : motor_off()
+
+    CHASSIS --> OFF : motor_off()
+    CHASSIS --> BRAKE : motor_passive_brake()
+```
+
+On every mode change, the firmware resets both PID controllers (zeroes `prevErr` and `iErr`), resets the trapezoidal profile velocity to 0, and clears the done flag. This prevents integral windup from a previous mode from affecting the new one.
+
 ## PWM Generation
 
 Each DC motor is driven by an H-bridge. The STM32 generates a PWM signal for the enable pin of the H-bridge and drives two direction pins (D0, D1) to control direction.
@@ -322,3 +371,9 @@ A dedicated 6 V regulator powers the servo rail. The firmware controls the regul
 The `update_servo_cmd()` function runs at 10 Hz from the main loop. Servo position is specified in timer ticks (600 = 0°, 2600 = 180°, 600 + degrees × 10 = position). The `stm32-data-reader` converts user-facing degrees to this scale before writing to `rxBuffer.servoPos[port]`.
 
 The 10 Hz update rate is deliberately slow. Updating servos every millisecond can cause jitter when the SPI bus is transferring large buffers and the timer compare register is written mid-cycle.
+
+## Related pages
+
+- [SPI Communication Protocol](../spi-protocol/) — how motor modes and targets are carried over the wire
+- [Data Pipeline](../data-pipeline/) — the full command path from Python `motor.set_speed()` to H-bridge output
+- [Build and Flash](../build-flash/) — how to change PID defaults and reflash the firmware

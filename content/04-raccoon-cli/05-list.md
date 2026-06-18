@@ -10,6 +10,10 @@ weight: 6
 
 List can be used to either show all projects or all missions in an project.
 
+`raccoon list projects` scans the current directory (or `--path`) for subdirectories containing `raccoon.project.yml`. It does not search recursively beyond one level — it looks at immediate subdirectories only.
+
+`raccoon list missions` reads the `missions:` list in the current project's `raccoon.project.yml` and reports each entry, its file location, and whether the file actually exists on disk. Missions listed in config but missing on disk appear with a warning status — the same check that `raccoon validate` enforces. See [validate]({{< ref "15-validate" >}}) for the full consistency check.
+
 ## raccoon list projects
 
 ### Options

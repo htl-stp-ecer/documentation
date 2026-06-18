@@ -20,6 +20,21 @@ raccoon doctor
 
 Run this command whenever something is not working before reaching for deeper debugging.
 
+## Three failure categories
+
+Most raccoon failures fall into exactly one of these buckets. `raccoon doctor` tells you which:
+
+```mermaid
+graph LR
+    A[something broken] --> B{doctor output}
+    B -->|Not connected| C[fix: raccoon connect IP]
+    B -->|Package outdated| D[fix: raccoon update]
+    B -->|Tool missing| E[fix: install the tool]
+    B -->|All green| F[check format_version: raccoon migrate --dry-run]
+```
+
+If `raccoon doctor` is fully green and things still fail, the next step is `raccoon migrate --dry-run` to check for project schema drift — that is a different layer entirely. See [Versioning And Upgrades]({{< ref "07-versioning-and-upgrades" >}}) for the full picture.
+
 ## What it checks
 
 ### Connection & project state

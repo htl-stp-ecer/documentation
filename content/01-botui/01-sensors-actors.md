@@ -10,6 +10,32 @@ weight: 2
 
 The Sensors & Actors screen is the diagnostic and manual-control hub of BotUI. Tap its tile on the Dashboard to open the sensor-selection screen, which presents a grid of tiles — one per sensor group (or per individual sensor when only one exists in a group). Every tile routes to a dedicated screen appropriate to that sensor type: a time-series graph, a radial control, a system health dashboard, or a 3D visualisation.
 
+## Concept
+
+All data shown here is live: BotUI subscribes to LCM channels on the raccoon_ring bus and the values update in real time. Nothing is polled on-demand — the `TransportService` spin timer drains incoming frames at ~30 fps and pushes them into Riverpod stream providers that rebuild the widgets automatically.
+
+The screen hierarchy follows a consistent drill-down pattern. You always start at a category list, pick a port or sub-category, and arrive at a screen appropriate for that sensor type. The same back arrow returns you one level up at each step.
+
+```mermaid
+graph TD
+    SEL["Sensor Selection Screen\n(category tiles grid)"]
+    SEL --> ANA["Analog category list\n(ports 0–5, graph 0–4095)"]
+    SEL --> DIG["Digital category list\n(ports 0–10, HIGH/LOW tiles)"]
+    SEL --> MOT["Motor category list\n(ports 0–3)"]
+    SEL --> SRV["Servo category list\n(ports 0–3)"]
+    SEL --> IMU_SEL["IMU selection\n(Gyro/Accel/Magneto/Heading/Orientation)"]
+    SEL --> CAM["Camera viewer"]
+    SEL --> SYS["System Health dashboard"]
+    SEL --> CALIB["Calibration Board sub-menu"]
+
+    MOT --> MOTOR["Motor control screen\n(Power / Vel / Pos / Graph)"]
+    SRV --> SERVO["Servo arc slider screen"]
+    IMU_SEL --> GRAPH_IMU["IMU time-series graph"]
+    IMU_SEL --> QUAT["Quaternion 3D visualisation"]
+    SYS --> HEALTH_GRAPH["Health metric graph\n(CPU / RAM / Temp / Battery)"]
+    SYS --> DISK["Disk usage breakdown"]
+```
+
 ## Sensor-Selection Screen
 
 When you open Sensors & Actors you land on a grid of category tiles. The categories that appear depend on what sensors are detected at runtime:
@@ -210,4 +236,4 @@ Tapping a tile opens the standard graph view for that port (0–1 range).
 
 ## Camera Viewer
 
-The **Camera** tile opens a live video stream viewer sourced from the raccoon camera service. No additional controls are shown on the sensor screen; camera configuration is done through Settings → Camera.
+The **Camera** tile opens a live video stream viewer sourced from the raccoon camera service. No additional controls are shown on the sensor screen; camera configuration is done through [Settings → Camera]({{< ref "/01-botui/03-settings#camera" >}}).

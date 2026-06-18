@@ -15,6 +15,24 @@ raccoon checkpoint <subcommand>
 
 `raccoon checkpoint` manages invisible git snapshots of your project's working tree. These snapshots let you roll back to an earlier state without polluting your git history, branch list, or stash list.
 
+## How checkpoints fit into the run lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> editing: edit mission code
+    editing --> running: raccoon run
+    running --> checkpoint_created: auto-checkpoint (pre-run)
+    checkpoint_created --> executing: codegen + sync + execute on Pi
+    executing --> results: run exits / Ctrl-C
+    results --> editing: happy with result
+    results --> restore: unexpected behaviour
+    restore --> editing: raccoon checkpoint restore N
+```
+
+Checkpoints are stored under `refs/raccoon/checkpoints/` — a git ref namespace invisible to `git log`, `git branch`, and `git stash`. They survive `git clean` and `git checkout` because the ref holds the object alive, but a maximum of 100 are kept before older ones are auto-pruned.
+
+> **Checkpoints vs. commits:** checkpoints are ephemeral recovery tools. For deliberate history, use `git commit`. For transferring code to the Pi, use `raccoon sync`.
+
 ## Why checkpoints exist
 
 During development you frequently make a small change, run it on the robot, and find it broke something. Without checkpoints you would have to manually `git stash` or make a commit before every run, then undo it afterward.

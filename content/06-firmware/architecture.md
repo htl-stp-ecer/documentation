@@ -6,6 +6,14 @@ draft: false
 weight: 1
 ---
 
+## Concept
+
+The Wombat is not controlled by a single processor. Two processors collaborate: the Raspberry Pi handles everything a general-purpose operating system is good at (networking, vision, Python code, user interfaces), and the STM32 handles everything that Linux is *not* good at (deterministic microsecond-level timing for motor feedback loops).
+
+The key insight is that back-EMF based position tracking imposes a strict real-time contract. Every 1250 µs, one motor must be stopped, the system must wait exactly 500 µs for the back-EMF signal to settle, and then the ADC must fire. If anything delays any step by even a few hundred microseconds, the ADC picks up PWM switching noise instead of the motor's actual back-EMF, and position tracking degrades. Linux cannot reliably meet that contract. The STM32 can.
+
+The SPI link between them is the only shared boundary. The Pi is the SPI master: it initiates every transfer, sends commands, and reads sensor data. The STM32 is the SPI slave: it responds with its current sensor snapshot and applies the received commands in the next control cycle.
+
 ## Why Two Processors?
 
 The Raspberry Pi runs Linux, which is a general-purpose preemptive operating system. Linux processes can be interrupted by the scheduler at any time. For most tasks — path planning, vision, networking, user code — this is fine. For motor control it is a problem.
@@ -78,3 +86,34 @@ The main loop then runs forever, handling:
 The motor control loop itself does **not** run in the main loop — it is triggered exclusively by the ADC2 conversion-complete interrupt (`HAL_ADC_ConvCpltCallback`) which fires after each BEMF sample.
 
 The firmware prints a `[stp] hb #N` heartbeat line over UART3 every 5 seconds containing the current motor modes, positions, BEMF readings, and conversion count. The Pi-side `UartMonitor` tails this output and forwards it to the logger.
+
+## Startup Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant H as HAL_Init / Clock
+    participant P as Peripheral Init
+    participant A as ADC1 (analog)
+    participant T as TIM6 (system tick)
+    participant S as SPI2 (Pi link)
+    participant M as Motor PID init
+    participant I as IMU (MPU-9250)
+
+    H->>P: HAL_Init + SystemClock_Config (180 MHz PLL)
+    P->>P: GPIO, DMA, ADC1, ADC2, SPI2, SPI3, TIM1/3/6/8/9, USART3
+    P->>A: startContinuousAnalogSampling() — ADC1 circular DMA starts
+    Note over A: must happen before TIM6 so accumulators have data
+    A->>T: systemTimerStart() — TIM6 1 µs tick begins
+    Note over T: drives BEMF scheduling + analog output
+    T->>S: initPiCommunication() — arms first SPI2 DMA
+    Note over S: STM32 now ready for Pi commands
+    S->>M: initMotors() — PID controller state reset
+    M->>I: setupImu() — MPU-9250 self-test, DMP load, 50 Hz fusion start
+    I-->>H: main loop begins (servo updates, IMU polling, SPI buffer refresh)
+```
+
+## Related pages
+
+- [SPI Communication Protocol](../spi-protocol/) — the wire format for the SPI link
+- [Motor Control](../motor-control/) — what the firmware does inside each BEMF cycle
+- [Data Pipeline](../data-pipeline/) — how sensor data travels from STM32 to Python

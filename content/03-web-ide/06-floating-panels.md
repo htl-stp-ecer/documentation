@@ -3,12 +3,18 @@ title: "Tool Panels (Bottom and Right)"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 7
+weight: 9
 ---
 
 ## Tool Panels
 
-The Web IDE's supplementary views are **docked tool panels**, not floating overlays. They slide open from the bottom or the right side of the editor and are resizable. Only the **Timing Panel** is still a floating, draggable overlay (inside the flowchart canvas).
+The Web IDE's supplementary views are **docked tool panels** — they slide open from the bottom or the right side of the editor and are resizable. Only the **Timing Panel** is a floating, draggable overlay (inside the flowchart canvas itself).
+
+**Bottom panels** are for observing — Logs (what is the robot printing?), Table Visualization (where is the robot?), and Arm Visualizer (what are the joint angles?).
+
+**Right panels** are for building — Step Library (what steps can I use?), Step Docs (what does this step do?), and Robot Config (what is my robot's geometry?).
+
+Only one bottom panel and one right panel can be open at a time. The selection and sizes survive page reloads (stored in `localStorage`).
 
 ### How to toggle panels
 
@@ -20,6 +26,47 @@ The Web IDE's supplementary views are **docked tool panels**, not floating overl
 | **Steps** (Step Library) | Right | Grid icon | Right stripe, top |
 | **Docs** (Step Docs) | Right | Book icon | Right stripe, top |
 | **Robot Config** | Right | Box icon | Right stripe, top |
+
+```mermaid
+graph LR
+    subgraph LeftStripe["Left tool stripe"]
+        LS_M["Missions\n(top)"]
+        LS_L["Logs"]
+        LS_T["Table"]
+        LS_A["Arm"]
+    end
+
+    subgraph RightStripe["Right tool stripe"]
+        RS_S["Steps"]
+        RS_D["Docs"]
+        RS_R["Robot"]
+    end
+
+    subgraph BottomPanel["Bottom panel (one at a time)"]
+        BP_L["Run Logs"]
+        BP_T["Table Visualization"]
+        BP_A["Arm Visualizer"]
+    end
+
+    subgraph RightPanel["Right panel (one at a time)"]
+        RP_S["Step Library"]
+        RP_D["Step Docs"]
+        RP_R["Robot Config"]
+    end
+
+    subgraph FloatingOverlay["Floating overlay (inside flowchart)"]
+        FP["Timing Panel"]
+    end
+
+    LS_L --> BP_L
+    LS_T --> BP_T
+    LS_A --> BP_A
+    RS_S --> RP_S
+    RS_D --> RP_D
+    RS_R --> RP_R
+```
+
+*Each stripe button toggles exactly one panel. Clicking an already-open panel closes it.*
 
 Click the icon once to open the panel; click again to close it. Only one bottom panel and one right panel can be open at a time. Panel selections and sizes are saved in `localStorage`.
 
@@ -133,3 +180,12 @@ The Timing Panel is the one remaining **floating overlay** in the Web IDE. It ap
 - The panel is hidden while no run data is available.
 
 Use the Timing Panel to identify which steps are taking longer than expected and to verify that step durations match your mission timing budget.
+
+---
+
+## Cross-references
+
+- [Running a Mission]({{< ref "07-running-a-mission" >}}) — logs panel auto-opens when a run starts
+- [Localization Replay]({{< ref "12-localization-replay" >}}) — loading a recording into the Table Visualization panel
+- [Arm Visualizer Panel]({{< ref "13-arm-panel" >}}) — full reference for the Arm Visualizer
+- [Settings Modal]({{< ref "05-settings-modal" >}}) — map editing lives inside the Table Visualization panel header

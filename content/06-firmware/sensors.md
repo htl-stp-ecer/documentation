@@ -6,6 +6,16 @@ draft: false
 weight: 4
 ---
 
+## Concept
+
+The STM32 reads three distinct categories of sensor, each with its own ADC, timing, and filtering strategy:
+
+- **Analog sensors (AIN0–AIN5) and battery voltage** — scanned continuously by ADC1 via circular DMA, averaged over many raw samples, VDDA-compensated, and output at 250 Hz.
+- **Digital inputs (DIN0–DIN9)** — read directly inside the SPI completion ISR so they update on every single SPI transaction with minimum latency.
+- **IMU (MPU-9250)** — fused by the on-chip DMP at 50 Hz; the main loop polls the DMP FIFO and updates the IMU struct in `txBuffer`.
+
+All three end up in the `TxBuffer` that is shipped to the Pi on every SPI transfer. The Pi's `DataPublisher` then serialises each field to the corresponding `raccoon/` LCM channel. See [Data Pipeline](../data-pipeline/) for the full downstream path.
+
 ## Analog Sensor Ports
 
 The Wombat exposes six general-purpose analog input ports (AIN0–AIN5) plus a battery voltage monitor. All eight ADC1 inputs — including an internal VREFINT channel — are scanned continuously via circular DMA.
@@ -30,6 +40,35 @@ The Wombat exposes six general-purpose analog input ports (AIN0–AIN5) plus a b
 ADC1 runs in **continuous scan mode** with circular DMA (`DMAContinuousRequests = ENABLE`). `startContinuousAnalogSampling()` is called once at boot and never stopped. Each complete DMA cycle fills `adcDmaBuffer[8]` and triggers `HAL_ADC_ConvCpltCallback`, which accumulates samples into `adcAccum[8]` and increments `adcSampleCount`.
 
 The output rate is controlled by `ANALOG_OUTPUT_INTERVAL` (4000 µs = **250 Hz** output rate). On every main-loop iteration, `updatingAnalogValuesInSpiBuffer()` checks if any samples have accumulated, takes an atomic snapshot of `adcAccum[]` and `adcSampleCount`, resets the accumulators, and computes averages. This is oversampling: many raw ADC samples are averaged between output frames, reducing quantization noise.
+
+*Figure 1 — ADC1 analog sensor pipeline from GPIO pins to `txBuffer`.*
+
+```mermaid
+flowchart TD
+    A0["AIN0–AIN5\nPB1 / PC1–PC5\nADC1_IN9,11–15"] -->|12-bit sample| DMA
+    BAT["Battery\nPC0 / ADC1_IN10\n480 cycle sample time"] -->|12-bit sample| DMA
+    VREF["VREFINT\ninternal reference ~1.21 V\n480 cycle sample time"] -->|12-bit sample| DMA
+
+    DMA["DMA1 circular\nadcDmaBuffer[8]\nHAL_ADC_Start_DMA"]
+    DMA -->|ConvCpltCallback ISR| ACCUM
+
+    ACCUM["adcAccum[8] += sample\nadcSampleCount++\ncontinuous oversampling"]
+
+    ACCUM -->|"main loop: updatingAnalogValuesInSpiBuffer()\nevery ~4 ms (250 Hz)"| SNAP
+
+    SNAP["atomic snapshot\n__disable_irq / __enable_irq\nlocalAccum[8], count"]
+
+    SNAP --> VSCALE["compute vddaScale\n= VREFINT_CAL / localAccum[7] / count\nfrom Flash cal @ 0x1FFF7A2A"]
+
+    SNAP --> AVG["average each channel\nlocalAccum[i] / count"]
+
+    VSCALE --> COMP["× vddaScale\nnormalize to 3.3 V"]
+    AVG --> COMP
+
+    COMP --> BUF["txBuffer.analogSensor[0..5]\ntxBuffer.batteryVoltage\n12-bit int16_t counts"]
+
+    BUF -->|SPI2 TxRxCplt DMA| PI["Pi RxBuffer\nSpiReal::readSensorData()"]
+```
 
 ### VDDA compensation
 
@@ -163,6 +202,43 @@ The Pi can override these at runtime by setting new 3×3 signed-char matrices in
 
 When new data is available and the SPI bus is not busy, `txBuffer.imu` is updated atomically from the local `imu` struct.
 
+*Figure 2 — IMU data acquisition loop: DMP FIFO → MPL fusion → `txBuffer.imu`.*
+
+```mermaid
+flowchart TD
+    MPU["MPU-9250\nSPI3 master\nPC10/11/12, PE2 CS0"]
+
+    MPU -->|"gyro + accel + DMP 6-axis quat\n50 Hz (every 20 ms)"| FIFO["DMP FIFO\ndmp_read_fifo()"]
+    MPU -->|"AK8963 via aux I²C\n10 Hz (every 100 ms)"| MAG["magnetometer\nmpu_get_compass_reg()"]
+
+    FIFO -->|"INV_XYZ_GYRO"| BG["inv_build_gyro()"]
+    FIFO -->|"INV_XYZ_ACCEL"| BA["inv_build_accel()"]
+    FIFO -->|"INV_WXYZ_QUAT"| BQ["inv_build_quat()\nstore imu.dmpQuat"]
+    MAG --> BC["inv_build_compass()"]
+
+    BG --> EXEC["inv_execute_on_data()\neMPL fusion step"]
+    BA --> EXEC
+    BQ --> EXEC
+    BC --> EXEC
+
+    EXEC --> MPL["imu_read_from_mpl()"]
+
+    MPL --> Q6["inv_get_6axis_quaternion()\n→ rot_mat (body→world)"]
+    MPL --> GY["inv_get_sensor_type_gyro()\n× rot_mat → imu.gyro"]
+    MPL --> AC["inv_get_sensor_type_accel()\n× rot_mat × 9.80665 → imu.accel"]
+    MPL --> LA["inv_get_linear_accel()\ngravity removed → imu.linearAccel\n+ velocity integration × 0.998 decay"]
+    MPL --> HD["heading = atan2(q1·q2 − q0·q3,\nq0²+q2²−0.5) → imu.heading"]
+
+    Q6 --> STRUCT["imu struct\n(ImuData)"]
+    GY --> STRUCT
+    AC --> STRUCT
+    LA --> STRUCT
+    HD --> STRUCT
+
+    STRUCT -->|"spi2_wait_idle() check"| TX["txBuffer.imu\n(atomic copy)"]
+    TX -->|"SPI2 TxRxCplt DMA"| PI["Pi DeviceController\n→ DataPublisher → LCM"]
+```
+
 ### Flash-based IMU Calibration Storage
 
 The SPI protocol includes a `PI_BUFFER_UPDATE_SAVE_IMU_CAL` update flag (bitmask `0x08`). When the Pi sets this flag in the `RxBuffer.updates` field, the STM32 main loop calls `cal_save_to_flash()`.
@@ -184,3 +260,9 @@ If this feature is reinstated in the future, the note in `flash_cal.c` recommend
 SPI3 is configured as master at startup with prescaler 64 (giving ~1.4 MHz), then changed to prescaler 256 during the IMU initialisation to stay within the MPU-9250's configuration register speed limit. After DMP load it can run faster, but the `changeSPIBaudRatePrescaler` call to restore a higher rate is commented out in the current code.
 
 The SPI3 DMA (DMA1 stream 0/5) runs in normal (not circular) mode — each transaction is explicitly started by the MPU-9250 driver and completes with an interrupt.
+
+## Related pages
+
+- [Data Pipeline](../data-pipeline/) — how sensor values travel from `txBuffer` to `analog.read()` and `imu.heading()`
+- [SPI Communication Protocol](../spi-protocol/) — the full `TxBuffer` layout and all `raccoon/` channel names
+- [Architecture Overview](../architecture/) — interrupt priorities and why ADC1 must start before TIM6

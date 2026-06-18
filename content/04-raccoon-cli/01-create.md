@@ -10,6 +10,12 @@ weight: 2
 
 Create can be used to either create an entirely new project or a mission for an project.
 
+## What "create" produces
+
+`raccoon create project` gives you a fully working project skeleton — not just empty files, but a version-tagged clone of the official example project with your name and a fresh UUID baked in. The UUID is the project's permanent identity on the Pi (remote path: `/home/pi/programs/<uuid>`).
+
+`raccoon create mission` does the inverse of manual file creation: it generates the mission file from a template, registers the class name in `config/missions.yml`, and inserts the import into `src/main.py` — all three locations updated atomically.
+
 ---
 
 ## raccoon create project
@@ -124,6 +130,17 @@ raccoon create project ConeBot --no-wizard
 ```
 
 > The exact file structure cloned from the example repository matches the version of raccoon you have installed. If the matching git tag is not yet published (e.g. on a pre-release build), raccoon falls back to the default branch of `htl-stp-ecer/raccoon-example`.
+
+### Adding run configurations for dev vs. competition
+
+Real competition bots add a `config/run-configurations.yml` file to separate development and competition modes. Include it from the root config:
+
+```yaml
+# raccoon.project.yml — add this line
+run_configurations: !include config/run-configurations.yml
+```
+
+See [Run Configurations]({{< ref "13-run-configurations" >}}) for the full reference and real competition bot examples.
 
 ---
 

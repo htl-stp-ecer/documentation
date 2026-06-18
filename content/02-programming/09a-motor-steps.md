@@ -3,10 +3,33 @@ title: "Motor Steps"
 author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
-weight: 14
+weight: 15
 ---
 
 # Motor Steps
+
+## Concept: Two Motor Worlds
+
+Raccoon has two completely separate worlds for motor control:
+
+1. **Drive-system motors** — the chassis motors (front-left, front-right, etc.). You never command these directly. The kinematic model (`DifferentialKinematics` / `MecanumKinematics`) translates a body velocity (`drive_forward`, `turn_left`) into per-wheel commands. You control the robot's motion, not the individual motors.
+
+2. **Mechanism motors** — arm lifts, drum collectors, conveyors, indexers. These are commanded directly by port using the motor-step API on this page. No kinematic layer sits between your code and the motor.
+
+```mermaid
+flowchart TD
+    subgraph "Drive system"
+        DS["drive_forward(cm)\nturn_left(deg)\nstrafe_right(cm)"] --> KM["Kinematic model\nDifferential / Mecanum"]
+        KM --> WHL["Per-wheel velocity commands\n(chassis motors only)"]
+    end
+    subgraph "Mechanism motors"
+        MS["move_motor_to(motor, pos)\nset_motor_dps(motor, dps)\nset_motor_velocity(motor, v)"] --> MW["Direct motor command\n(mechanism motor only)"]
+    end
+    style DS fill:#4CAF50,color:#fff
+    style MS fill:#42A5F5,color:#fff
+```
+
+**Key rule:** Never mix. Don't command a chassis motor with `set_motor_velocity` — you'll fight the drive controller. Don't try to use mechanism motors with `drive_forward` — they aren't in the kinematic model.
 
 Motor steps give you direct control over individual motors — independent of the drive system.
 Use them for arm lifts, conveyors, drum collectors, indexers, or any mechanism driven by a
@@ -15,6 +38,16 @@ motor that is not part of the chassis.
 The drive system (`drive_forward`, `turn_left`, etc.) controls all chassis motors together
 through a kinematic model. Motor steps bypass that and let you command **one specific motor**
 at a time, by port number.
+
+## Control Modes
+
+| Mode | API | Closed loop? | When to use |
+|------|-----|-------------|-------------|
+| Position (absolute) | `move_motor_to()` | Yes — BEMF position controller | Arms, lifts with absolute encoder reference |
+| Position (relative) | `move_motor_relative()` | Yes | Move by a fixed delta from current position |
+| Velocity (human units) | `set_motor_dps()` | Yes — BEMF velocity controller | Drums, conveyors when calibration is available |
+| Velocity (raw BEMF) | `set_motor_velocity()` | Yes — BEMF velocity controller | When you know the raw ticks target |
+| Power (open loop) | `set_motor_power()` | No — raw PWM | Simple actuators where speed variation is acceptable |
 
 ## Imports
 
@@ -278,6 +311,36 @@ seq([
 ])
 ```
 
+### Timed Motor Control Without Limit Switches
+
+When a mechanism has no limit switches, the practical alternative is time-based gating:
+`set_motor_velocity` + `wait_for_seconds` + a stop step. The entire sequence is wrapped in a
+named function for readability.
+
+This pattern is used in competition code (adapted from the conebot's cone container mechanism):
+
+```python
+# src/steps/cone_container_steps.py
+from raccoon import *
+from src.hardware.defs import Defs
+
+def down_cone_container():
+    """Lower the cone container and re-lift slightly to release the cone."""
+    return seq([
+        set_motor_velocity(Defs.cone_container_motor, velocity=-1700),
+        wait_for_seconds(0.4),                                        # time-gate
+        motor_passive_brake(Defs.cone_container_motor),
+        drive_forward(cm=10),
+        set_motor_velocity(Defs.cone_container_motor, velocity=1700), # re-lift
+        wait_for_seconds(0.2),
+        motor_passive_brake(Defs.cone_container_motor),
+    ])
+```
+
+The raw velocity value (`-1700`) is in BEMF firmware ticks. If your motor is calibrated you can
+use the equivalent `set_motor_dps()` call instead — but `set_motor_velocity()` is fine once you've
+characterized the ticks on a specific motor.
+
 ## Getting a Motor by Port
 
 Motor objects come from the hardware map defined in `defs.py`. You can also look one up by
@@ -297,3 +360,9 @@ Defs.arm_motor
 # Works, but fragile — the number must match the YAML definition
 robot.motor(2)
 ```
+
+## Related Pages
+
+- [Servos]({{< ref "09-servos" >}}) — position-controlled actuators for arms and claws
+- [Calibration]({{< ref "10-calibration" >}}) — required before `set_motor_dps()` gives accurate speeds
+- [Custom Steps]({{< ref "05-custom-steps" >}}) — writing `MotionStep` classes that call `robot.drive.set_velocity()` directly

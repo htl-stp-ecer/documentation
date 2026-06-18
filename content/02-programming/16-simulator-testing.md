@@ -3,11 +3,43 @@ title: "Simulator And Testing"
 author: "Docs Bot"
 date: 2026-06-18
 draft: false
-weight: 21
+weight: 22
 description: "How the raccoon simulator, bundled scenes, and pytest fixtures actually work."
 ---
 
 # Simulator And Testing
+
+## Concept: What the Simulator Is (and Isn't)
+
+The raccoon simulator is a **physics-backed mock HAL**. It replaces the hardware abstraction layer (motors, encoders, analog sensors, IMU) with simulated equivalents driven by a C++ physics engine. Your mission code and step code run completely unchanged — the same `drive_forward(30)` that drives a real robot drives the simulated robot. The simulator doesn't know or care that it's being tested.
+
+What the simulator **does model:**
+- Differential and mecanum drivetrain kinematics
+- Motor dynamics (first-order time constant, back-EMF feedback)
+- IR line sensors: computes readings by projecting sensor positions onto the scene geometry
+- Distance sensors: ray-cast against scene walls
+- Odometry: integrates simulated wheel velocities exactly as the hardware odometry does
+
+What the simulator **does not model:**
+- IMU noise, gyroscope drift, or heading error — heading in the sim is perfect
+- Servo dynamics or load — servos reach their target instantly
+- Battery voltage sag, motor heating, or mechanical slop
+- Camera or time-of-flight sensors
+- Physical collisions that affect the robot's trajectory (walls stop the robot but don't impart realistic forces)
+
+The simulator is most useful for **unit-testing motion primitives**, verifying that a drive step travels roughly the right distance, and regression-testing odometry. It is not a substitute for real-robot tuning of PID gains.
+
+```mermaid
+flowchart TD
+    A["scene config (.ftmap)<br/>+ SimRobotConfig"] --> B["configure() / use_scene()"]
+    B --> C["MockPlatform singleton<br/>(C++ pybind11)"]
+    C --> D["Physics tick loop<br/>motor dynamics, kinematics"]
+    D --> E["Simulated sensors<br/>IR projection, ray-cast"]
+    D --> F["Simulated odometry<br/>pose integration"]
+    E --> G["Your step code<br/>(unchanged)"]
+    F --> G
+    G --> H["test assertions<br/>pose(), yaw_rate()"]
+```
 
 The raccoon stack ships a real simulator and a real pytest integration layer. You can write tests that run your robot code against a simulated table map and verify position, sensor readings, and motion behavior — without a physical robot.
 

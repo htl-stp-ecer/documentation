@@ -3,7 +3,7 @@ title: "Your First Robot Program"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 2
+weight: 3
 ---
 
 # Your First Robot Program
@@ -18,12 +18,17 @@ You've set up your robot, connected it, and `raccoon run` works. Now what? This 
 
 This is what you'll do over and over:
 
-1. **Edit** your Python mission file on your laptop
-2. **Run** `raccoon run` in the terminal
-3. **Watch** the robot execute, read the terminal output
-4. **Iterate** — tweak values, add steps, fix what went wrong
+```mermaid
+flowchart LR
+    EDIT["Edit mission .py\non laptop"] --> RUN["raccoon run"]
+    RUN --> CODEGEN["regenerate defs.py\n+ robot.py"]
+    CODEGEN --> SYNC["sync to Pi\nover SSH"]
+    SYNC --> EXEC["execute on Pi\nwatch terminal output"]
+    EXEC --> ITERATE["tweak values\nfind next issue"]
+    ITERATE --> EDIT
+```
 
-That's it. There's no separate compile step, no firmware flashing, no manual file copying. `raccoon run` handles syncing, code generation, and execution in one command.
+No separate compile step, no firmware flashing, no manual file copying. `raccoon run` handles syncing, code generation, and execution in one command.
 
 > **Don't edit `defs.py` or `robot.py`** — these are generated from your YAML config every time you run. Your changes will be overwritten. Edit `raccoon.project.yml` (or the `config/*.yml` files) instead, then `raccoon run` regenerates them.
 
@@ -265,6 +270,27 @@ parallel(
 ```
 
 `parallel()` finishes when **all tracks** are done. The framework checks that you don't use the same hardware in two tracks — you can't drive forward and turn at the same time.
+
+**Background tasks** — sometimes you want to start something in the background and not wait for it at all:
+
+```python
+seq([
+    background(Defs.arm.down()),   # arm starts moving; execution continues immediately
+    drive_forward(30),             # drives while arm is still moving
+])
+```
+
+For coordination across missions, name the background task:
+
+```python
+# End of M010
+background(drop_cube_into_container(), name="drop_cube")
+
+# Start of M020 — wait for the arm move that started in M010
+wait_for_background("drop_cube")
+```
+
+Named background tasks are run-scoped, not mission-scoped — they survive mission boundaries. If the task finishes before `wait_for_background` is reached, the wait returns immediately.
 
 ---
 

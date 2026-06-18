@@ -12,6 +12,38 @@ The Settings screen is a **two-tier hierarchy**. The top-level screen shows six 
 
 ![IMG: Homepage for settings](/images/botui/settings/botui-settings.png)
 
+## Concept: Two-Tier Settings Model
+
+Settings in BotUI come from two different sources with different persistence mechanisms. Understanding this helps you find the right screen and avoid confusion when a setting does not seem to survive a restart.
+
+```mermaid
+graph LR
+    subgraph "BotUI SharedPreferences\n(persisted across reboots)"
+        ROT["Screen rotation\n(screen_rotation key)"]
+        SCRN["Screensaver toggle\n(shared_preferences)"]
+        TOUCH["Touch calibration matrix\n(touch_calibration key)"]
+    end
+    subgraph "OS / Service Layer\n(managed by Linux)"
+        WIFI["Wi-Fi credentials\n(NetworkManager)"]
+        SYSAUTO["Service autostart\n(systemd enable/disable)"]
+    end
+    subgraph "Settings Sub-Screens"
+        DISP["Display"]
+        NET["Network"]
+        SYS["System → Services"]
+    end
+
+    DISP --> ROT
+    DISP --> SCRN
+    DISP --> TOUCH
+    NET --> WIFI
+    SYS --> SYSAUTO
+```
+
+The **Display** sub-screen writes to `SharedPreferences` — these settings are owned by BotUI and survive the application restarting. The **Network** sub-screen issues commands to NetworkManager; credentials are stored by the OS, not by BotUI. The **System → Services** screen issues `systemctl enable/disable` commands; autostart state lives in systemd unit files, not in BotUI.
+
+Neither tier touches raccoon's Python configuration files (`robot.yml`, `raccoon.calibration.yml`, etc.) — those are project-level settings managed by the toolchain, not by BotUI.
+
 ## Top-Level Tiles
 
 | Tile | Icon colour | Sub-screen |
@@ -25,7 +57,7 @@ The Settings screen is a **two-tier hierarchy**. The top-level screen shows six 
 
 ---
 
-## Network
+## Network {#network}
 
 The Network sub-screen is a two-tile menu:
 
@@ -69,13 +101,13 @@ All three modes provide a Device Info page showing IP address, SSID, encryption 
 
 ---
 
-## Camera
+## Camera {#camera}
 
 Opens the camera configuration feature. Camera settings are managed through the dedicated camera sub-system.
 
 ---
 
-## Display
+## Display {#display}
 
 The Display sub-screen contains four tiles: **Calibrate**, **Rotate**, **Screensaver**, and **Hide UI**.
 
@@ -132,7 +164,7 @@ Stops the BotUI Flutter application entirely. This is useful when you need acces
 
 ---
 
-## System
+## System {#system}
 
 The System sub-screen contains three tiles: **Services**, **Reboot**, and **Shutdown**.
 
@@ -179,7 +211,7 @@ Powers off the device. A **confirmation dialog** is shown before the shutdown is
 
 ---
 
-## App Status
+## App Status {#app-status}
 
 The App Status screen shows the installed version of every RaccoonOS component. This is the first place to check when debugging "why is the robot behaving differently than expected" — it lets you verify that all components are at the versions you deployed.
 
@@ -200,9 +232,11 @@ Each row shows the component name with its icon and either a green version badge
 
 A **refresh button** in the top bar re-fetches versions from the server. If the server is unreachable an orange warning banner is shown at the top of the list, but the UI version is still displayed from local state.
 
+> **Tip:** Before a competition run, open App Status and verify that `raccoon-lib` and `raccoon-cli` are at the versions you tested with. A version mismatch between the toolchain on your laptop and the library on the robot is a common source of unexpected behaviour.
+
 ---
 
-## Robot (Personality)
+## Robot (Personality) {#robot}
 
 The Robot sub-screen is a **read-only inspector** for the robot's current personality configuration. It does not allow editing — personality traits are assigned at build time or via configuration files.
 

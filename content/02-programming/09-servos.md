@@ -3,12 +3,28 @@ title: "Servos"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 13
+weight: 14
 ---
 
 # Servos
 
-Servos are position-controlled actuators used for arms, claws, shields, and other mechanisms.
+## Concept
+
+A servo is a position-controlled actuator. Unlike a motor, which you command with velocity or torque, a servo accepts an angle in degrees and the firmware holds the output shaft at that angle. The internal feedback loop is entirely in the servo hardware — raccoon only needs to send the target angle.
+
+`ServoPreset` wraps a raw `Servo` with a dictionary of named angles. Each key in the dictionary becomes a callable method on the preset object, so mission code reads as intent (`Defs.claw.open()`) rather than raw numbers (`servo(Defs.claw, 30)`).
+
+```mermaid
+flowchart LR
+    A["Mission code\nDefs.claw.closed()"] --> B["ServoPreset\nresolves name → angle\nadds offset"]
+    B --> C["slow_servo step\nor full-speed servo step"]
+    C --> D["HAL → Firmware\nPWM signal to servo"]
+    D --> E["Servo holds angle\n(internal PID in hardware)"]
+    style A fill:#4CAF50,color:#fff
+    style E fill:#FF7043,color:#fff
+```
+
+The key design choice: **all angle arithmetic happens at build time** (when the step is constructed), not at runtime. The firmware only receives the final degree value.
 
 ## Declaration
 
@@ -60,6 +76,42 @@ claw = ServoPreset(
 ```
 
 This is useful when replacing a broken servo. A new servo mounted on the same shaft may land a few teeth off from the original, causing all positions to be shifted by the same amount. Since all positions are just angle values, adding a constant offset shifts every position by the same amount — no need to re-tune each angle individually.
+
+**Real-world use: mechanical assembly compensation.** The clawbot's shoulder servo is mounted with an unavoidable 22.4-degree physical offset due to how the joint spline engages at assembly time. Rather than adjusting every named position by 22.4 degrees, the team used `offset=22.4`:
+
+```yaml
+# config/servos.yml (adapted from the clawbot)
+arm_sholder:
+  type: Servo
+  port: 1
+  offset: 22.4      # Compensates for spline engagement offset at assembly
+  positions:
+    max_down: 195.3
+    _0deg: 169.2
+    p90deg: 69
+    max_up: 20
+```
+
+This way all named angles describe the arm's actual joint angle, and the hardware reality is absorbed in `offset` — no magic-number subtraction sprinkled through mission code.
+
+**Position names starting with `_` are allowed.** Names like `_0deg`, `_20deg`, `_45deg`, `_90deg` are valid Python identifiers and become callable methods: `Defs.arm_sholder._0deg()`. The underscore prefix signals an angle-based name rather than a functional one.
+
+**Object-specific names make mission code self-documenting.** Rather than overloading a single `open` and `closed`, you can name by the object being gripped:
+
+```yaml
+# conebot servos.yml (real example)
+claw_servo:
+  type: Servo
+  port: 1
+  positions:
+    closed: 154
+    half_open: 70
+    open: 55
+    botguy_open: 90       # wider grip for the botguy figurine
+    botguy_closed: 130    # tighter grip for the botguy figurine
+```
+
+Mission code then reads `Defs.claw_servo.botguy_closed()` instead of a raw number or an ambiguous `closed()`.
 
 > **Tip:** When choosing your servo angles, try to avoid values very close to 0 or 180. Keeping some margin (e.g. 10–170) leaves room to apply a positive or negative offset when a servo needs to be swapped at competition — without hitting the physical limits.
 
@@ -255,6 +307,28 @@ Use `arm.device` when you need to call raw HAL methods (`enable()`, `disable()`)
 Use `arm.positions` to inspect the configured angles programmatically — e.g. to verify that the
 YAML was parsed correctly during a setup check.
 
+`ServoPreset` also exposes a `get_position()` method that returns the currently commanded angle:
+
+```python
+# Read the current angle — useful in defer() guards
+current_angle = Defs.arm_servo.get_position()
+```
+
+This is particularly useful inside a `defer()` factory to check whether the servo has already moved
+before issuing a redundant command:
+
+```python
+from raccoon import defer, seq
+
+def safe_arm_lower():
+    """Lower the arm only if it is not already at the down position."""
+    def _build():
+        if Defs.arm_servo.get_position() > 150:
+            return Defs.arm_servo.down()
+        return seq([])   # already down — do nothing
+    return defer(_build)
+```
+
 ## Servo Power States
 
 Servo power/control on Wombat has more than one useful state.
@@ -382,3 +456,9 @@ Defs.arm.down(60)      # 60 deg/s — slower, more controlled
 ```
 
 Use a slower speed for heavy or delicate mechanisms where full-speed movement could cause problems (slamming, overshooting, dropping objects).
+
+## Related Pages
+
+- [Motor Steps]({{< ref "09a-motor-steps" >}}) — direct motor control for mechanism motors not using the drive system
+- [Configuration Reference → servos.yml]({{< ref "13-configuration-reference" >}}) — how to declare servos and positions in YAML
+- [Calibration]({{< ref "10-calibration" >}}) — the setup-mission flow including servo homing

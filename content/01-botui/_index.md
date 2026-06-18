@@ -3,12 +3,111 @@ title: "Bot UI"
 author: "Jakob Schlögl"
 date: 2026-06-18
 draft: false
-weight: 1
+weight: 2
 ---
 
 # Bot UI
 
-The Robot UI (BotUI) is the touchscreen interface displayed on the robot's screen. It gives you access to all robot features — sensor graphs, program execution, network settings, and system management — without needing a laptop or any other device. Everything runs directly on the Raspberry Pi.
+BotUI is the on-robot Flutter touchscreen application that runs on the Raspberry Pi inside every RaccoonOS robot. It gives you access to all robot features — sensor graphs, program execution, network settings, and system management — directly from the robot's display, without needing a laptop or SSH session.
+
+## What BotUI Is
+
+Think of BotUI as the robot's cockpit. It is the only process on the Pi that has a screen, and it acts as a real-time window into every other service running in the RaccoonOS stack. It does not implement robot logic itself; instead it reads and writes to the shared-memory transport bus that all raccoon services communicate through.
+
+BotUI is implemented in Flutter (targeting `flutter-pi` on ARM64 Linux) and communicates with the rest of the stack exclusively through `raccoon_ring` — the same shared-memory IPC mechanism used by raccoon-lib and stm32-data-reader. There is no REST API, no WebSocket, and no inter-process call: everything is publish/subscribe over named LCM channels.
+
+## How BotUI Talks to the Robot
+
+The data path between BotUI's Flutter widgets and the robot's hardware services has three distinct layers:
+
+```mermaid
+graph LR
+    subgraph "Flutter UI (Dart)"
+        W[Widget / Riverpod Provider]
+        TS[TransportService]
+    end
+    subgraph "Bridge Layer"
+        FFI["libraccoon_ring_bridge.so\n(C++ FFI)"]
+    end
+    subgraph "Shared Memory Bus"
+        RING["raccoon_ring\n(LCM channels)"]
+    end
+    subgraph "Robot Services"
+        STM["stm32-data-reader\n(sensor data)"]
+        RACC["raccoon service\n(program runner)"]
+        CAM["raccoon-cam\n(camera)"]
+        CALIB["raccoon-calib-bridge\n(calibration board)"]
+    end
+
+    W -->|publish / subscribe| TS
+    TS -->|Dart FFI| FFI
+    FFI -->|shared memory| RING
+    RING <-->|LCM messages| STM
+    RING <-->|LCM messages| RACC
+    RING <-->|LCM messages| CAM
+    RING <-->|LCM messages| CALIB
+```
+
+The `libraccoon_ring_bridge.so` is a thin C++ shared library compiled for ARM64 and bundled with every BotUI build. It wraps the `raccoon_ring` C++ API and exposes a C-ABI that the Dart `dart:ffi` layer calls directly. From Flutter's perspective, `TransportService` (a `keepAlive` Riverpod provider) is the single entry point: every widget subscribes to or publishes on a named channel and the bridge takes care of the rest.
+
+The spin timer inside `RaccoonRingTransport` drains the bridge's receive queue into Dart streams at 33 ms intervals (~30 fps). The bridge's C++ poll thread queues frames as they arrive via a futex-woken loop; the Dart spin timer simply reads from that queue — it does not block or poll hardware.
+
+## Screen / Navigation Map
+
+BotUI uses `go_router` for declarative navigation. The application starts at `/` (Dashboard) and all navigation is push/pop on a single `Navigator` stack:
+
+```mermaid
+graph TD
+    DASH["/ — Dashboard"]
+    SENS["/sensors — Sensors & Actors"]
+    PROG["/programs — Programs"]
+    SETT["/settings — Settings"]
+
+    DASH --> SENS
+    DASH --> PROG
+    DASH --> SETT
+
+    SENS --> CAT["/sensors/category\nSensor Category"]
+    SENS --> IMU["/sensors/imu\nIMU Selection"]
+    SENS --> CB["/sensors/calib_board\nCalibration Board"]
+    CAT --> SCREEN["/sensors/screen\nSensor Screen"]
+
+    CB --> PAA["/sensors/calib_board/paa\nOptical Flow"]
+    CB --> ICM["/sensors/calib_board/icm\nICM IMU"]
+    CB --> ODO["/sensors/calib_board/odometry\nOdometry"]
+
+    PROG --> ACT["/programs/action\nProgram Action"]
+    ACT --> RUN["/programs/run\nProgram Run (xterm)"]
+
+    SETT --> DISP["/settings/display"]
+    SETT --> SYS["/settings/system"]
+    SETT --> NET["/wifi — Network"]
+    SETT --> STATUS["/settings/app-status"]
+    SETT --> ROBOT["/settings/personality"]
+```
+
+Every screen can be reached by pressing back to return toward the Dashboard. The back arrow in the top bar is present on every sub-screen. The screensaver lives at `/robot-face` and is pushed automatically from the Dashboard when idle.
+
+## Two-Tier Settings Model
+
+Settings in BotUI follow a two-tier model that is worth understanding before navigating the Settings section:
+
+- **Persisted on the Pi (SharedPreferences):** Screen rotation, screensaver toggle, touch calibration matrix. These survive reboots and are written by BotUI itself.
+- **Persisted by system services:** Wi-Fi credentials (NetworkManager), service autostart (systemd). BotUI issues commands to the OS (via shell commands over SSH or direct syscalls) and the OS persists them.
+
+The Settings screen at `/settings` is the gateway to both tiers. Neither tier stores anything in raccoon's Python configuration files — settings here are Pi-level, not project-level.
+
+## Section Overview
+
+| Page | What you will find |
+|------|--------------------|
+| [Dashboard]({{< ref "/01-botui/00-dashboard" >}}) | Entry screen, tile layout, and screensaver behaviour |
+| [Sensors & Actors]({{< ref "/01-botui/01-sensors-actors" >}}) | All sensor graph views, motor/servo control, and system health |
+| [Programs]({{< ref "/01-botui/02-programs" >}}) | Browsing, launching, and monitoring robot programs |
+| [Settings]({{< ref "/01-botui/03-settings" >}}) | Network, display, system services, and robot personality |
+| [Calibration Board]({{< ref "/01-botui/04-calibration-board" >}}) | USB-C external board for precision odometry and IMU calibration |
+
+---
 
 ## Installation
 
@@ -121,11 +220,3 @@ Override them on the command line if your Pi is on a different address:
 ```bash
 RPI_HOST=192.168.1.42 ./deploy.sh
 ```
-
-## Features
-
-- [Dashboard]({{< ref "/01-botui/00-dashboard" >}}): The first screen displayed after boot; entry point to all other features.
-- [Sensors & Actors]({{< ref "/01-botui/01-sensors-actors" >}}): Real-time graphs and direct control for all sensors and actuators.
-- [Programs]({{< ref "/01-botui/02-programs" >}}): Browse, launch, and monitor executable programs on the robot.
-- [Settings]({{< ref "/01-botui/03-settings" >}}): Network, display, system, camera, and robot personality configuration.
-- [Calibration Board]({{< ref "/01-botui/04-calibration-board" >}}): USB-C daughterboard for precision odometry and IMU calibration.

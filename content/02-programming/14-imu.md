@@ -3,12 +3,33 @@ title: "IMU"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 19
+weight: 20
 ---
 
 # IMU
 
 The Wombat's IMU (Inertial Measurement Unit) is the primary source of heading information for the robot. It is what lets `turn_left(90)` know that exactly 90 degrees have elapsed, and what keeps the robot driving straight rather than veering sideways.
+
+## How the IMU Pipeline Works
+
+Understanding the full data path helps when debugging heading drift or deciding whether to recalibrate.
+
+```mermaid
+graph LR
+    HW["MPU-9250<br/>gyro + accel + mag<br/>200 Hz internal"] --> DMP["On-chip DMP<br/>6-axis fusion<br/>quaternion at 200 Hz"]
+    DMP --> STM["STM32 coprocessor<br/>reads FIFO<br/>50 Hz"]
+    STM -->|"SPI"| PI["Raspberry Pi<br/>raccoon HAL"]
+    PI --> HEAD["imu.get_heading()<br/>CCW-positive radians"]
+    PI --> AV["imu.get_angular_velocity()<br/>rad/s"]
+    HEAD --> MOTD["Drive heading-hold PID<br/>(straight driving)"]
+    HEAD --> MOTR["Turn PID controller<br/>(turn_left / turn_right)"]
+```
+
+The key stages:
+1. The **DMP** runs 6-axis fusion (gyroscope + accelerometer) entirely on-chip at 200 Hz, including automatic gyroscope bias calibration. This is why the Wombat's heading tracking is robust even at high rotation rates.
+2. The **STM32** reads the DMP's quaternion output every 20 ms (50 Hz) and forwards it to the Pi over SPI along with raw gyro, accel, and magnetometer data.
+3. The **raccoon HAL** receives this data and exposes it via `imu.get_heading()` (the DMP-computed scalar heading) and `imu.get_angular_velocity()` (gyro data converted to rad/s).
+4. The **motion system** uses `get_heading()` for both the turn PID and the straight-drive heading-hold PID. Your code does not interact with the IMU directly unless you need raw sensor data.
 
 ## The Sensor Hardware
 

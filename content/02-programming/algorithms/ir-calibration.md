@@ -10,6 +10,27 @@ weight: 3
 
 IR sensor calibration uses a **K-Means clustering** approach to automatically distinguish black from white surfaces. This technique is based on the research paper [*Applied Machine Learning in Sensor Calibration — A Clustering Technique*](/papers/liu-xie-jiang-2025-ml-sensor-calibration.pdf) by Abigail Liu, Aaron Xie, and Oliver Jiang (Los Altos Community Team 0399, GCER 2025).
 
+## Concept
+
+You do not need to understand this page to run calibration — the `calibrate()` step handles everything. Come here when:
+- calibration fails validation and you want to know why
+- a sensor repeatedly triggers on white or misses black, and you want to understand the threshold
+- you're working on a robot that crosses surfaces with different reflectivity (requiring multiple calibration sets — see [Calibration]({{< ref "10-calibration" >}}))
+
+The calibration pipeline has three stages:
+
+```mermaid
+flowchart LR
+    A[Robot drives across\nboth surfaces] --> B[IR sensors sampled\nat 100 Hz]
+    B --> C[K-Means clustering\nk=2 on raw values]
+    C --> D{Validation:\nrange > 500\nsep > 700}
+    D -- Pass --> E[white_threshold\nblack_threshold stored]
+    D -- Fail --> F[BotUI warning:\nRetry]
+    E --> G[probabilityOfBlack\nlinear interpolation\nbetween thresholds]
+```
+
+The output — `probabilityOfBlack()` — is what [line following]({{< ref "line-following" >}}), [lineup]({{< ref "lineup" >}}), and stop conditions like `on_black()` all consume.
+
 ## The Problem
 
 IR sensors return raw analog values that vary between sensors, surfaces, and environmental conditions. To make decisions like "am I on a black line?", the system needs a threshold separating black readings from white readings.
@@ -70,3 +91,23 @@ probabilityOfBlack:
 ```
 
 This enables more nuanced line-following behavior (e.g., proportional control) rather than binary on/off decisions. See [Line Following]({{< ref "line-following" >}}) for how the PID controller uses these probability values.
+
+## Multiple Calibration Sets
+
+Robots that traverse surfaces with different reflectivity (for example, a white ground floor and a dark-colored elevated deck) need separate calibration sets. The `calibrate_sensors()` step can collect multiple named sets in a single setup phase. Mid-mission, `switch_calibration_set()` activates a different set instantly.
+
+```python
+# In SetupMission — collect both sets during setup
+calibrate_sensors(calibration_sets=["default", "upper"])
+switch_calibration_set("default")   # start on ground surface
+
+# In mission M050 — ascending the ramp
+switch_calibration_set("upper")     # ramp surface has different reflectivity
+
+# In mission M080 — after descending
+switch_calibration_set("default")
+```
+
+Each named set stores independent `white_threshold` and `black_threshold` values per sensor port in `racoon.calibration.yml`. Switching a set takes effect immediately on the next `on_black()` / `probabilityOfBlack()` call.
+
+For how to structure the setup mission and YAML, see [Calibration → Calibration Sets]({{< ref "10-calibration" >}}).

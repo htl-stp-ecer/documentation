@@ -3,20 +3,22 @@ title: "Synchronizing Two Robots"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 6
+weight: 7
 ---
 
 # Synchronizing Two Robots
+
+## Concept
 
 In a Botball match, your two robots run completely separate programs on separate Wombats — they don't talk to each other over the network, they don't share sensors, and neither one knows where the other is. What they **do** share is a common start signal: the **wait-for-light gate** on both robots fires the instant the start lamp turns on, and at that exact moment both mission clocks start measuring from T=0. From there on, each robot's clock ticks forward in lockstep with the other — not because they're communicating, but because they were both kicked off by the same physical event in the room.
 
 `wait_for_checkpoint()` uses that shared timeline to coordinate the two robots without any communication. You pick absolute mission times — *"enter the shared zone at T=20s"*, *"drop the cube at T=35s"* — and bake them into both robots' missions. As long as each robot started at the same moment, they'll arrive at the same wall-clock time even though neither knows what the other is doing.
 
-## The Mental Model
-
 Think of the two robots as dancers who can't see each other, performing the same choreography to a shared song. Neither one is listening for the other — they're both listening to the beat. If both start when the music starts, step 1 at bar 4 and step 2 at bar 8 will line up perfectly, even though neither dancer has any idea where the other is on the stage.
 
 `wait_for_checkpoint()` is the beat. Your mission is the choreography.
+
+## How the Clock Works
 
 ```mermaid
 sequenceDiagram
@@ -40,8 +42,6 @@ sequenceDiagram
 ```
 
 Both robots look at their own clock. They never look at each other.
-
-## How It Works
 
 Every robot has a `synchronizer` attached to it. The synchronizer captures `T=0` the moment the wait-for-light gate fires — i.e. the instant the start lamp is detected. This is what ties the two robots' clocks together: because the lamp turns on for both robots at the same physical moment, both synchronizers latch `T=0` at (nearly) the same instant, and `wait_for_checkpoint(20.0)` on Robot A fires at (nearly) the same wall-clock moment as `wait_for_checkpoint(20.0)` on Robot B.
 
@@ -117,6 +117,47 @@ class M010DropCubeMission(Mission):
 ```
 
 Neither robot knows where the other is. They only agree on *when* each action is allowed to happen. As long as both start at T=0 together, the checkpoints do the rest.
+
+## Single-Robot Timing Gates
+
+`wait_for_checkpoint()` is not exclusively for two-robot coordination. It works equally well as a **single-robot timing gate** — holding one robot until a known safe window, even if that window is driven purely by elapsed time rather than by the partner robot's state.
+
+The Ecer2026 ConeBot uses it to avoid a dangerous backward drive across a shared area until T=87s — the arithmetic in the argument (`60 + 27`) makes the intent readable in source:
+
+```python
+# ConeBot M040DriveToRampMission
+drive_backward().until(
+    after_cm(10) + over_line(Defs.front.right) + after_cm(20)
+),
+wait_for_checkpoint(60 + 27),    # Wait until T=87s before continuing
+drive_backward().until(after_cm(70)),
+```
+
+If your robot simply needs to avoid a zone until a certain game time — regardless of the partner — this is the right tool. No second robot needed.
+
+## Reading the Clock Inside a Step
+
+Custom steps can read the current match time directly from `robot.synchronizer.get_time()`. This is useful when you need checkpoint-relative timing logic that is too fine-grained for a separate `wait_for_checkpoint()` step — for example, computing how much time remains before an expected drum arrival.
+
+The synchronizer may not have latched T=0 yet (if the step runs before the start light fires), so always guard the read:
+
+```python
+import asyncio
+from raccoon import Step, GenericRobot
+
+class WaitForDrumStep(Step):
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        target_arrival = 45.0  # drums expected at T=45s
+        try:
+            elapsed = robot.synchronizer.get_time()
+            remaining = target_arrival - elapsed
+        except (TypeError, AttributeError):
+            remaining = 0.0   # pre-latch: assume checkpoint already passed
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+```
+
+*(Adapted from the Ecer2026 DrumBot — `WaitForDrumStep`.)*
 
 ## Choosing Checkpoint Times
 
@@ -228,3 +269,8 @@ do_until_checkpoint(checkpoint, step)
 Both live in `raccoon.step.timing` and can be placed anywhere inside a `seq([...])` or `parallel(...)` block, just like any other step.
 
 > **Use keyword arguments carefully.** The parameter names are `checkpoint_seconds` and `checkpoint` respectively. Using the wrong keyword name (e.g. `do_until_checkpoint(seconds=12.0, task=my_step)`) will raise a `TypeError`. Pass positionally or use the correct names: `do_until_checkpoint(checkpoint=12.0, step=my_step)`.
+
+## Related Pages
+
+- **[Missions]({{< ref "03-missions" >}})** — mission structure, background steps, and cross-mission coordination
+- **[Making Your Robot Competition Ready]({{< ref "15-competition-ready" >}})** — enabling the light-start gate

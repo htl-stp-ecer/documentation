@@ -3,10 +3,38 @@ title: "Configuration Reference"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 18
+weight: 19
 ---
 
-This page is a complete reference for every key in every configuration file used by a raccoon/libstp project. Configuration is split across several YAML files that are assembled by raccoon's include-aware loader at build time. All paths are relative to the project root.
+## Concept: Config → Code Pipeline
+
+raccoon configuration is not read at runtime. The YAML files are processed by the code generator (codegen), which produces `src/hardware/defs.py` and `src/hardware/robot.py`. The generated Python files contain the actual hardware objects — typed, instantiated, and named. The YAML is the source of truth; the Python is the output.
+
+```mermaid
+flowchart TD
+    A["raccoon.project.yml\n(root descriptor)"] -->|"!include"| B["config/robot.yml\nkinematics, PIDs, geometry"]
+    A -->|"!include"| C["config/missions.yml\nordered mission list"]
+    A -->|"!include"| D["config/hardware.yml\nsensors, SensorGroups"]
+    A -->|"!include"| E["config/connection.yml\nSSH, daemon"]
+    D -->|"!include-merge"| F["config/motors.yml\nMotor entries"]
+    D -->|"!include-merge"| G["config/servos.yml\nServoPreset entries"]
+    B --> H["raccoon codegen"]
+    C --> H
+    D --> H
+    F --> H
+    G --> H
+    H --> I["src/hardware/defs.py\nDefs class — all hardware"]
+    H --> J["src/hardware/robot.py\nRobot class — kinematics, PIDs"]
+    I --> K["Mission code imports Defs"]
+    J --> K
+    style A fill:#FF7043,color:#fff
+    style H fill:#42A5F5,color:#fff
+    style K fill:#4CAF50,color:#fff
+```
+
+The `!include-merge` directive is how `hardware.yml` keeps motors and servos in separate focused files while presenting them as a single flat namespace to the codegen. Keys prefixed with `_` (e.g. `_motors`, `_servos`) are merge-anchor keys — they are consumed by the loader and do not produce hardware attributes in `Defs`. Every other key becomes an attribute.
+
+This page is a complete reference for every key in every configuration file. All paths are relative to the project root.
 
 ## File layout and include graph
 
@@ -300,6 +328,39 @@ Geometric description of the robot body. Used to compute sensor positions relati
 | `y_cm` | `float` | Sensor Y position from the robot's rear edge in centimetres. |
 | `clearance_cm` | `float` | Vertical distance the sensor sits above the floor (default `0`). Used for line-detection geometry compensation. |
 
+#### `start_pose` — initial localization estimate
+
+`start_pose` sets where the robot thinks it is at the start of the run. This is the initial odometry estimate, not a physical constraint — the robot does not drive to this position. It tells the localization system where on the field to begin tracking.
+
+When `table_map` is also specified, `start_pose` initialises the field-relative pose for absolute coordinate queries. Without `table_map`, `start_pose` only affects the initial pose returned by `robot.odometry.get_pose()`.
+
+```yaml
+physical:
+  width_cm: 23.5
+  length_cm: 29.6
+  rotation_center:
+    x_cm: 11.75    # geometric center left-to-right
+    y_cm: 14.8     # offset front-to-back
+  start_pose:
+    x_cm: 30.0     # 30 cm from left edge of field
+    y_cm: 20.0     # 20 cm from bottom edge
+    theta_deg: 90.0  # facing toward +Y (up the field)
+  table_map:
+    path: config/2026-game-table.ftmap
+  sensors:
+    - name: front_left_ir_sensor
+      x_cm: 7.8
+      y_cm: 29.6   # front edge of robot
+    - name: front_right_ir_sensor
+      x_cm: 15.7
+      y_cm: 29.6
+    - name: rear_left_ir_sensor
+      x_cm: 7.8
+      y_cm: 0.0    # rear edge
+```
+
+`start_pose.theta_deg` convention: `0.0` faces the +X direction (right), `90.0` faces +Y (up in the standard field coordinate system). The scaffold ships with `90.0` because most robots start facing up the field.
+
 ---
 
 ## `config/hardware.yml`
@@ -489,6 +550,10 @@ left_motor:
       kd: 0.0
 ```
 
+**Real asymmetric values are normal.** The examplebot's two drive motors had calibrated values of `1.741e-05` (left) and `1.712e-05` (right) — a ~1.7% difference. This is within the normal manufacturing tolerance for hobbyist motors, and the per-motor `ticks_to_rad` exactly corrects for it so the robot drives straight. Do not assume both motors should have the same value; if you enter the same value for both, you may see the robot drift.
+
+**The most common mistake** is entering a raw tick count rather than `2 * pi / ticks_per_revolution`. If you have a motor with 1440 ticks per revolution, `ticks_to_rad = 2 * pi / 1440 ≈ 0.004363`. The scaffold placeholder `0.00002` is wrong for most hardware — always run `raccoon calibrate ticks` to measure the real value.
+
 ---
 
 ## `config/servos.yml`
@@ -579,6 +644,35 @@ If a bare string entry (without a type key) is used, it is treated as `normal`.
 
 Each mission class name is converted to snake_case to derive the source filename. `DriveToBoxMission` → `src/missions/drive_to_box_mission.py`.
 
+### Mission Numbering
+
+The conventional mission naming is three-digit zero-padded: `M000` (setup), `M010`–`M990` (game missions), `M999` (shutdown). The gaps between decade numbers (`M010`, `M020`, …) leave room for inserting missions later without renumbering the entire set.
+
+Arbitrary three-digit numbers between `001` and `998` are valid. Inserting `M025` between `M020` and `M030` is perfectly legal — the execution order is determined entirely by the order in `missions.yml`, not by the numeric prefix:
+
+```yaml
+# Real example — conebot inserted M001, M025, M027 after initial numbering
+- M000SetupMission: setup
+- M001DriveDownRampMission     # inserted later without renaming M010
+- M010DriveToConeMission
+- M020CollectConeMission
+- M025CollectSecondConeMission # inserted between M020 and M030
+- M040DriveToRampMission
+- M999ShutdownMission: shutdown
+```
+
+### Temporarily Disabling Missions
+
+Use YAML comments to disable a mission without deleting its source file. This is a common competition workflow when you want to skip a mission for a specific run configuration without losing the code:
+
+```yaml
+- M020CollectConeMission
+#- M025CollectSecondConeMission   ← disabled for this run
+- M040DriveToRampMission
+```
+
+Remove the `#` to re-enable. The source file `src/missions/m025_collect_second_cone_mission.py` remains untouched.
+
 The scaffold generates:
 
 ```yaml
@@ -636,3 +730,88 @@ Several keys are written back to config files automatically by raccoon calibrati
 | `robot.motion_pid.angular.max_velocity` | Manual (after `raccoon calibrate step-response`) | Measured maximum turn speed (rad/s) |
 | `robot.motion_pid.angular.acceleration` | Manual (after `raccoon calibrate step-response`) | Measured angular acceleration (rad/s²) |
 | `robot.motion_pid.angular.deceleration` | Manual (after `raccoon calibrate step-response`) | Measured angular deceleration (rad/s²) |
+
+---
+
+## Complete Mecanum robot.yml Example
+
+A real mecanum competition robot's `robot.yml` (adapted from the clawbot) showing `start_pose`, sensor positions, and motion PID for two surfaces:
+
+```yaml
+# config/robot.yml — mecanum four-wheel competition robot
+shutdown_in: 120
+
+drive:
+  kinematics:
+    type: mecanum
+    wheel_radius: 0.024      # metres
+    wheelbase: 0.161         # front-to-back axle distance, metres
+    track_width: 0.192       # left-to-right wheel distance, metres
+    front_left_motor: front_left_motor
+    front_right_motor: front_right_motor
+    back_left_motor: back_left_motor
+    back_right_motor: back_right_motor
+  vel_config:
+    vx:
+      pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+    vy:
+      pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+    wz:
+      pid: { kp: 0.0, ki: 0.0, kd: 0.0 }
+      ff:  { kS: 0.0, kV: 1.0, kA: 0.0 }
+
+motion_pid:
+  distance:
+    kp: 2.5
+    kd: 0.1
+  heading:
+    kp: 3.0
+    kd: 0.05
+  velocity_ff: 1.0
+  distance_tolerance_m: 0.012
+  angle_tolerance_rad: 0.025
+  linear:
+    max_velocity: 0.55   # m/s — measured by autotune
+    acceleration: 1.2
+    deceleration: 1.4
+  lateral:
+    max_velocity: 0.40
+    acceleration: 1.0
+    deceleration: 1.2
+  angular:
+    max_velocity: 4.2    # rad/s
+    acceleration: 8.0
+    deceleration: 8.0
+
+physical:
+  width_cm: 23.5
+  length_cm: 29.6
+  rotation_center:
+    x_cm: 11.75
+    y_cm: 14.8
+  start_pose:
+    x_cm: 30.0            # initial localization estimate — where on the field
+    y_cm: 20.0
+    theta_deg: 90.0       # facing up the field (+Y direction)
+  table_map:
+    path: config/2026-game-table.ftmap
+  sensors:
+    - name: front_left_light_sensor
+      x_cm: 7.8
+      y_cm: 29.6          # front edge of robot body
+    - name: front_right_light_sensor
+      x_cm: 15.7
+      y_cm: 29.6
+    - name: rear_left_light_sensor
+      x_cm: 7.8
+      y_cm: 0.0           # rear edge
+```
+
+Note that `odometry:` is absent — odometry is platform-managed and does not belong in `robot.yml`. If your project's `robot.yml` still contains an `odometry:` block, you can safely delete it.
+
+## Related Pages
+
+- [Calibration]({{< ref "10-calibration" >}}) — which keys are written by calibration and how to run the calibration flow
+- [Robot Definition]({{< ref "02-robot-definition" >}}) — how the generated `defs.py` and `robot.py` use these config values

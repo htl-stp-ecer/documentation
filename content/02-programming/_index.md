@@ -10,7 +10,20 @@ weight: 3
 
 This section covers everything you need to program robots with the **raccoon** SDK — from writing your first mission to tuning low-level motor controllers.
 
-The current platform is a layered robotics framework: you write missions in Python using a high-level DSL, while the control loops, kinematics, and hardware drivers run in optimized C++ underneath. You don't need to touch C++ to build a competition robot.
+## The Mental Model
+
+`raccoon` is a layered framework. You write missions in Python using a high-level DSL; the control loops, kinematics, and hardware drivers run in compiled C++ underneath. You never need to write C++ to build a competition robot.
+
+**Three things you touch directly:**
+1. **YAML config** (`raccoon.project.yml` and `config/*.yml`) — describes your hardware, drive geometry, and mission list. The CLI reads this and generates Python.
+2. **Mission files** (`src/missions/*.py`) — describe what the robot does, step by step. You own these entirely.
+3. **Custom step files** (`src/steps/*.py`) — reusable behaviors you package as functions or classes.
+
+**Two things the CLI generates for you — do not edit by hand:**
+- `src/hardware/defs.py` — every motor, servo, and sensor as Python objects
+- `src/hardware/robot.py` — the `Robot` class with kinematics, drive, and odometry wired together
+
+The YAML is the single source of truth for hardware. Change hardware in YAML, run `raccoon run`, and the generated files update automatically.
 
 ```mermaid
 graph TD
@@ -30,12 +43,24 @@ graph TD
     style G fill:#FF7043,color:#fff
 ```
 
+## Suggested Reading Path
+
+**New to raccoon?** Read in this order:
+1. [Your First Robot Program]({{< ref "00a-first-robot-program" >}}) — hands-on, no prerequisites
+2. [Project Structure]({{< ref "01-project-structure" >}}) — understand what files do what
+3. [Robot Definition]({{< ref "02-robot-definition" >}}) — configure your specific hardware
+4. [Missions]({{< ref "03-missions" >}}) — write real competition code
+5. [Stop Conditions]({{< ref "04a-stop-conditions" >}}) + [Calibration]({{< ref "10-calibration" >}}) — make it accurate
+
+**Want the full picture first?** Read [Architecture & Project Model]({{< ref "00b-architecture-concepts" >}}) and [Architecture Overview]({{< ref "00-overview" >}}) before anything else.
+
 ## Sections
 
 | Page | What You'll Learn |
 |------|-------------------|
 | [Architecture Overview]({{< ref "00-overview" >}}) | The full layer stack, how pieces connect |
 | [Your First Robot Program]({{< ref "00a-first-robot-program" >}}) | Hands-on tutorial: drive, servos, sensors, first mission |
+| [Architecture & Project Model]({{< ref "00b-architecture-concepts" >}}) | Deep dive: layered stack, YAML→codegen→runtime, mission lifecycle |
 | [Project Structure]({{< ref "01-project-structure" >}}) | Files, folders, and configuration |
 | [Robot Definition]({{< ref "02-robot-definition" >}}) | Declaring hardware, kinematics, and drive |
 | [Missions]({{< ref "03-missions" >}}) | Writing and sequencing missions |

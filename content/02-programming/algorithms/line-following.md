@@ -10,6 +10,28 @@ weight: 1
 
 Line following keeps the robot tracking along a black line (or its edge) using PID-controlled steering corrections. The system reads calibrated IR sensor probabilities each control cycle and adjusts the robot's heading or lateral position to stay on course.
 
+## Concept
+
+The core idea is to turn a **sensor position error** into a **velocity correction**:
+
+```mermaid
+flowchart LR
+    A[IR sensor\nprobabilityOfBlack] --> B[Compute error\n left − right\n or sensor − 0.5]
+    B --> C[PID controller\nkp · e + kd · ė]
+    C --> D[Angular or lateral\nvelocity correction]
+    D --> E[Motion controller\napplies correction]
+    E --> F{Stop condition?}
+    F -- No --> A
+    F -- Yes --> G[Stop]
+```
+
+After [calibration]({{< ref "10-calibration" >}}), each IR sensor returns `probabilityOfBlack()` — a float from 0.0 (pure white) to 1.0 (pure black). The PID controller converts the error signal into a small velocity correction that steers the robot back toward the line on every 10 ms control tick.
+
+The family of line-follow steps covers every combination of:
+- **Primary motion direction** — forward, backward (negative speed), or lateral (strafe)
+- **Correction axis** — rotation (angular velocity), lateral strafing, or forward/backward
+- **Sensor count** — one sensor (edge tracking) or two sensors (differential)
+
 ## Quick Start
 
 ```python
@@ -200,6 +222,37 @@ These directional variants accept `heading_speed` and `strafe_speed` separately 
 | `distance_cm` | float | `None` | Distance (euclidean) to follow |
 | `kp`, `ki`, `kd` | float | `0.4 / 0.0 / 0.1` | PID gains |
 
+### `strafe_follow_line_single` — Single-Sensor Lateral-Correction Variant
+
+`strafe_follow_line_single` is the single-sensor equivalent of `strafe_follow_line`. The robot drives forward (or backward) while the PID corrects by strafing. This is particularly useful on mecanum robots that need heading-locked forward motion with line tracking.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sensor` | IRSensor | Required | Single sensor tracking the line edge |
+| `distance_cm` | float | `None` | Distance to follow; required if no `.until()` |
+| `speed` | float | `0.5` | Forward/backward fraction. **Negative = backward** (see note below) |
+| `side` | `LineSide` | `LEFT` | Which edge of the line to track |
+| `kp`, `ki`, `kd` | float | `0.4 / 0.0 / 0.1` | PID gains |
+
+> **Backward line-following with negative speed.** Setting `speed` to a negative value reverses the primary axis (the robot drives backward) while the PID still corrects laterally. The `sensor` and `side` arguments stay the same — only the speed sign changes. This is the standard mecanum-robot technique for following a line while reversing:
+>
+> ```python
+> # Adapted from packingbot — follow a line while driving backward
+> def line_follow_backwards(speed=1.0):
+>     return strafe_follow_line_single(
+>         Defs.rear.right,
+>         speed=-speed,          # negative = primary axis reversed → drive backward
+>         side=LineSide.RIGHT,
+>         kp=0.5,
+>         ki=0.3,
+>         kd=0.0,
+>     )
+>
+> line_follow_backwards().until(
+>     after_cm(30) + on_black(Defs.front.right) + after_cm(30)
+> )
+> ```
+
 ### `SensorGroup.follow_right_edge` Note
 
 `Defs.front.follow_right_edge(cm=50)` is a **single-sensor** convenience that internally calls `follow_line_single` with `self.right` (the right sensor of the group). Despite the group owning both sensors, only the right one is used. Use `follow_line(Defs.front.left, Defs.front.right, ...)` explicitly if you want the two-sensor variant.
@@ -242,6 +295,32 @@ lateral_follow_line_single(
 
 Sensor labeling for `LateralFollowLine`: when strafing right, `left_sensor` is the front-facing side sensor and `right_sensor` is the rear-facing side sensor. When strafing left, that geometry mirrors automatically.
 
+## `hold_heading=False` — Heading-Float Mode
+
+Both `correct_lateral()` and `correct_forward()` on the `line_follow()` builder accept an optional `hold_heading=False` argument. By default, `hold_heading=True` keeps the robot's heading locked via the motion PID while it corrects position. Setting `hold_heading=False` lets the heading drift freely — useful for slow-speed final alignment moves where heading-hold torque would fight the intended correction motion.
+
+```python
+# Adapted from cube-bot m040 — slow alignment using the fluent builder
+# hold_heading=False lets the chassis float to avoid fighting the line's geometry
+align_step = (
+    line_follow()
+    .single(Defs.rear.left, side=LineSide.LEFT)
+    .move(forward=0.4)
+    .correct_lateral(hold_heading=False)
+    .pid(kp=0.6, ki=0.3, kd=0.0)
+)
+
+# Run for 0.4 s alongside an arm move
+parallel(
+    align_step.until(after_seconds(0.4)),
+    arm.move_angles(base_deg=91, speed=80),
+)
+```
+
+> **When to use `hold_heading=False`:** At full speed, heading-hold prevents the robot from drifting sideways — keep it on. At slow speed (≤ 0.4), especially when fine-aligning on a line before a pickup, the heading-hold PID may resist the small sideways nudges needed for accurate alignment. Disable it in that case.
+
+The fluent `line_follow()` builder is the only way to access `hold_heading=False`. The simpler `strafe_follow_line_single(...)` factory always uses `hold_heading=True` implicitly.
+
 ## All Line-Follow Steps Summary
 
 | Step | Motion direction | Correction method | Sensors |
@@ -255,6 +334,25 @@ Sensor labeling for `LateralFollowLine`: when strafing right, `left_sensor` is t
 | `lateral_follow_line_single` | Lateral (strafe primary) | Forward/backward | One |
 | `directional_follow_line_single` | Any (heading + strafe) | Rotation (angular velocity) | One |
 
+## Real-world Example: `follow_line_single` with Compound Stop Condition
+
+Competition robots rarely stop on the very first sensor trigger — start-line tape or brief noise can cause false positives. The standard guard is a minimum-distance condition combined with a sensor trigger using the `&` (AND) operator:
+
+```python
+# Adapted from examplebot — follow the left edge, stop at the delivery zone.
+# after_cm(20) prevents the start-line tape from triggering a premature stop.
+# & requires BOTH conditions to be true simultaneously.
+follow_line_single(
+    Defs.front.left,
+    speed=0.8,
+    side=LineSide.LEFT,
+    kp=0.5,
+    kd=0.1,
+).until(after_cm(20) & on_black(Defs.front.right))
+```
+
+The `after_cm(20)` acts as a minimum-distance guard — `on_black(Defs.front.right)` can only fire after at least 20 cm have been traveled. The `&` means both conditions must hold in the same control cycle.
+
 ## Tips
 
 1. **Start with default PID gains.** Only tune if the robot oscillates (lower `kp`, raise `kd`) or drifts off the line (raise `kp`).
@@ -263,3 +361,5 @@ Sensor labeling for `LateralFollowLine`: when strafing right, `left_sensor` is t
 4. **`follow_right_edge` uses only one sensor.** The `SensorGroup.follow_right_edge()` shortcut calls `follow_line_single` with only the right sensor. Use the explicit `follow_line()` factory with both sensors if you want two-sensor behavior.
 5. **You must provide `distance_cm` or `.until()`.** Both `follow_line` and `follow_line_single` raise a `ValueError` immediately if neither is provided.
 6. **Calibrate on the actual surface.** Line following accuracy depends directly on calibration quality — see [Calibration]({{< ref "10-calibration" >}}).
+7. **Use `hold_heading=False` for slow-speed final alignment.** At high speed, heading-hold is essential. At slow alignment speeds (≤ 0.4), it can fight the correction — disable it via the `line_follow()` builder's `.correct_lateral(hold_heading=False)`.
+8. **Negative speed in `strafe_follow_line_single` drives backward.** The PID still corrects laterally; only the primary-axis direction reverses. Use a rear-facing sensor with the appropriate `LineSide` to match the robot's new travel direction.

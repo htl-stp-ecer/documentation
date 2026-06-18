@@ -10,6 +10,17 @@ weight: 7
 
 These commands manage the connection between your laptop and the robot (Wombat/Pi).
 
+> This page is the connection management reference. For the full SSH key setup flow and options, see the dedicated [connect page]({{< ref "02-connect" >}}).
+
+## Where the connection is saved
+
+raccoon saves the connection in two places simultaneously:
+
+- `config/connection.yml` inside the project — used when you run commands from this project directory
+- `~/.raccoon/config.yml` globally — records the Pi as a "known Pi" so `raccoon shell` and `raccoon doctor` can find it without a project
+
+`raccoon disconnect` only drops the in-memory session state. It does not delete either saved address. To fully reset (e.g. when the robot changes IP), run `raccoon connect <new-IP>` — it overwrites both config files with the new address.
+
 ## raccoon connect
 
 ```bash

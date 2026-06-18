@@ -15,6 +15,29 @@ raccoon sync
 
 `raccoon sync` is not just "copy files to the Pi." The current implementation is a verified synchronization flow with transfer backends, ignore rules, content fingerprints, and a persisted sync counter.
 
+## How it works
+
+```mermaid
+flowchart TD
+    A[raccoon sync] --> B{validate project?}
+    B -- yes --> C[run raccoon validate]
+    B -- no-validate flag --> D
+    C --> D[create git checkpoint if auto_checkpoints on]
+    D --> E{backend?}
+    E -- Linux/macOS --> F[rsync over SSH]
+    E -- Windows --> G[SFTP via Paramiko]
+    F --> H[transfer files to Pi]
+    G --> H
+    H --> I[compute fingerprint locally]
+    I --> J[ask Pi for remote fingerprint]
+    J --> K{hashes match?}
+    K -- yes --> L[bump remote sync counter]
+    K -- no --> M[FAIL: print diff, do not bump counter]
+    L --> N[persist sync state locally]
+```
+
+The **fingerprint verification step** is what distinguishes `raccoon sync` from a plain rsync wrapper. The sync counter prevents silent divergence when two machines sync the same project.
+
 Source of truth:
 
 - [sync_cmd.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/sync_cmd.py)
@@ -287,3 +310,9 @@ If both fail, it stops and tells you to run `raccoon connect`.
 - pull after run
 
 So when run behavior feels flaky, `raccoon sync --verbose` is often the fastest way to isolate whether the issue is project transfer, codegen, or runtime execution.
+
+## Related pages
+
+- [run]({{< ref "03-run" >}}) — the full run lifecycle, of which sync is steps 4 and 6
+- [checkpoint]({{< ref "12-checkpoint" >}}) — the git snapshot created before sync
+- [Troubleshooting And Recovery]({{< ref "08-troubleshooting-and-recovery" >}}) — sync failure recovery playbooks

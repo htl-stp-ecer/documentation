@@ -6,6 +6,30 @@ draft: false
 weight: 6
 ---
 
+## Concept
+
+The firmware and the Pi-side bridge are two separate compiled artifacts that must stay in sync via the `TRANSFER_VERSION` constant. When they are out of sync, the `stm32-data-reader` detects the mismatch on startup and automatically reflashes the STM32.
+
+There are two distinct compilation targets:
+
+1. **STM32 firmware** (`stm32-data-reader/firmware/`) — cross-compiled for Cortex-M4F with `arm-none-eabi-gcc`, produces `wombat.bin` / `wombat.elf`.
+2. **stm32-data-reader** (`stm32-data-reader/`) — cross-compiled for aarch64 (Pi), a C++20 CMake project.
+
+Both are built by the same top-level `build.sh` script. The recommended development workflow is:
+
+```mermaid
+graph LR
+    DEV["Change firmware source\n(stm32-data-reader/firmware/)"]
+    BUILD["./build.sh\nDocker cross-compile\nboth targets"]
+    DEPLOY["./deploy.sh\nCopy reader to Pi\nFlash firmware via SSH+openocd\nRestart service"]
+    VERIFY["Check logs\nstm32-data-reader prints\n'SPI version OK'\nor auto-reflash"]
+
+    DEV --> BUILD --> DEPLOY --> VERIFY
+    VERIFY -->|iterate| DEV
+```
+
+If you only changed Python code, skip the build step — `raccoon sync` or `raccoon run` handles Python deployment without touching the firmware.
+
 ## Firmware Location
 
 The STM32 firmware lives in `stm32-data-reader/firmware/` (merged from the old standalone `Firmware-Stp/` repository). The shared SPI protocol header at `stm32-data-reader/shared/spi/pi_buffer.h` is used by both the firmware and the Pi-side reader.
@@ -261,3 +285,9 @@ The BEMF timing constants are in `stm32-data-reader/firmware/Firmware/include/Se
 ```
 
 Only one motor is stopped per cycle (round-robin), so the torque interruption at any moment is limited to one motor out of four. Reducing `BEMF_SAMPLING_INTERVAL` increases the per-motor update rate but also reduces effective torque on that motor. Reducing `BEMF_CONVERSION_START_DELAY_TIME` below 500 µs risks reading PWM switching noise instead of the true back-EMF.
+
+## Related pages
+
+- [SPI Communication Protocol](../spi-protocol/) — `TRANSFER_VERSION 21` and version mismatch behavior
+- [Motor Control](../motor-control/) — the BEMF constants defined in `bemf.h` that you may need to change
+- [Robot Services And systemd](../robot-services-and-systemd/) — how `stm32_data_reader.service` picks up the new binary after deploy

@@ -12,6 +12,30 @@ Wall alignment drives the robot into a physical boundary — a wall, a pipe, a d
 
 This is one of the most robust re-localization techniques in Botball. Odometry drifts over a full mission, but a wall always stays where it is. Driving into a wall and resetting the heading afterward cancels accumulated heading error completely.
 
+## Concept
+
+```mermaid
+stateDiagram-v2
+    [*] --> GracePeriod : step starts
+    GracePeriod --> Monitoring : grace_period elapsed
+    Monitoring --> Settling : accel_magnitude >= threshold
+    Monitoring --> Timeout : max_duration elapsed
+    Settling --> Stopped : settle_duration elapsed
+    Timeout --> Stopped : (no bump detected)
+    Stopped --> [*]
+```
+
+The step has four internal phases:
+
+| Phase | What happens |
+|-------|-------------|
+| **Grace period** | Motors spin up — IMU noise from startup is suppressed |
+| **Monitoring** | Each cycle: read `sqrt(ax² + ay²)`, compare to `accel_threshold` |
+| **Settling** | Threshold crossed — keep pushing for `settle_duration` seconds so the chassis rotates flush |
+| **Stopped** | Drive stops, `bump_result` is populated; or timeout fires as a safety net |
+
+After the step, call `mark_heading_reference()` immediately. This is the entire point: the robot is now flush against a known physical surface, so the heading is exactly known. Locking that into the odometry reference prevents drift from affecting subsequent `turn_to_heading_*()` calls.
+
 ## Quick Start
 
 ```python
@@ -160,6 +184,32 @@ if step.bump_result:
     print(f"Impact: {step.bump_result.accel_magnitude:.2f} m/s²")
     print(f"Heading corrected by: {step.bump_result.heading_correction_deg:.1f}°")
 ```
+
+## Resetting Heading After Wall Alignment
+
+Wall alignment is only half the job. After the robot is flush against the wall, you must tell the odometry system that this heading is now the reference. Without this step, any `turn_to_heading_*()` call that follows will be relative to the old, drifted origin.
+
+```python
+# Adapted from examplebot — collect an object, drive into the wall, reset heading.
+class M020CollectObjectMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            grab_object(),   # arm grabs the object
+
+            # Drive backward into the back wall.
+            # accel_threshold=0.3 is more sensitive than the default 0.5 —
+            # tune lower on heavier robots, higher on lighter ones.
+            wall_align_backward(accel_threshold=0.3),
+
+            # Capture the post-align heading as the new 0° reference.
+            # Any drift accumulated during the previous mission is now gone.
+            mark_heading_reference(),
+
+            turn_right(degrees=90),   # this now uses the wall-corrected origin
+        ])
+```
+
+The pattern is always: `wall_align_*()` → `mark_heading_reference()`. Never insert other drive steps between them.
 
 ## Tips
 

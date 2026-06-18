@@ -20,6 +20,20 @@ Source of truth:
 - [migrate.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/migrate.py)
 - [raccoon/__init__.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/raccoon-lib/python/raccoon/__init__.py)
 
+## The four versioning layers
+
+```mermaid
+graph TD
+    A[bundle manifest<br/>bundles/latest.json] -->|pins| B[package versions<br/>raccoon-cli, raccoon-lib, raccoon-server…]
+    B -->|installed on| C[Laptop]
+    B -->|installed on| D[Pi]
+    E[raccoon.project.yml] -->|schema tracked by| F[format_version int]
+    F -->|migrations in| G[raccoon_cli/migrations/*.py]
+    H[localization.jsonl] -->|independent| I[replay format_version]
+```
+
+**Practical rule:** "my packages are up to date" and "my project format is current" are independent questions. `raccoon doctor` answers the first; `raccoon migrate --dry-run` answers the second. Both must be green before competition.
+
 ## There are four different version concepts
 
 ### Package versions

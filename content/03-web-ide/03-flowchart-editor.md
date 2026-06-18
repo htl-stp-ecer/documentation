@@ -3,12 +3,40 @@ title: "Flowchart Editor (Center)"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 4
+weight: 6
 ---
 
 ## Flowchart Editor (Center)
 
 The main workspace for building missions visually. Each mission is represented as a flowchart of connected step nodes. Switch to it by clicking the **Flow** tab in the center panel tab bar.
+
+## How it works
+
+The flowchart is a **visual representation of the Python code that will run on the robot**. Each node is one step call; connections between nodes represent execution order (sequential by default). When you save the flowchart, the IDE backend's code generator (`MissionCodeGenerator`) converts the node graph into a Python class with a `sequence()` method containing the matching `seq()` / `parallel()` call tree.
+
+```mermaid
+flowchart LR
+    Node1["drive_forward\n(cm=30)"]
+    Node2["turn_to_heading_right\n(deg=90)"]
+    Node3["line_follow_single\n(sensor=front)"]
+
+    Node1 --> Node2 --> Node3
+```
+
+This flowchart generates Python roughly equivalent to:
+
+```python
+def sequence(self) -> Sequential:
+    return seq([
+        drive_forward(cm=30),
+        turn_to_heading_right(deg=90),
+        line_follow_single(sensor=Defs.front_sensor).until(on_black(Defs.front_sensor)),
+    ])
+```
+
+**Parallel branches** are represented by two or more nodes that share the same incoming connection — they become a `parallel([seq([...]), seq([...])])` call in Python.
+
+**Important:** The flowchart and the Python file share the same source. If you edit the Python directly in the Code tab and then save the flowchart, your manual Python edits are overwritten. Treat flowchart saves as the authoritative update path.
 
 ![Flowchart editor with SetupMission](/images/web-ide/webide-flowchart.png)
 
@@ -76,3 +104,12 @@ When timestamps are enabled (clock icon in the navbar), each node shows the dura
 ### Timing Panel
 
 After a run completes, a **Timing Panel** overlay appears inside the flowchart canvas. It shows per-step durations as a list and optionally as a chart. The panel can be dragged to any position within the flowchart area. It is the only genuinely floating element remaining in the flowchart view.
+
+---
+
+## Cross-references
+
+- [Step Library]({{< ref "04-step-library" >}}) — finding steps to drag onto the canvas
+- [Python Code Editor]({{< ref "10-code-editor" >}}) — viewing and editing the generated Python source
+- [Running a Mission]({{< ref "07-running-a-mission" >}}) — running and debugging from the flowchart
+- [Architecture]({{< ref "0a-architecture" >}}) — how a flowchart save becomes a Python file

@@ -3,13 +3,15 @@ title: "Advanced Internals"
 author: "Docs Bot"
 date: 2026-06-18
 draft: false
-weight: 10
+weight: 12
 description: "Technical internals of the Web IDE: backends, run configurations, simulation modes, maps, and replay."
 ---
 
 # Advanced Internals
 
 This page covers the parts of the Web IDE that matter when you need to debug behavior, understand how it talks to the robot, or keep the docs aligned with the actual application.
+
+For a higher-level overview with diagrams, see [Architecture]({{< ref "0a-architecture" >}}).
 
 ## Two backends, not one
 
@@ -19,6 +21,41 @@ The Web IDE talks to two different backend classes:
 - **Device backends** running on robot Pis, typically on port **8421**
 
 This is an intentional architecture decision, not an implementation accident.
+
+*Service and backend topology — every box is a real component in the codebase.*
+
+```mermaid
+graph TD
+    subgraph Browser["Browser (Angular frontend)"]
+        HS[HttpService<br/>http-service.ts]
+        FRM[FlowchartRunManager<br/>flowchart-run-manager.ts]
+        RCD[RunConfigurationsDialog<br/>run-configurations-dialog.ts]
+        RAS[RunActionService]
+        LRS[LocalizationReplayService<br/>localization-replay.service.ts]
+        TVS[TableVisualizationService]
+    end
+
+    subgraph IDEBackend["IDE Backend — laptop port 4200"]
+        ProjAPI[Project / Missions API<br/>/api/v1/projects /missions]
+        RunAPI[Run WebSocket<br/>/missions/{uuid}/run]
+        RunsAPI[Runs listing<br/>/api/v1/runs/{uuid}]
+        RunCfgAPI[Run config CRUD<br/>/api/v1/run_configurations]
+    end
+
+    subgraph PiServer["Pi Server — robot port 8421"]
+        HWApi[Hardware API<br/>/api/v1/device]
+        ArmCmd[Arm command<br/>/command]
+    end
+
+    HS -- localApi --> IDEBackend
+    HS -- deviceApi --> PiServer
+    FRM --> HS
+    FRM --> RAS
+    FRM --> TVS
+    RCD --> HS
+    LRS --> RunsAPI
+    LRS --> HS
+```
 
 The `raccoon web` command starts the integrated server (frontend + IDE backend) on port 4200. During Angular development (`npm start`) the frontend runs on port 4300 and the Angular dev proxy routes API calls to the backend on 4200.
 

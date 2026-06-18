@@ -11,6 +11,17 @@ description: "How raccoon logs actually works: local vs remote runs, filtering, 
 
 `raccoon logs` is the log browser for both project run logs and project service journald output.
 
+## Concept: two separate log sources
+
+raccoon manages two completely different categories of logs. Knowing which you need avoids a lot of dead-end debugging:
+
+| Source | What it contains | How to access |
+|--------|-----------------|---------------|
+| **Run logs** (`libstp.log`) | Output from `raccoon run` executions — mission steps, sensor readings, timing | `raccoon logs show 1` |
+| **Service journals** (systemd / journald) | Output from project daemons (e.g. camera service) running on the Pi | `raccoon logs services show <name>` |
+
+Run logs are parsed and indexed by raccoon into numbered "runs" so you can refer to them as `show 1` (most recent), `show 2`, etc. Service logs are read from journald on the Pi and are remote-only.
+
 Source of truth:
 
 - [logs.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/logs.py)

@@ -14,6 +14,25 @@ raccoon run
 
 The command you will use most. On a connected Pi it syncs your project, runs code generation locally, executes the program on the robot, and pulls results back — all in one step.
 
+## How it works
+
+```mermaid
+sequenceDiagram
+    participant L as Laptop
+    participant Pi as Wombat Pi
+
+    L->>L: 1. validate project (raccoon validate)
+    L->>L: 2. create git checkpoint (pre-run snapshot)
+    L->>L: 3. codegen — generate defs.py, defs.pyi, robot.py
+    L->>Pi: 4. push sync — rsync (Linux/macOS) or SFTP (Windows)
+    Pi->>Pi: 5. execute src/main.py via raccoon-server
+    Pi-->>L: stream stdout live
+    L->>L: Ctrl-C or natural exit
+    Pi-->>L: 6. pull sync — calibration data, recordings, logs
+```
+
+The **codegen happens on the laptop**, not on the Pi. This matters: YAML is never transferred. The Pi only receives ready-to-run Python. If anything is wrong with your YAML, you find out on the laptop before any file transfer happens.
+
 ## What it does
 
 The exact sequence depends on whether you are connected to a Pi.
@@ -156,3 +175,10 @@ raccoon sync      # push or pull files only
 ```
 
 These are rarely needed — `raccoon run` covers both.
+
+## Related pages
+
+- [sync]({{< ref "09-sync" >}}) — what the push/pull steps do in detail, including fingerprint verification
+- [Run Configurations]({{< ref "13-run-configurations" >}}) — how to name `dev` vs `competition` mode configurations
+- [checkpoint]({{< ref "12-checkpoint" >}}) — the automatic pre-run snapshots
+- [logs]({{< ref "10-logs" >}}) — browsing output from previous runs

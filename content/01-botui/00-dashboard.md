@@ -8,9 +8,13 @@ weight: 1
 
 # Dashboard
 
-The Dashboard is the first screen shown after BotUI boots. It is a single full-screen view with three vertically stacked tiles that navigate to the three main areas of the application.
+The Dashboard is the first screen shown after BotUI boots. It acts as the root of the application: every other screen is reached by navigating forward from here, and pressing back from any sub-screen returns here.
 
 ![IMG: Dashboard Screen on the Bot UI](/images/botui/botui-dashboard.png)
+
+## Concept
+
+The Dashboard has one job: get you to the right screen as fast as possible during a competition. During a run you typically need to reach Programs in one tap and Sensors in two. The large Programs tile in the centre reflects that priority. Between runs, the screensaver keeps the display active without wasting screen real estate on static information.
 
 ## Tile Layout
 
@@ -31,3 +35,5 @@ When the Dashboard is idle, BotUI shows an animated robot face (the screensaver)
 The screensaver is **enabled by default**. You can toggle it on or off under **Settings → Display → Screensaver**. The tile label on the Display settings screen reflects the current state: it reads "Screensaver On" (cyan) when enabled, or "Screensaver Off" (grey) when disabled. The setting is persisted across reboots via `SharedPreferences`.
 
 When the screensaver is active, any tap on the screen dismisses it and returns to the normal Dashboard view.
+
+> **Cross-link:** The screensaver toggle and its persistence are described in detail under [Settings → Display]({{< ref "/01-botui/03-settings#display" >}}).

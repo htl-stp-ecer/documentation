@@ -3,12 +3,18 @@ title: "Steps DSL"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 7
+weight: 8
 ---
 
 # Steps DSL
 
-Steps are the building blocks of every mission. Each step is a single action: drive forward, turn, move a servo, wait for a sensor. You combine steps into sequences and parallel blocks to build complex behaviors.
+## Concept: What a Step Is
+
+A **step** is the atomic unit of a mission — a single, self-contained action. Driving 25 cm forward is a step. Turning 90 degrees is a step. Moving a servo to a named position is a step. Waiting for a sensor is a step.
+
+Steps are composable: `seq([...])` runs them one after another; `parallel(...)` runs them simultaneously. The mission system is nothing more than a large tree of nested steps executed by the framework.
+
+You never interact with step classes directly. Instead, you call **factory functions** that return **builder objects**. This is the DSL layer.
 
 > For a complete, always up-to-date list of every available step function and its parameters, see the **[API Reference]({{< ref "05-api-reference" >}})** — specifically the DSL Steps section. This page explains the concepts and patterns behind the DSL, not every individual function.
 
@@ -80,6 +86,8 @@ The decorator marks the class as hidden from the DSL discovery system (e.g., the
 
 The generated files are named `*_dsl.py` and sit alongside the original source. You never edit them — they're regenerated on every build.
 
+> **Project-owned steps can use the same codegen infrastructure.** If you create a class in `src/steps/` and annotate it with `@dsl_step`, running `raccoon codegen` generates a `*_dsl.py` file for it too. Your mission code then imports from that generated file, just as it does for raccoon's own built-in steps. See the [Custom Steps]({{< ref "05-custom-steps" >}}) page for the full pattern.
+
 ### Available Builder Methods
 
 Every builder inherits these methods from `StepBuilder`:
@@ -120,6 +128,31 @@ drive_forward(25).on_anomaly(play_sound())
 
 Passing a step directly is syntactic sugar — the framework wraps it in a callback that calls `step.run_step(robot)`.
 
+## Step Lifecycle
+
+Understanding the step lifecycle is critical when writing custom steps and diagnosing timing anomalies:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued : step added to seq() / parallel()
+    Queued --> Starting : runner reaches this step
+    Starting --> Running : on_start() called (MotionStep) /<br/>_execute_step() entered (Step)
+    Running --> Checking : stop condition polled (100 Hz)
+    Checking --> Running : condition not met — continue
+    Checking --> Stopping : condition met / step returns
+    Stopping --> Done : on_stop() called / cleanup
+    Done --> [*]
+    Running --> Anomaly : runs longer than timing baseline
+    Anomaly --> Running : on_anomaly handler fires,<br/>step continues
+    Running --> Cancelled : resource preempted by<br/>foreground step / timeout
+    Cancelled --> [*]
+```
+
+Key points:
+- **`seq([...])`**: only one step is in `Running` at a time. The next step does not enter `Starting` until the current one reaches `Done`.
+- **`parallel(...)`**: all tracks enter `Starting` together. The parallel block reaches `Done` only when all tracks have finished.
+- **`background()`**: the step enters `Starting` and `Running` immediately, but the sequence does not wait for it — the next step in `seq()` starts. The background step may be `Cancelled` if a later foreground step claims the same resource.
+
 ## Stop Conditions
 
 Many steps accept a `.until(condition)` clause that controls when the step finishes. Conditions can be combined with `|` (OR), `&` (AND), and `+` (THEN), and grouped with parentheses for complex logic:
@@ -141,3 +174,9 @@ The control flow steps documented in [Missions]({{< ref "03-missions" >}}) — `
 For a full explanation of each, see the **[Missions — Control Flow]({{< ref "03-missions#control-flow" >}})** section.
 
 For the full, always up-to-date list of every available step function and its parameters, see the **[API Reference]({{< ref "05-api-reference" >}})** — specifically the DSL Steps section.
+
+## Related Pages
+
+- **[Custom Steps]({{< ref "05-custom-steps" >}})** — writing function-based and class-based custom steps, including `MotionStep`
+- **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** — full reference for `.until()` conditions and operators
+- **[Missions]({{< ref "03-missions" >}})** — composing steps into missions with `seq()`, `parallel()`, `background()`, and control flow

@@ -3,12 +3,47 @@ title: "Raccoon CLI"
 author: "Florian Schwanzer"
 date: 2026-06-18
 draft: false
-weight: 1
+weight: 5
 ---
 
 # Raccoon CLI
 
 raccoon-cli is the command-line tool for managing robot projects. It handles everything from project scaffolding to running code on the robot.
+
+## The developer workflow lifecycle
+
+Every raccoon session follows the same lifecycle. Understanding the shape of this loop answers "which command do I run next?" at every step.
+
+```mermaid
+flowchart LR
+    A([create project]) --> B([connect to Pi])
+    B --> C([wizard / configure YAML])
+    C --> D([write Python mission code])
+    D --> E([raccoon run])
+    E --> F([codegen local])
+    F --> G([sync push → Pi])
+    G --> H([execute on Pi])
+    H --> I([sync pull ← Pi])
+    I --> J{happy?}
+    J -- no --> D
+    J -- yes --> K([commit / checkpoint])
+    K --> D
+```
+
+The key insight: **code generation and all validation happen on your laptop**. The Pi only receives the final Python files, never the raw YAML. This makes the edit–run loop fast even over a slow Wi-Fi link.
+
+### Where each command fits
+
+| Phase | Command | What happens |
+|-------|---------|--------------|
+| Setup | `raccoon create project` | Clone example repo, assign UUID, init git |
+| Setup | `raccoon connect <IP>` | SSH key auth, save connection config |
+| Setup | `raccoon wizard` | Write YAML hardware config interactively |
+| Iterate | `raccoon run` | Codegen → push → execute → pull (all-in-one) |
+| Inspect | `raccoon logs` | Browse run logs from Pi |
+| Recover | `raccoon checkpoint restore` | Roll back to a pre-run snapshot |
+| Update | `raccoon update` | Bring laptop + Pi to the same bundle |
+| Diagnose | `raccoon doctor` | Check connection, tools, versions |
 
 ## Command Overview
 
@@ -51,6 +86,24 @@ raccoon --no-validate sync
 ```
 
 This is useful when you intentionally have an incomplete config and want to force a run anyway.
+
+## Reading order
+
+If you are new to raccoon-cli, read pages in this order:
+
+1. **[Quick Start]({{< ref "00-quick-start" >}})** — install, create, connect, run in 5 minutes
+2. **[create]({{< ref "01-create" >}})** — project scaffolding and mission creation
+3. **[connect]({{< ref "02-connect" >}})** — SSH key setup
+4. **[run]({{< ref "03-run" >}})** — the daily driver command in depth
+5. **[Run Configurations]({{< ref "13-run-configurations" >}})** — how competition bots parameterise `dev` vs `competition` modes
+6. **[sync]({{< ref "09-sync" >}})** — what actually happens under the hood
+7. **[checkpoint]({{< ref "12-checkpoint" >}})** — automatic safety snapshots
+
+For troubleshooting and maintenance, jump directly to:
+
+- **[Versioning And Upgrades]({{< ref "07-versioning-and-upgrades" >}})** — bundles, migrations, format_version
+- **[Troubleshooting And Recovery]({{< ref "08-troubleshooting-and-recovery" >}})** — playbooks for common failures
+- **[doctor]({{< ref "11-doctor" >}})** — system health check
 
 ## Deep Dives
 
