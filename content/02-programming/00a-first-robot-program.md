@@ -1,7 +1,7 @@
 ---
 title: "Your First Robot Program"
 author: "Tobias Madlberger"
-date: 2026-03-28
+date: 2026-06-18
 draft: false
 weight: 2
 ---
@@ -31,20 +31,20 @@ That's it. There's no separate compile step, no firmware flashing, no manual fil
 
 ## Step 1: The Minimal Mission
 
-Open your first mission file. If you created a project with `raccoon create project`, you already have `src/missions/m01_mission.py` (or similar). If not, create one:
+Open your first mission file. If you created a project with `raccoon create project`, you already have `src/missions/m010_first_mission.py` (or similar). If not, create one:
 
 ```bash
 raccoon create mission MyFirstMission
 ```
 
-Replace the contents with:
+This creates `src/missions/m010_my_first_mission.py` with the next available 3-digit number (starting at `M010`, incrementing by 10). Replace the contents with:
 
 ```python
 from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M01MyFirstMission(Mission):
+class M010MyFirstMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(10),
@@ -68,7 +68,7 @@ raccoon run
 Now let's make the robot do something more interesting — drive a square:
 
 ```python
-class M01MyFirstMission(Mission):
+class M010MyFirstMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(25),
@@ -133,7 +133,7 @@ Before writing code, you need to find the servo angles for each position:
 The simplest way — just tell it which angle to go to:
 
 ```python
-class M01MyFirstMission(Mission):
+class M010MyFirstMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             servo(Defs.my_arm_servo, 150),   # Arm up
@@ -151,14 +151,15 @@ For servos you use a lot, define named positions. Update your YAML:
 ```yaml
 definitions:
   arm:
-    type: ServoPreset
-    servo:
-      port: 0
+    type: Servo         # Still "Servo" — the positions: block makes it a preset
+    port: 0
     positions:
       up: 150
       down: 20
       mid: 85
 ```
+
+> **Important:** The YAML type is always `Servo`, not `ServoPreset`. The codegen detects the `positions:` block and automatically wraps the servo in a `ServoPreset` at code-generation time. If you write `type: ServoPreset` the codegen will raise a `ValueError` because it is not a recognised type key.
 
 Now in your code, you get named methods:
 
@@ -248,6 +249,7 @@ seq([
     Defs.claw.closed(),
     Defs.arm.up(),
 ])
+
 ```
 
 A more advanced pattern — trigger an action at a specific point during a drive:
@@ -270,7 +272,7 @@ parallel(
 
 Here's a complete project with setup, main mission, and shutdown — the pattern every competition robot follows.
 
-### Setup mission (`m00_setup_mission.py`)
+### Setup mission (`m000_setup_mission.py`)
 
 Runs before the match starts. Calibrates and homes all servos:
 
@@ -279,7 +281,9 @@ from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M00SetupMission(Mission):
+class M000SetupMission(SetupMission):   # SetupMission, not Mission!
+    setup_time = 120   # 2-minute countdown shown on the UI during setup
+
     def sequence(self) -> Sequential:
         return seq([
             # Home servos to known positions
@@ -292,7 +296,9 @@ class M00SetupMission(Mission):
         ])
 ```
 
-### Main mission (`m01_grab_object_mission.py`)
+> **`SetupMission`, not `Mission`**: The setup entry **must** subclass `SetupMission` (imported from `raccoon`). If you use plain `Mission`, `robot.start()` raises `TypeError: setup_mission must be a SetupMission instance`. The `SetupMission.setup_time` attribute (optional, in seconds) displays a countdown timer on every UI screen during the setup phase; set it to `0` to disable.
+
+### Main mission (`m010_grab_object_mission.py`)
 
 The actual task — drive to an object, pick it up, bring it back:
 
@@ -301,7 +307,7 @@ from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M01GrabObjectMission(Mission):
+class M010GrabObjectMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             # Drive to the object
@@ -328,16 +334,16 @@ class M01GrabObjectMission(Mission):
         ])
 ```
 
-### Shutdown mission (`m99_shutdown_mission.py`)
+### Shutdown mission (`m999_shutdown_mission.py`)
 
-Runs when the match timer expires. Stop everything safely:
+Runs when the match timer expires or after all main missions complete. Stop everything safely:
 
 ```python
 from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M99ShutdownMission(Mission):
+class M999ShutdownMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             Defs.arm.up(),
@@ -348,14 +354,16 @@ class M99ShutdownMission(Mission):
 
 ### Mission order in the YAML
 
-In `raccoon.project.yml`:
+In `raccoon.project.yml` (or `config/missions.yml`):
 
 ```yaml
 missions:
-  - M00SetupMission: setup
-  - M99ShutdownMission: shutdown
-  - M01GrabObjectMission
+  - M000SetupMission: setup
+  - M999ShutdownMission: shutdown
+  - M010GrabObjectMission
 ```
+
+> **3-digit mission numbers**: The CLI uses a 3-digit zero-padded numbering scheme: `M000` (setup), `M010`–`M990` (main missions, incrementing by 10), `M999` (shutdown). Numbers `0` and `999` are reserved. `raccoon create mission` automatically assigns the next available number and names the file accordingly.
 
 The `setup` mission runs first (before the start signal). After the start signal, missions run in list order. When `shutdown_in` milliseconds expire, the current mission is cancelled and the `shutdown` mission runs.
 
@@ -481,10 +489,10 @@ The code snippets on this page are intentionally minimal — each one teaches on
 
 **[raccoon-example](https://github.com/htl-stp-ecer/raccoon-example)** is a clean reference robot that demonstrates everything on this page in a single, readable codebase:
 
-- `m00_setup_mission.py` — servo homing, `calibrate()`, `wait_for_button()`  
-- `m01_navigate_to_object_mission.py` — `mark_heading_reference()`, `parallel()`, `.until()` with a sensor stop condition  
-- `m02_collect_object_mission.py` — reusable custom step, `wall_align_backward()`  
-- `m03_deliver_object_mission.py` — `strafe_follow_line_single()`, combined stop conditions  
+- `m000_setup_mission.py` — servo homing, `calibrate()`, `wait_for_button()`  
+- `m010_navigate_to_object_mission.py` — `mark_heading_reference()`, `parallel()`, `.until()` with a sensor stop condition  
+- `m020_collect_object_mission.py` — reusable custom step, `wall_align_backward()`  
+- `m030_deliver_object_mission.py` — `strafe_follow_line_single()`, combined stop conditions  
 - `steps/arm_steps.py` — `seq()` composition and `defer()` for runtime decisions  
 
 It is built with the same patterns as competition robots, but written for clarity rather than speed. The competition robots ([drumbot](https://gitlab.com/fallgame2025/drumbot), [conebot](https://gitlab.com/fallgame2025/conebot), [packingbot](https://gitlab.com/fallgame2025/packingbot)) show what the platform looks like under real pressure — raccoon-example shows what the code *should* look like when you have time to write it properly.
@@ -541,6 +549,6 @@ wait_until_distance(cm)            # Wait until driven distance
 run(lambda robot: print("hi"))     # Run Python code
 
 # === CALIBRATION ===
-calibrate(distance_cm=50)           # Calibrate motors + sensors
+calibrate(distance_cm=50)           # Calibrate motors + sensors (default is 30 cm; 50 is explicit override)
 auto_tune()                         # Auto-tune PID + motion profiles
 ```

@@ -1,9 +1,9 @@
 ---
 title: "Steps DSL"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 5
+weight: 7
 ---
 
 # Steps DSL
@@ -37,8 +37,8 @@ drive_forward(25)
 # Chained — add a stop condition
 drive_forward(speed=0.8).until(on_black(Defs.front.right))
 
-# Multiple chains
-drive_forward(25).on_anomaly(lambda step, dt: print(f"Slow: {dt}s")).skip_timing()
+# Multiple chains — anomaly callback + skip timing
+drive_forward(25).on_anomaly(lambda step, robot: robot.warn(f"Slow: {step}")).skip_timing()
 ```
 
 Builders are steps themselves — you can place them directly into `seq([...])` without calling `.build()`. When the mission runs, the builder constructs the real step and executes it.
@@ -87,9 +87,38 @@ Every builder inherits these methods from `StepBuilder`:
 | Method | What It Does |
 |--------|-------------|
 | `.until(condition)` | Add a stop condition (motion steps) |
-| `.on_anomaly(callback)` | Register a timing anomaly watchdog |
+| `.on_anomaly(callback_or_step)` | Register a timing anomaly handler (see below) |
 | `.skip_timing()` | Exclude from timing instrumentation |
 | Per-parameter setters | One for each `__init__` parameter (e.g., `.cm()`, `.speed()`) |
+
+#### `.on_anomaly()` — Timing Anomaly Handler
+
+`.on_anomaly()` registers a handler that fires when the step takes longer than its expected baseline (as measured by the timing database). It accepts **either** an async callback or a step instance directly:
+
+**Callback form** — receives `(step: Step, robot: GenericRobot)`:
+
+```python
+import asyncio
+from raccoon import *
+
+async def slow_step_handler(step, robot):
+    # step is the Step instance that ran slowly
+    # robot is the GenericRobot — use it to access hardware/logging
+    robot.warn(f"Step ran slowly: {step}")
+
+drive_forward(25).on_anomaly(slow_step_handler)
+```
+
+The callback signature is `Callable[[Step, GenericRobot], Awaitable[Any]]` — the second argument is always a `GenericRobot`, not a timing value.
+
+**Step form** — run a step when the anomaly fires:
+
+```python
+# Play a sound whenever this drive step runs longer than expected
+drive_forward(25).on_anomaly(play_sound())
+```
+
+Passing a step directly is syntactic sugar — the framework wraps it in a callback that calls `step.run_step(robot)`.
 
 ## Stop Conditions
 
@@ -104,5 +133,11 @@ drive_forward(speed=1.0).until(
 ```
 
 See **[Stop Conditions]({{< ref "04a-stop-conditions" >}})** for the full reference — all available conditions, operators, parenthesized grouping, and common patterns.
+
+## Control Flow Steps
+
+The control flow steps documented in [Missions]({{< ref "03-missions" >}}) — `if_then()`, `background()`, `wait_for_background()`, `timeout()`, `timeout_or()`, `start_watchdog()`, `feed_watchdog()`, `stop_watchdog()`, and the `run_if_env()` family — are all first-class steps. They can be placed anywhere in a `seq([...])` or `parallel(...)` block, passed to `defer()`, used as branches inside `if_then()`, or combined with stop conditions.
+
+For a full explanation of each, see the **[Missions — Control Flow]({{< ref "03-missions#control-flow" >}})** section.
 
 For the full, always up-to-date list of every available step function and its parameters, see the **[API Reference]({{< ref "05-api-reference" >}})** — specifically the DSL Steps section.

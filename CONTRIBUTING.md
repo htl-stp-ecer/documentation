@@ -6,11 +6,47 @@
 
 ## Quick start
 
+**Prerequisites:** Hugo **extended edition** is required — the standard edition will fail with CSS errors. Install it with:
+
+```bash
+# macOS
+brew install hugo
+
+# Debian/Ubuntu (installs extended by default on recent releases)
+sudo apt install hugo
+
+# Windows
+winget install Hugo.Hugo.Extended
+```
+
+Then clone and serve:
+
 ```bash
 git clone https://github.com/htl-stp-ecer/documentation.git
 cd documentation
 hugo server -D          # live preview at http://localhost:1313
 ```
+
+### Local development note — `data/dsl_steps.json`
+
+`data/dsl_steps.json` is the step catalog that powers the Available Steps page. It is **committed to this repository**, so it works on a fresh clone. However, in CI the file is overwritten by the latest release artifact from `raccoon-lib` (CI workflow step "Fetch library API docs"). This means the committed file may lag slightly behind the very latest library release.
+
+If you want to regenerate the catalog from local source:
+
+1. Clone (or have) the `raccoon-lib` repo alongside this one.
+2. From its root, run:
+
+   ```bash
+   python3 docs/generate_dsl_catalog.py
+   ```
+
+3. Copy the output to this repo:
+
+   ```bash
+   cp raccoon-lib/docs/_build/dsl-steps.json documentation/data/dsl_steps.json
+   ```
+
+The Available Steps page will then reflect your local library version.
 
 ---
 
@@ -22,7 +58,7 @@ Each top-level folder under `content/` is a section. The numeric prefix controls
 |---------|--------|
 | `00-quick-start/` | First-time setup |
 | `01-botui/` | BotUI web dashboard |
-| `02-programming/` | LibSTP SDK — missions, steps, sensors, drive |
+| `02-programming/` | raccoon SDK — missions, steps, sensors, drive |
 | `02-programming/algorithms/` | Self-contained algorithm explanations |
 | `03-web-ide/` | Web IDE panels and workflows |
 | `04-raccoon-cli/` | One page per `raccoon` CLI command |

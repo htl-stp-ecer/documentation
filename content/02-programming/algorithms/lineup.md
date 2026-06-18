@@ -1,7 +1,7 @@
 ---
 title: "Lineup"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 2
 ---
@@ -60,13 +60,15 @@ Where `sensor_gap` is the known physical distance between the two sensors on the
 
 ### Algorithm Phases
 
-The full `forward_lineup_on_black` sequence has three phases:
+The `forward_lineup_on_black` function is composed of three back-to-back steps with no pauses:
 
 1. **Measure** — Drive forward at constant speed. Record odometry when the first sensor crosses the black threshold, then when the second one does. The difference is the stagger distance.
 2. **Turn** — Execute a point turn by the computed angle. The sign is determined by which sensor hit first (left first → turn right, right first → turn left).
-3. **Clear** — Drive forward at reduced speed until both sensors see white again, leaving the robot just past the line, squared up and ready.
+3. **Clear** — Drive forward at half speed until both sensors see white again, leaving the robot just past the line, squared up and ready.
 
-All three phases execute back-to-back with no pauses. The measurement phase happens at full approach speed — there is no need to slow down.
+The measurement phase happens at full approach speed — there is no need to slow down.
+
+Internally, steps 1 and 2 are the core geometry algorithm (exposed as the internal `lineup()` helper). Step 3 is appended by the public factory `forward_lineup_on_black` as a finishing move. If you call `lineup()` directly (it is a hidden DSL function not intended for normal use), you get only the measure + turn, without the clearing drive.
 
 ### Why This Works So Well
 
@@ -112,21 +114,77 @@ strafe_right_lineup_on_black(Defs.right.front, Defs.right.back)
 
 ## Parameters
 
+### Public Dual-Sensor Functions
+
+All four public forward/backward variants (`forward_lineup_on_black`, `backward_lineup_on_black`, `forward_lineup_on_white`, `backward_lineup_on_white`) share the same signature:
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `left_sensor` / `right_sensor` | IRSensor | Required | Dual-sensor: the two sensors that will cross the line |
-| `detection_threshold` | float | 0.7 | Sensor confidence (0.0–1.0) needed to register a line hit |
-| `forward_speed` | float | 1.0 | Approach speed in m/s (negative for backward) |
+| `left_sensor` | IRSensor | Required | Left IR sensor, mounted on the left side of the chassis |
+| `right_sensor` | IRSensor | Required | Right IR sensor, mounted on the right side of the chassis |
+| `detection_threshold` | float | `0.7` | Sensor confidence (0.0–1.0) needed to register a line hit. Lower values trigger earlier but are more susceptible to noise. |
 
-**Single-sensor additional parameters:**
+The approach speed is hard-coded at 1.0 (full speed forward) for the measurement phase and 0.5 for the clearing drive. There is no public `forward_speed` parameter — the speed is not user-configurable on the public API.
+
+### Single-Sensor Additional Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `sensor` | IRSensor | Required | The single sensor crossing the line |
-| `line_width_cm` | float | 5.0 | Known physical width of the line |
-| `entry_threshold` | float | 0.7 | Confidence to detect leading edge |
-| `exit_threshold` | float | 0.3 | Confidence to detect trailing edge (should be lower than entry) |
+| `line_width_cm` | float | `5.0` | Known physical width of the line |
+| `entry_threshold` | float | `0.7` | Confidence to detect leading edge |
+| `exit_threshold` | float | `0.3` | Confidence to detect trailing edge (should be lower than entry) |
 | `correction_side` | `CorrectionSide` | Required | Direction to turn for correction (LEFT or RIGHT) |
+
+## White-Surface Variants
+
+Each forward/backward direction also has a white-surface counterpart that detects a white region instead of a black line:
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+# Align on a white line (e.g. tape on a dark background)
+forward_lineup_on_white(Defs.front.left, Defs.front.right)
+backward_lineup_on_white(Defs.front.left, Defs.front.right)
+```
+
+The algorithm is identical — only the detection color is inverted. The clear phase after alignment also inverts: the robot drives until both sensors see black.
+
+## Strafe Lineup Variants
+
+For omni/mecanum robots, strafe lineup variants also have white-surface counterparts:
+
+```python
+# Align while strafing right, on a black line
+strafe_right_lineup_on_black(Defs.right.front, Defs.right.back)
+
+# Align while strafing right, on a white region
+strafe_right_lineup_on_white(Defs.right.front, Defs.right.back)
+
+# Align while strafing left, on a black line
+strafe_left_lineup_on_black(Defs.left.front, Defs.left.back)
+
+# Align while strafing left, on a white region
+strafe_left_lineup_on_white(Defs.left.front, Defs.left.back)
+```
+
+All strafe variants take `front_sensor`, `back_sensor`, and `detection_threshold` (default `0.7`).
+
+## All Lineup Functions Reference
+
+| Function | Direction | Surface | Sensors |
+|----------|-----------|---------|---------|
+| `forward_lineup_on_black` | Forward | Black | Left + Right |
+| `forward_lineup_on_white` | Forward | White | Left + Right |
+| `backward_lineup_on_black` | Backward | Black | Left + Right |
+| `backward_lineup_on_white` | Backward | White | Left + Right |
+| `strafe_right_lineup_on_black` | Strafe right | Black | Front + Back |
+| `strafe_right_lineup_on_white` | Strafe right | White | Front + Back |
+| `strafe_left_lineup_on_black` | Strafe left | Black | Front + Back |
+| `strafe_left_lineup_on_white` | Strafe left | White | Front + Back |
+| `forward_single_lineup` | Forward | Black | One |
+| `backward_single_lineup` | Backward | Black | One |
 
 ## Tips
 
@@ -134,3 +192,4 @@ strafe_right_lineup_on_black(Defs.right.front, Defs.right.back)
 2. **Mount sensors as far apart as possible.** A wider sensor gap gives better angle resolution — small stagger differences map to larger, more measurable distances.
 3. **Use the SensorGroup shortcut** (`Defs.front.lineup_on_black()`) for the most common case.
 4. **Lineup works at full speed.** There's no need to slow down before hitting the line. The measurement is taken during continuous motion.
+5. **The approach speed is fixed.** The public API hard-codes the approach at 1.0 (full speed) and the post-turn clearing drive at 0.5. There is no way to configure these speeds on the public API — accept them or use the internal `lineup()` helper directly.

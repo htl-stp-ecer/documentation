@@ -1,9 +1,9 @@
 ---
 title: "IMU"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
-weight: 15
+weight: 19
 ---
 
 # IMU
@@ -20,7 +20,7 @@ The Wombat uses an **InvenSense MPU-9250**, a nine-axis MEMS sensor package that
 | Accelerometer | Linear acceleration along each axis | m/s² |
 | Magnetometer (AK8963) | Magnetic field strength along each axis | µT |
 
-The chip is connected to the **STM32 coprocessor** via SPI. The STM32 reads the sensor, runs orientation estimation firmware, and forwards the results to the Raspberry Pi over a shared SPI buffer at approximately 75 Hz. User programs on the Pi access these values through the `raccoon` HAL.
+The chip is connected to the **STM32 coprocessor** via SPI. The STM32 reads the sensor, runs orientation estimation firmware, and forwards the results to the Raspberry Pi over a shared SPI buffer at **50 Hz**. User programs on the Pi access these values through the `raccoon` HAL.
 
 ### Axes and Orientation
 
@@ -36,11 +36,11 @@ The **sign convention** used by `raccoon` is counter-clockwise positive (CCW = p
 
 ## The Digital Motion Processor (DMP)
 
-The MPU-9250 includes a **Digital Motion Processor** (DMP) — a small dedicated compute block inside the sensor chip. The DMP runs a proprietary 6-axis fusion algorithm (gyroscope + accelerometer) entirely on-chip at 200 Hz, without using the host CPU. The STM32 reads the DMP's quaternion output from a FIFO buffer at 50 Hz and exposes it to the Pi at ~75 Hz.
+The MPU-9250 includes a **Digital Motion Processor** (DMP) — a small dedicated compute block inside the sensor chip. The DMP runs a proprietary 6-axis fusion algorithm (gyroscope + accelerometer) entirely on-chip at 200 Hz, without using the host CPU. The STM32 reads the DMP's quaternion output from a FIFO buffer at 50 Hz and forwards it to the Pi at the same **50 Hz** rate.
 
-The DMP also handles gyroscope bias calibration internally at startup: it estimates the bias of each gyro axis while the robot is still, and subtracts it from subsequent readings. This calibrated gyroscope signal is what the rest of the pipeline uses.
+The DMP also handles gyroscope bias calibration at startup and on an ongoing basis (see [Calibration](#calibration) below). This calibrated gyroscope signal is what the rest of the pipeline uses.
 
-The heading value available via `imu.get_heading()` comes from this DMP pipeline. In dynamic conditions — the kind of fast rotation that a Botball match involves — the DMP's 6-axis fusion has been shown to track heading with a Mean Absolute Error of around 12° over a 2-minute test, which is significantly better than raw gyroscope integration or software-based filters running at the lower 75 Hz rate available on the Pi.
+The heading value available via `imu.get_heading()` comes from this DMP pipeline. In dynamic conditions — the kind of fast rotation that a Botball match involves — the DMP's 6-axis fusion has been shown to track heading with a Mean Absolute Error of around 12° over a 2-minute test, which is significantly better than raw gyroscope integration or software-based filters running at the 50 Hz rate available on the Pi.
 
 ## How the Drive System Uses the IMU
 
@@ -84,7 +84,7 @@ Adding the magnetometer (9-axis Mahony) reduces static yaw drift to under 0.2 °
 | Method | Static yaw drift | Dynamic MAE | Notes |
 |--------|-----------------|-------------|-------|
 | DMP 6-axis | 109 °/h | **12°** | Best for motion; runs on-chip at 200 Hz |
-| Mahony 6-axis | 21 °/h | 32° | Good static; software filter at 75 Hz |
+| Mahony 6-axis | 21 °/h | 32° | Good static; software filter at 50 Hz (Pi data rate) |
 | Raw gyro integration | 27 °/h | 30° | Simplest; no correction |
 | Mahony 9-axis (with magnetometer) | **0.19 °/h** | 113° | Best static; degrades under fast rotation |
 
@@ -102,7 +102,11 @@ Where `y` is the raw reading, `x` is the true value, `b` is bias, `K` is a scale
 
 ### Gyroscope Bias
 
-The DMP handles gyroscope bias automatically. At startup, while the robot is stationary, the DMP measures the mean output of each gyro axis and stores it as the bias. Subsequent readings subtract this bias. This process happens before the robot begins moving and requires the robot to be still for a brief settling period (typically under a second).
+The DMP handles gyroscope bias automatically, both at startup and continuously during operation:
+
+- **Initial calibration:** at startup the DMP estimates each gyro axis bias while the robot is stationary and subtracts it from subsequent readings. The robot must be still for a brief settling period (typically under a second).
+- **Continuous re-calibration:** the firmware enables `DMP_FEATURE_GYRO_CAL`, which re-runs bias estimation after every 8-second window of detected no-motion. It also enables `inv_enable_in_use_auto_calibration()`, which refines bias estimates continuously during normal operation.
+- **Persistence:** whenever the MPL library reports improved sensor accuracy, the firmware automatically saves the updated calibration data to flash memory. This means calibration persists across power cycles and improves over time.
 
 The calibrated gyroscope Z-axis bias is around 0.005 °/s, which over 10 minutes gives approximately 3° of drift — the theoretical minimum for a gyroscope without a magnetic reference.
 
@@ -162,12 +166,17 @@ imu = IMU()
 
 # Full read: returns (accel, gyro, magneto) as tuples of (x, y, z)
 accel, gyro, magneto = imu.read()
-# accel: (ax, ay, az) in m/s²
-# gyro:  (wx, wy, wz) in rad/s
+# accel:   (ax, ay, az) in m/s²
+# gyro:    (wx, wy, wz) in DEGREES/second  ← raw DMP output, not rad/s
 # magneto: (mx, my, mz) in µT
+#
+# Note: imu.read() returns gyro in degrees/second because the MPL firmware
+# stores calibrated gyro data in that unit (Q16 fixed-point, 1 dps = 2^16).
+# No unit conversion is applied on the way out.
 
-# Angular velocity only (rad/s)
+# Angular velocity only — converted to rad/s
 wx, wy, wz = imu.get_angular_velocity()
+# Returns (x, y, z) in rad/s; internally multiplies the raw deg/s value by π/180.
 
 # Firmware-computed heading (radians, CCW-positive)
 heading_rad = imu.get_heading()
@@ -177,8 +186,11 @@ lax, lay, laz = imu.get_linear_acceleration()
 
 # Configure which body axis is used as the turn (yaw) axis
 # Options: "world_z" (default), "body_x", "body_y", "body_z"
-# Prefix with "-" to negate: "-body_z"
+# Prefix with "-" to negate the sign: "-body_z"
 imu.set_yaw_rate_axis_mode("world_z")
+
+# Query the currently active axis mode
+current_mode = imu.get_yaw_rate_axis_mode()  # returns a string, e.g. "world_z"
 
 # Angular rate around the configured turn axis (rad/s)
 yaw_rate = imu.get_yaw_rate()
@@ -188,27 +200,27 @@ The firmware-computed heading (`get_heading()`) is the value used by the motion 
 
 ### Turn Axis Modes
 
-By default the system tracks yaw rotation as the world-Z axis — which is correct when the robot is flat on a table. If your robot turns while tilted (e.g. a robot that tips up on ramps), you can configure the relevant body axis instead:
+By default the system tracks yaw rotation using the `"world_z"` axis setting — which is correct when the robot is flat on a table. If your robot turns while tilted (e.g. a robot that tips up on ramps), you can configure the relevant body axis instead using `imu.set_yaw_rate_axis_mode()`:
 
 | Mode | Description |
 |------|-------------|
-| `"world_z"` | Yaw in the world frame (default, robot flat on surface) |
-| `"body_x"` | Robot's X axis (forward/back roll) |
-| `"body_y"` | Robot's Y axis (left/right roll) |
-| `"body_z"` | Robot's Z axis (raw body yaw, without world correction) |
+| `"world_z"` | Default. Uses the body-Z gyro component (identical to `"body_z"` in the current implementation — world-frame rotation is not yet applied). |
+| `"body_x"` | Robot's X axis (forward/back roll — for robots rotating around their length axis). |
+| `"body_y"` | Robot's Y axis (left/right roll — for robots rotating around their width axis). |
+| `"body_z"` | Robot's Z axis raw body-frame yaw. Currently returns the same `g[2]` value as `"world_z"`. |
 
-This is configured on the odometry level and is passed to the IMU automatically:
+**Implementation note:** In the current firmware, `"world_z"` and `"body_z"` are functionally identical. Both return the raw body-frame gyro Z component (`g[2]`) multiplied by the axis sign. No quaternion-based rotation to a true world frame is applied for `"world_z"`. The distinction exists for future use when a full quaternion correction is implemented.
+
+**Negating the axis:** prefix any mode with `"-"` to negate the reported yaw rate sign. This inverts the direction the system considers positive rotation:
 
 ```python
-from raccoon import Stm32OdometryConfig
-
-config = Stm32OdometryConfig()
-config.turn_axis = "body_z"  # Use raw body Z for a tilted robot
+imu.set_yaw_rate_axis_mode("-body_z")  # Inverts the sign of body-Z yaw rate
+current = imu.get_yaw_rate_axis_mode() # Returns "body_z" (prefix is applied internally)
 ```
 
 ## The `after_degrees()` Stop Condition
 
-`after_degrees(deg)` is a stop condition that fires after the robot has rotated by a given angle. Unlike `after_cm()` which uses encoder-based odometry, `after_degrees()` reads the **absolute IMU heading** directly. This means it is not affected by odometry resets that occur at the start of each motion step.
+`after_degrees(deg)` is a stop condition that fires after the robot has rotated by a given angle. It measures rotation based on the **localization module's pose heading** — specifically `robot.localization.get_pose().heading`.
 
 ```python
 # Turn right until 60 degrees have elapsed, with safety timeout
@@ -218,7 +230,11 @@ turn_right(speed=0.5).until(after_degrees(60) | after_seconds(3))
 drive_forward(speed=0.3).until(after_degrees(15) | after_cm(50))
 ```
 
-**Implementation detail:** `after_degrees()` records the absolute heading at start, then on each check computes the angular difference accounting for wrapping at ±180°:
+**Important requirements:**
+- `robot.localization` must not be `None`. If localization is not wired up, calling `after_degrees()` raises `RuntimeError: after_degrees requires robot.localization (world heading is read from localization.get_pose().heading)`.
+- Because it reads from the localization pose (not a raw IMU register), heading resets performed by localization will affect its reference point.
+
+**Implementation detail:** `after_degrees()` records the localization heading at start, then on each check computes the unsigned angular difference accounting for wrapping at ±180°:
 
 ```python
 delta = abs(current - start_heading)
@@ -227,6 +243,38 @@ if delta > π:
 ```
 
 This means it measures total unsigned rotation, regardless of direction. It works for both left and right turns. Unlike an angle-based `turn_left(deg)`, which uses a full PID controller to reach a precise target, `after_degrees()` is a simpler "how far have we rotated" check. Use `turn_left(deg)` when you need precision; use `after_degrees(deg)` inside a `.until()` when you need a rotation threshold as part of more complex logic.
+
+## `imu.calibrate()`
+
+The Python binding exposes `imu.calibrate()` with the docstring "Calibrate the IMU sensor." In the current implementation, **this method is a no-op** — its entire body is commented out in `MPU9250.cpp`. Calling it does nothing and returns immediately.
+
+Calibration in RaccoonOS is handled automatically by the DMP and the MPL library at the firmware level (see [Gyroscope Bias](#gyroscope-bias) above). There is no action needed or available from Python-level code.
+
+## Velocity Estimation
+
+The STM32 firmware continuously integrates gravity-compensated linear acceleration into a velocity estimate. This running velocity integral is accessible from Python via two methods:
+
+```python
+from raccoon.hal import IMU
+
+imu = IMU()
+
+# Read the firmware-integrated velocity (m/s)
+vx, vy, vz = imu.get_integrated_velocity()
+# Returns (vx, vy, vz) in m/s.
+# This is the cumulative integral of gravity-compensated linear acceleration.
+# Useful for dead-reckoning short distances when encoder data is unavailable.
+
+# Reset the accumulator to zero
+imu.reset_integrated_velocity()
+# Sets the firmware-side velocity accumulator to (0, 0, 0).
+# Call this before any segment where you want to measure displacement from scratch.
+```
+
+**Practical notes:**
+- The integrated velocity drifts over time because it integrates accelerometer noise as well as true motion. It is most useful over short time windows (a few seconds).
+- The firmware applies a drift-suppression epsilon (`kEpsAccelVel = 0.05 m/s`) — changes below this threshold are not propagated, which helps prevent runaway drift at rest.
+- Call `reset_integrated_velocity()` before each measurement window so drift from prior motion does not accumulate into the new reading.
 
 ## Practical Notes
 
@@ -252,6 +300,6 @@ The accelerometer is sensitive to vibration from motors and the surface. At high
 
 ### When to Recalibrate
 
-- **Gyroscope bias**: Handled automatically by the DMP at every power-on. No manual action needed.
+- **Gyroscope bias**: Handled automatically by the DMP at every power-on and continuously during no-motion windows. Improved calibration data is automatically saved to flash and restored on the next boot. No manual action needed.
 - **Accelerometer**: Recalibrate if you add significant weight to the Wombat, move the board to a different mounting angle, or observe that the gravity reading is noticeably wrong. In practice, the accelerometer calibration is stable across power cycles.
 - **Magnetometer**: Recalibrate whenever the robot's mechanical configuration changes — different motors, different battery placement, added metal parts. This includes between competition seasons. Do not skip magnetometer calibration if you plan to use 9-axis heading estimation.

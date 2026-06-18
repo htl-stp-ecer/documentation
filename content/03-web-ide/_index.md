@@ -1,7 +1,7 @@
 ---
 title: "Web IDE"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 1
 ---
@@ -15,11 +15,16 @@ The Web IDE is a browser-based visual environment for building missions, configu
 | Page | Description |
 |------|-------------|
 | [Starting the Web IDE]({{< ref "00-starting-the-web-ide" >}}) | How to launch the Web IDE locally |
-| [Interface Overview]({{< ref "01-interface-overview" >}}) | Three-panel layout and top bar overview |
-| [Mission Panel (Left)]({{< ref "02-mission-panel" >}}) | Mission list, creation, and ordering |
-| [Flowchart Editor (Center)]({{< ref "03-flowchart-editor" >}}) | Node editing, connections, and toolbar functions |
-| [Step Library (Right)]({{< ref "04-step-library" >}}) | Step search and drag-and-drop usage |
-| [Settings Modal]({{< ref "05-settings-modal" >}}) | Project, Robot, Map, Start, and Keybindings tabs |
-| [Floating Panels]({{< ref "06-floating-panels" >}}) | Run Logs, Table Visualization, and Timing panel |
-| [Running a Mission]({{< ref "07-running-a-mission" >}}) | Start/stop flow and simulation mode behavior |
+| [Interface Overview]({{< ref "01-interface-overview" >}}) | Tool-stripe layout, center tabs, top bar, and panel persistence |
+| [Mission Panel (Left)]({{< ref "02-mission-panel" >}}) | Mission list, setup/shutdown flags, rename, and ordering |
+| [Flowchart Editor (Center)]({{< ref "03-flowchart-editor" >}}) | Node editing, keyboard shortcuts, and where toolbar controls actually live |
+| [Step Library and Step Docs (Right)]({{< ref "04-step-library" >}}) | Step search, grouping, drag-and-drop, and inline documentation panel |
+| [Settings, Robot Config, and Map Editing]({{< ref "05-settings-modal" >}}) | Settings Modal (Project + Keybindings tabs), Robot Config Panel, map editor, start pose |
+| [Tool Panels (Bottom and Right)]({{< ref "06-floating-panels" >}}) | Logs, Table Visualization, path planning, Arm Visualizer, and Timing panel |
+| [Running a Mission]({{< ref "07-running-a-mission" >}}) | Run configurations, start/stop/debug flow |
 | [Projects List]({{< ref "08-projects-list" >}}) | Navigate back to the projects overview |
+| [Advanced Internals]({{< ref "09-advanced-internals" >}}) | Technical internals: backends, run configurations, simulation modes, maps, and replay |
+| [Python Code Editor]({{< ref "10-code-editor" >}}) | Full CodeMirror 6 Python editor embedded in the center panel |
+| [Run Configurations]({{< ref "11-run-configurations" >}}) | Named bundles of run flags stored in `raccoon.project.yml` |
+| [Localization Replay]({{< ref "12-localization-replay" >}}) | Frame-by-frame playback of recorded localization runs in the Table Visualization panel |
+| [Arm Visualizer Panel]({{< ref "13-arm-panel" >}}) | 3D joint inspector and IK controller for robotic arm chains |

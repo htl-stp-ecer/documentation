@@ -1,7 +1,7 @@
 ---
 title: "Firmware"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 7
 ---
@@ -24,8 +24,9 @@ This section documents the firmware running on the STM32 and the full data pipel
 
 | Repository | Location |
 |---|---|
-| STM32 firmware | `Firmware-Stp/` |
+| STM32 firmware | `stm32-data-reader/firmware/` |
 | Pi-side SPI bridge | `stm32-data-reader/` |
-| libstp hardware abstraction | `library/modules/libstp-platforms/wombat/` |
-| raccoon-transport (LCM wrapper) | `library/raccoon-transport/` |
+| raccoon-transport (LCM wrapper) | `stm32-data-reader/raccoon-transport/` |
 | Shared SPI protocol header | `stm32-data-reader/shared/spi/pi_buffer.h` |
+
+> **Note:** The firmware previously lived in a separate `Firmware-Stp/` directory at the repository root. It has been merged into `stm32-data-reader/firmware/`. Any path references to `Firmware-Stp/` in older notes or scripts are stale and will not work.

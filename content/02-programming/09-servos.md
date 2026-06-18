@@ -1,9 +1,9 @@
 ---
 title: "Servos"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 10
+weight: 13
 ---
 
 # Servos
@@ -140,11 +140,56 @@ shake_servo(Defs.claw_servo, duration=2.0, angle_a=30, angle_b=135)
 
 ### Slow Servo
 
-Move to a position at a controlled speed (degrees per second) — useful for gentle placement. By default, `slow_servo` uses ease-in-ease-out interpolation, which smoothly accelerates and decelerates the servo for fluid motion:
+Move to a position at a controlled speed (degrees per second) — useful for gentle placement.
+The default easing is `Easing.EASE_IN_OUT` (smoothstep: 3t² − 2t³), which gives gentle acceleration
+and deceleration. You can select a different curve with the `easing` parameter:
 
 ```python
-slow_servo(Defs.my_servo, angle=90, speed=30.0)   # 30 degrees/sec (slower than default 60)
+from raccoon.step.servo import slow_servo, Easing
+
+# Default: ease-in-ease-out at 60 deg/s
+slow_servo(Defs.my_servo, angle=90, speed=60.0)
+
+# Constant speed — no acceleration/deceleration
+slow_servo(Defs.my_servo, angle=90, speed=45.0, easing=Easing.LINEAR)
+
+# Fast start, gentle stop
+slow_servo(Defs.my_servo, angle=90, speed=80.0, easing=Easing.EASE_OUT)
 ```
+
+**How interpolation is applied:**
+
+For the four built-in `Easing` enum members (`LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_OUT`),
+`slow_servo` calls `servo_ref.set_smooth_position()` and the **firmware** handles the easing
+curve entirely on the STM32. The Python side only sets the target and waits — no per-tick Python
+loop runs.
+
+If you pass a **custom Python callable** instead of an `Easing` member, the Python side steps
+through intermediate positions at ~10 Hz (100 ms per tick), calling your function with normalised
+time `t ∈ [0, 1]` and commanding the interpolated angle each tick.
+
+#### Easing enum
+
+| Variant | Curve | When to use |
+|---------|-------|-------------|
+| `Easing.LINEAR` | Constant speed | Mechanisms where you want a predictable, uniform rate |
+| `Easing.EASE_IN` | Slow start, fast end (quadratic) | Build-up moves where momentum matters |
+| `Easing.EASE_OUT` | Fast start, slow end (quadratic) | Soft landings — place objects gently |
+| `Easing.EASE_IN_OUT` | Smoothstep (3t²−2t³) — **default** | General-purpose: natural, fluid motion |
+| `Easing.EASE_IN_OUT_COSINE` | Cosine-based ease-in-out | Similar to smoothstep, slightly softer peaks |
+
+You can also pass any Python callable with signature `(t: float) -> float` for fully custom curves.
+
+Import: `from raccoon.step.servo import Easing` (also exported from top-level `raccoon`).
+
+#### Parameters of `slow_servo`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `servo` | `Servo` or `ServoPreset` | required | The servo to move |
+| `angle` | `float` | required | Target angle in degrees |
+| `speed` | `float` | `60.0` | Movement speed in degrees per second |
+| `easing` | `Easing` or callable | `Easing.EASE_IN_OUT` | Interpolation curve |
 
 ### Disable All Servos
 
@@ -153,6 +198,62 @@ Turn off all servo outputs (servos go limp):
 ```python
 fully_disable_servos()
 ```
+
+## Builder Pattern and Step Chaining
+
+Every servo step factory (`slow_servo`, `shake_servo`, `fully_disable_servos`) returns a
+**builder object**, not a plain Step. The builder lets you chain optional modifiers before the step
+is executed:
+
+```python
+from raccoon.step.servo import slow_servo, Easing
+
+# All arguments in one call
+slow_servo(Defs.arm, angle=90, speed=45.0)
+
+# Equivalent: chain .angle() and .speed() after construction
+slow_servo().servo(Defs.arm).angle(90).speed(45.0)
+
+# Add an anomaly callback (called if the step takes unexpectedly long)
+slow_servo(Defs.arm, angle=90, speed=45.0).on_anomaly(
+    lambda step, duration: print(f"Servo move took {duration:.2f}s")
+)
+
+# Skip timing instrumentation for this step
+slow_servo(Defs.arm, angle=90).skip_timing()
+```
+
+All builder methods return `self`, so you can chain freely. The step is built and run lazily when
+it is added to a `seq()` or `parallel()` and executed by the mission runner.
+
+The same pattern applies to `shake_servo()` and `fully_disable_servos()`.
+
+### ServoPreset runtime properties
+
+`ServoPreset` exposes three read-only runtime properties:
+
+```python
+from raccoon.hal import Servo
+from raccoon.step.servo import ServoPreset
+
+arm = ServoPreset(Servo(port=1), positions={"down": 10, "up": 105}, offset=5)
+
+# Raw Servo device for direct hardware access
+arm.device          # Servo(port=1)
+
+# Current mounting offset in degrees
+arm.offset          # 5.0
+
+# Position name → angle mapping (before offset is applied)
+arm.positions       # {"down": 10, "up": 105}
+
+# The offset is added when the position is called, not when .positions is read
+arm.up.value        # 110.0  (105 + offset 5)
+```
+
+Use `arm.device` when you need to call raw HAL methods (`enable()`, `disable()`) directly.
+Use `arm.positions` to inspect the configured angles programmatically — e.g. to verify that the
+YAML was parsed correctly during a setup check.
 
 ## Servo Power States
 
@@ -240,7 +341,7 @@ parallel(
 Always home your servos in the setup mission so they're in a known position:
 
 ```python
-class M00SetupMission(Mission):
+class M000SetupMission(SetupMission):
     def sequence(self) -> Sequential:
         return seq([
             Defs.claw.closed(),

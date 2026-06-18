@@ -1,9 +1,9 @@
 ---
 title: "UI Steps & Screens"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 13
+weight: 17
 ---
 
 # UI Steps & Screens
@@ -64,8 +64,10 @@ class MyMissionStep(UIStep):
         # Text input
         name = await self.input_text("Enter robot name")
 
-        # Slider input
+        # Slider input — returns float | None (None if user cancels)
         speed = await self.input_slider("Set speed", min=0, max=100, default=50)
+        if speed is not None:
+            robot.drive.set_speed(speed / 100.0)
 
         # Multiple choice — returns the selected option
         choice = await self.choose("Pick a strategy",
@@ -96,17 +98,33 @@ class MyStep(UIStep):
             icon_name="check_circle",
         ))
 
-        # Confirmation dialog
-        result = await self.show(ConfirmScreen(
+        # Confirmation dialog — returns True (confirmed) or False (cancelled)
+        confirmed = await self.show(ConfirmScreen(
             title="Dangerous Action",
             message="This will reset calibration. Continue?",
             confirm_label="Yes, reset",
             cancel_label="Cancel",
         ))
-        if result.confirmed:
+        if confirmed:
             # ... reset calibration
             pass
 ```
+
+**`ConfirmScreen` constructor parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | `str` | — | **Required.** Screen title. |
+| `message` | `str` | — | **Required.** Body text. |
+| `confirm_label` | `str` | `"Confirm"` | Label on the confirmation button. |
+| `cancel_label` | `str` | `"Cancel"` | Label on the cancel button. |
+| `confirm_style` | `str` | `"success"` | Button style: `"success"`, `"danger"`, `"primary"`, etc. |
+| `icon_name` | `str` | `"help_outline"` | Material icon name. |
+| `icon_color` | `str` | `"blue"` | Icon color. |
+
+**Return type:** `bool` — `True` when the user taps the confirm button, `False` when they tap cancel. The physical Wombat button acts as the confirm button (`_primary_button_id = "confirm"`).
+
+> **Common mistake:** `result = await self.show(ConfirmScreen(...))` then `result.confirmed` raises `AttributeError: 'bool' object has no attribute 'confirmed'`. The result is already the boolean — use `if result:` or `if confirmed:` directly.
 
 ### Progress & Status
 
@@ -124,6 +142,7 @@ class MyStep(UIStep):
             for i in range(100):
                 ctx.screen.progress = i          # 0-100 integer, shown as percentage
                 ctx.screen.message = f"Motor {i // 25 + 1} of 4..."
+                ctx.screen.status = f"{i}% complete"  # optional subtitle line
                 await ctx.screen.refresh()
                 await asyncio.sleep(0.05)
 
@@ -165,7 +184,8 @@ class MyStep(UIStep):
         threshold = result.value  # SliderInputResult
 
         # Multiple choice — choices are (id, label) or (id, label, description) tuples
-        result = await self.show(ChoiceScreen(
+        # Returns the selected id string, or None if cancelled
+        selected = await self.show(ChoiceScreen(
             title="Calibration Set",
             message="Which surface are you calibrating for?",
             choices=[
@@ -175,8 +195,22 @@ class MyStep(UIStep):
             ],
             cancel_label="Cancel",
         ))
-        selected = result.choice  # Returns the chosen id string
+        if selected == "ground":
+            pass  # handle ground surface
+        elif selected == "upper":
+            pass  # handle upper platform
 ```
+
+**`ChoiceScreen` return type:** `str | None` — the `id` string from the selected tuple (first element), or `None` if the user tapped the cancel button. The result is a plain string; there is no `.choice` attribute.
+
+**`ChoiceScreen` constructor parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | `str` | — | **Required.** Screen title. |
+| `message` | `str` | — | **Required.** Prompt text above the choices. |
+| `choices` | `list[tuple]` | — | **Required.** List of `(id, label)` or `(id, label, description)` tuples. Each `id` must be unique. |
+| `cancel_label` | `str \| None` | `"Cancel"` | Label for the cancel button. Pass `None` to hide the cancel button entirely. |
 
 ### Wait-for-Button Screen
 
@@ -390,6 +424,7 @@ All widgets are imported from `raccoon.ui.widgets`.
 | `Card(children)` | Card container | `title`, `padding` |
 | `Split(left, right)` | Side-by-side layout | `ratio` — tuple of ints, e.g. `(1, 1)` or `(5, 3)` |
 | `Expanded(child)` | Fill available space | `flex` weight |
+| `Container(children)` | Colored backdrop | `bg_color` (hex or named color), `padding` (px); fills all available space |
 
 ## Event Decorators
 
@@ -491,11 +526,20 @@ async with self.showing(ProgressScreen(message="Calibrating...")) as ctx:
 Show a screen while running a coroutine. Screen stays visible until the task completes:
 
 ```python
+# Callable form — function called internally
 result = await self.run_with_ui(
     ProgressScreen("Running diagnostics..."),
-    self.run_diagnostics,   # async method
+    self.run_diagnostics,   # async method / callable
+)
+
+# Coroutine form — pass a coroutine object directly
+result = await self.run_with_ui(
+    ProgressScreen("Calibrating..."),
+    self.do_calibration()   # already-created coroutine
 )
 ```
+
+Both forms are supported. Pass either a callable (it will be called with no arguments) or an already-created coroutine object.
 
 ## The `_primary_button_id` Pattern
 
@@ -567,22 +611,28 @@ From the actual calibration system — measure, confirm, retry if needed:
 class CalibrateStep(UIStep):
     async def _execute_step(self, robot):
         while True:
-            # Step 1: Measure
+            # Step 1: Measure on a custom screen (white / black surfaces)
             white = await self.show(MeasureScreen(port=0, surface="white"))
             black = await self.show(MeasureScreen(port=0, surface="black"))
 
-            # Step 2: Confirm
-            result = await self.show(ConfirmScreen(
-                white_value=white.value,
-                black_value=black.value,
+            # Step 2: Confirm — ConfirmScreen is UIScreen[bool] and returns
+            # a plain bool. Its constructor takes (title, message, ...) —
+            # there are no white_value/black_value parameters.
+            confirmed = await self.show(ConfirmScreen(
+                title="Save Calibration?",
+                message=f"White={white.value:.0f}  Black={black.value:.0f}. Save?",
+                confirm_label="Save",
+                cancel_label="Re-measure",
             ))
 
-            if result.confirmed:
+            if confirmed:
                 # Save and exit
-                store_calibration(result)
+                store_calibration(white.value, black.value)
                 break
             # Otherwise loop and re-measure
 ```
+
+> **Important:** `ConfirmScreen` is typed `UIScreen[bool]`. `await self.show(ConfirmScreen(...))` returns a plain `bool` — `True` when the user taps the confirm button, `False` when they tap cancel. There is no `.confirmed` attribute on the result; using `result.confirmed` raises `AttributeError`.
 
 ### Wait-for-Light with State Machine
 
@@ -618,6 +668,53 @@ class DriveWithFeedback(UIStep):
         ))
 ```
 
+## Setup Timer Integration
+
+During a `SetupMission` — the mission that runs before the competition starts — raccoon automatically injects a countdown timer into every rendered screen. The timer shows the remaining setup time in seconds and is visible on all `UIScreen` instances without any extra code in your screens.
+
+Two public functions let you control the timer programmatically:
+
+```python
+from raccoon.ui.step import set_setup_timer_paused, reset_setup_timer
+```
+
+### `set_setup_timer_paused(paused: bool)`
+
+Pause or resume the countdown.
+
+- `set_setup_timer_paused(True)` — freezes the timer. Elapsed time stops accumulating. The displayed value stays constant.
+- `set_setup_timer_paused(False)` — resumes from where it was paused.
+- **No-op** when called outside a `SetupMission` (e.g. in a regular mission or tests). Safe to call unconditionally.
+
+**When to use:** The Wait-for-Light step pauses the timer while armed so that the remaining setup time is not consumed during the countdown wait.
+
+### `reset_setup_timer()`
+
+Restart the countdown from its full configured duration (`SetupMission.setup_time`) and un-pause.
+
+- **No-op** outside a `SetupMission`.
+
+**When to use:** If the user aborts and re-enters the setup flow, call `reset_setup_timer()` so they see the full timer again.
+
+### How the timer works
+
+The timer state is stored in a `ContextVar` (`_active_setup_timer`) set by `SetupMission.setup_timer_context()`. Because it is a `ContextVar`, the value is automatically available to any screen rendered in that async context — you do not pass it explicitly. Outside a `SetupMission`, the var is `None` and the timer is simply not rendered.
+
+```python
+# Example: pause timer during a critical measurement
+from raccoon.ui.step import set_setup_timer_paused
+
+class WaitForLightStep(UIStep):
+    async def _execute_step(self, robot):
+        # Freeze timer while waiting for the start light
+        set_setup_timer_paused(True)
+        await self.show(WaitForButtonScreen("Waiting for light..."))
+        # Resume when done
+        set_setup_timer_paused(False)
+```
+
+---
+
 ## When to Use UI Steps
 
 | Situation | Use |
@@ -630,5 +727,6 @@ class DriveWithFeedback(UIStep):
 | Calibration workflow | Custom screen with `read_sensor()` + `ResultsTable` |
 | Visual feedback during autonomous | `self.showing(ProgressScreen(...))` context manager |
 | Multi-step wizard | Chain multiple `self.show()` calls with different screens |
+| Pause setup timer during armed state | `set_setup_timer_paused(True)` / `set_setup_timer_paused(False)` |
 
 > **Tip:** Start with the quick helpers (`message`, `confirm`, `input_number`). Only build custom screens when you need live sensor data, complex layouts, or multi-step flows.

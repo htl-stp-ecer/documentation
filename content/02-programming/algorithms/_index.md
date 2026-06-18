@@ -1,7 +1,7 @@
 ---
 title: "Deep Dives"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 20
 ---
@@ -12,7 +12,8 @@ This section covers the key algorithms and techniques that power LibSTP's sensor
 
 | Page | What It Does |
 |------|-------------|
-| [Line Following]({{< ref "line-following" >}}) | PID-based edge tracking with profiled and directional variants |
-| [Lineup]({{< ref "lineup" >}}) | Single-pass geometric line alignment |
+| [Line Following]({{< ref "line-following" >}}) | PID-based edge tracking with profiled, directional, and lateral variants |
+| [Lineup]({{< ref "lineup" >}}) | Single-pass geometric line alignment for black and white surfaces |
 | [IR Sensor Calibration (K-Means)]({{< ref "ir-calibration" >}}) | Clustering-based threshold detection for IR sensors |
 | [Wait for Light]({{< ref "wait-for-light" >}}) | Kalman-filtered start lamp detection with test/arm workflow |
+| [Wall Alignment]({{< ref "wall-alignment" >}}) | IMU-based wall impact detection and heading reset |

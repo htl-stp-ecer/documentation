@@ -1,9 +1,9 @@
 ---
 title: "Stop Conditions"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 6
+weight: 8
 ---
 
 # Stop Conditions
@@ -20,15 +20,64 @@ drive_forward(speed=0.8).until(on_black(Defs.front.right))
 |-----------|---------------|
 | `on_black(sensor, threshold=0.7)` | IR sensor reads black |
 | `on_white(sensor, threshold=0.7)` | IR sensor reads white |
-| `over_line(sensor)` | Sensor crosses a line (black then white) — shorthand for `on_black(sensor) + on_white(sensor)` |
+| `over_line(sensor, black_threshold=0.7, white_threshold=0.7)` | Sensor crosses a line (black then white) — shorthand for `on_black(sensor, black_threshold) + on_white(sensor, white_threshold)` |
 | `after_seconds(s)` | Fixed time elapsed |
-| `after_cm(cm)` | Distance traveled (via odometry) |
+| `after_cm(cm, absolute=False)` | Distance traveled (via odometry path length) |
+| `after_forward_cm(cm, absolute=False)` | Signed forward displacement relative to robot's heading at condition start |
+| `after_lateral_cm(cm, absolute=False)` | Signed lateral displacement — positive is left on mecanum/omni drivetrains |
 | `after_degrees(deg)` | Heading changed by N degrees (via IMU) |
 | `on_digital(sensor, pressed=True)` | Digital sensor state |
 | `on_analog_above(sensor, threshold)` | Analog reading above value |
 | `on_analog_below(sensor, threshold)` | Analog reading below value |
 | `stall_detected(motor, threshold_tps=10, duration=0.25)` | Motor is stalling |
 | `custom(fn)` | Your own lambda/function |
+
+### `after_cm` — Path Length Distance
+
+`after_cm(cm)` uses the odometry **path length** (cumulative total distance traveled) and works correctly regardless of direction (forward, backward, strafing, curved paths).
+
+The optional `absolute=True` mode measures from the odometry origin (last `reset()`) rather than from when the condition started. Use relative mode (the default) when you care about "how far since this step began"; use absolute mode when you want to gate on total mission displacement:
+
+```python
+# Relative (default): stop after traveling 30 cm from now
+drive_forward(speed=0.8).until(after_cm(30))
+
+# Absolute: stop when total path length from last reset reaches 50 cm
+drive_forward(speed=0.8).until(after_cm(50, absolute=True))
+```
+
+### `after_forward_cm` and `after_lateral_cm` — Axis Displacement
+
+`after_forward_cm(cm)` and `after_lateral_cm(cm)` measure **signed displacement along a body axis** rather than cumulative path length. The axis is fixed to the robot's heading at the moment the condition starts — any turning that happens afterward does not rotate the axis.
+
+- `after_forward_cm(cm)`: positive triggers after moving forward; negative triggers after moving backward.
+- `after_lateral_cm(cm)`: positive triggers after moving left; negative triggers after moving right. Only meaningful on drivetrains that support lateral motion (mecanum / omni). On a differential drive the lateral component stays near zero unless the robot rotates and then drives.
+
+```python
+# Stop after 20 cm of net forward progress (ignores any side drift)
+drive_forward(speed=0.8).until(after_forward_cm(20))
+
+# Stop after 15 cm of lateral travel to the left (mecanum strafe)
+strafe_left(speed=0.5).until(after_lateral_cm(15))
+
+# Stop after moving 10 cm backward
+drive_backward(speed=0.5).until(after_forward_cm(-10))
+```
+
+Both accept `absolute=True` to read displacement from the odometry origin instead of from condition start:
+
+```python
+# Stop when the robot is 30 cm forward of its starting point
+drive_forward(speed=0.8).until(after_forward_cm(30, absolute=True))
+```
+
+**When to use which:**
+
+| Condition | Measures | Use case |
+|-----------|---------|---------|
+| `after_cm(cm)` | Total path length | Any motion — works on curves, backwards, strafing |
+| `after_forward_cm(cm)` | Net forward component | Mecanum: want to stop after N cm of actual forward progress, not total travel |
+| `after_lateral_cm(cm)` | Net lateral component | Mecanum strafe: stop after N cm sideways |
 
 ## Combining Conditions
 

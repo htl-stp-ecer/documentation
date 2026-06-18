@@ -1,7 +1,7 @@
 ---
 title: "Programming"
 author: "Florian Schwanzer"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 3
 ---
@@ -39,6 +39,7 @@ graph TD
 | [Project Structure]({{< ref "01-project-structure" >}}) | Files, folders, and configuration |
 | [Robot Definition]({{< ref "02-robot-definition" >}}) | Declaring hardware, kinematics, and drive |
 | [Missions]({{< ref "03-missions" >}}) | Writing and sequencing missions |
+| [Synchronizing Two Robots]({{< ref "03a-synchronizing-robots" >}}) | Multi-robot coordination over the network |
 | [Steps DSL]({{< ref "04-steps" >}}) | The motion/action building blocks |
 | [Stop Conditions]({{< ref "04a-stop-conditions" >}}) | Combining conditions with OR, AND, THEN |
 | [Custom Steps]({{< ref "05-custom-steps" >}}) | Writing your own reusable steps |
@@ -46,11 +47,20 @@ graph TD
 | [Drive System]({{< ref "07-drive-system" >}}) | Kinematics, velocity control, PID tuning |
 | [Odometry]({{< ref "08-odometry" >}}) | Position tracking and heading reference |
 | [Servos]({{< ref "09-servos" >}}) | Servo control and presets |
+| [Motor Steps]({{< ref "09a-motor-steps" >}}) | Direct motor control for arms, conveyors, and mechanism actuators |
 | [Calibration]({{< ref "10-calibration" >}}) | Motor and sensor calibration workflow |
-| [UI Steps & Screens]({{< ref "12-ui-steps" >}}) | Touchscreen UI, widgets, custom screens |
 | [Advanced Topics]({{< ref "11-advanced" >}}) | Async, timing, transport, debugging |
+| [UI Steps & Screens]({{< ref "12-ui-steps" >}}) | Touchscreen UI, widgets, custom screens |
+| [Configuration Reference]({{< ref "13-configuration-reference" >}}) | Complete reference for every YAML configuration key |
+| [IMU]({{< ref "14-imu" >}}) | Inertial measurement unit integration and heading reference |
+| [Competition Ready]({{< ref "15-competition-ready" >}}) | Checklist and tuning guide for competition day |
+| [Simulator And Testing]({{< ref "16-simulator-testing" >}}) | Running missions in the built-in simulator and writing pytest fixtures |
+| [Table Maps]({{< ref "17-table-maps" >}}) | Field map format, coordinate conventions, and IDE integration |
+| [YAML Includes]({{< ref "18-yaml-includes" >}}) | `!include` and `!include-merge` semantics and write-back behavior |
 | [Motion Flow and Kinematics]({{< ref "19-motion-flow-and-kinematics" >}}) | How motion profiles, drive control, kinematics, HAL, and firmware fit together |
 | [Arm Kinematics and Code Generation]({{< ref "20-arm-kinematics-and-codegen" >}}) | The actual `ArmChain` pipeline: IK, servo mapping, guards, and runtime behavior |
+| [Smooth Path and Spline Motion]({{< ref "21-smooth-path" >}}) | Continuous fluid motion across waypoints using `smooth_path()` and `spline()` |
+| [Localization and Resync]({{< ref "22-localization-resync" >}}) | Particle-filter localization, drift correction, and resync step injection |
 
 ### Deep Dives
 

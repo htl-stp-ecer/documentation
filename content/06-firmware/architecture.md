@@ -1,7 +1,7 @@
 ---
 title: "Architecture Overview"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 1
 ---
@@ -16,7 +16,7 @@ The STM32 has no operating system. Its interrupt controller runs at known, deter
 
 ## Responsibility Split
 
-### STM32F427 (firmware, `Firmware-Stp/`)
+### STM32F427 (firmware, `stm32-data-reader/firmware/`)
 
 The STM32 owns everything that touches physical hardware at high frequency:
 
@@ -31,7 +31,7 @@ The STM32 owns everything that touches physical hardware at high frequency:
 - **Odometry computation** (velocity and position in world frame, if kinematics config is loaded)
 - **SPI slave interface** to the Raspberry Pi (SPI2, DMA-driven, circular mode)
 
-The STM32 does not run any user code. It executes only the firmware compiled from `Firmware-Stp/`.
+The STM32 does not run any user code. It executes only the firmware compiled from `stm32-data-reader/firmware/`.
 
 ### Raspberry Pi (user code, libstp, stm32-data-reader)
 
@@ -56,18 +56,25 @@ The MCU is connected to the Pi via:
 When the STM32 powers on or resets:
 
 1. `HAL_Init()` initialises the HAL tick (SysTick at 1 ms).
-2. `SystemClock_Config()` configures the PLL for 180 MHz operation.
-3. All peripherals are initialised: GPIO, DMA, ADC1, ADC2, SPI2, SPI3, TIM1, TIM3, TIM6, TIM8, TIM9.
-4. `systemTimerStart()` starts TIM6 (the 1 µs system tick) and arms the BEMF and analog sampling schedules.
-5. `initPiCommunication()` arms the first SPI2 DMA transfer — from this point the STM32 is ready to receive commands and send sensor data.
-6. `initMotors()` initialises all PID controller state.
-7. `setupImu()` runs the MPU-9250 self-test to calibrate gyro/accel biases, initialises the InvenSense Motion Processing Library (MPL), loads the DMP firmware, and starts the sensor fusion pipeline at 50 Hz.
+2. `SystemClock_Config()` configures the PLL for 180 MHz operation. Flash cache (instruction + data) is enabled; prefetch is disabled as recommended by ST application note AN4073 to reduce ADC noise from the Flash AHB bus.
+3. All peripherals are initialised: GPIO, DMA, ADC1, ADC2, SPI2, SPI3, TIM1, TIM3, TIM6, TIM8, TIM9, and USART3 (the debug serial port to the Pi).
+4. `startContinuousAnalogSampling()` kicks off continuous circular DMA mode on ADC1. This must happen **before** `systemTimerStart()` so the oversampling accumulators have data by the time the timer ISR fires for the first time.
+5. `systemTimerStart()` starts TIM6 (the 1 µs system tick), which drives the BEMF and analog output scheduling.
+6. `initPiCommunication()` arms the first SPI2 DMA transfer — from this point the STM32 is ready to receive commands and send sensor data.
+7. `initMotors()` initialises all PID controller state.
+8. `setupImu()` runs the MPU-9250 self-test to calibrate gyro/accel biases, initialises the InvenSense Motion Processing Library (MPL), loads the DMP firmware, and starts the sensor fusion pipeline at 50 Hz.
 
 The main loop then runs forever, handling:
-- Servo position updates (10 Hz)
+- Servo position updates (CCR writes are PWM-shadow-buffered, so the timing is fine even if the loop rate varies)
 - PID gain updates from the `updateFlags` bitmask set by the SPI interrupt
+- IMU calibration save requests (`PI_BUFFER_UPDATE_SAVE_IMU_CAL` flag — calls `cal_save_to_flash()`, currently a no-op)
+- Kinematics config updates and odometry reset
+- Motor position reset on-STM32 via `motorPositionReset` bitmask
+- Feature flag updates (e.g., `FEATURE_BEMF_DISABLE`)
 - IMU orientation matrix updates
 - IMU polling (`readImu()`)
-- SPI buffer refresh (`updatingAnalogValuesInSpiBuffer()`, `updatingMotorsInSpiBuffer()`)
+- SPI buffer refresh (`updatingMotorsInSpiBuffer()`) and odometry output
 
 The motor control loop itself does **not** run in the main loop — it is triggered exclusively by the ADC2 conversion-complete interrupt (`HAL_ADC_ConvCpltCallback`) which fires after each BEMF sample.
+
+The firmware prints a `[stp] hb #N` heartbeat line over UART3 every 5 seconds containing the current motor modes, positions, BEMF readings, and conversion count. The Pi-side `UartMonitor` tails this output and forwards it to the logger.

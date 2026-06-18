@@ -1,9 +1,9 @@
 ---
 title: "Missions"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 4
+weight: 5
 ---
 
 # Missions
@@ -12,14 +12,14 @@ A mission is a self-contained task your robot performs — "drive to the cone an
 
 ## Writing a Mission
 
-Every mission extends the `Mission` base class and implements a `sequence()` method that returns a `Sequential` of steps:
+Every mission extends the `Mission` base class and implements a `sequence()` method that returns a step tree:
 
 ```python
 from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M01DriveToConeMission(Mission):
+class M010DriveToConeMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(25),
@@ -40,7 +40,7 @@ from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M01DriveToConeMission(Mission):
+class M010DriveToConeMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             # Start position: against the wall
@@ -185,6 +185,180 @@ do_while_active(
 )
 ```
 
+### Conditional Branching with `if_then()`
+
+`if_then()` evaluates a predicate at runtime and executes one of two branches. The predicate receives the robot instance and must return a boolean quickly — it runs synchronously and should not do long-running work.
+
+```python
+from raccoon import *
+
+# Sensor-gated branch: take different paths depending on what the robot detects
+if_then(
+    lambda robot: robot.defs.front_right_ir.read() > 500,
+    then_step=turn_left(90),    # sensor above threshold: go left
+    else_step=turn_right(90),   # sensor below threshold: go right
+)
+```
+
+The `else_step` is optional — omitting it means "do nothing on the false branch":
+
+```python
+# Only open the claw if we're close enough
+if_then(
+    lambda robot: robot.defs.distance_sensor.read() < 300,
+    then_step=Defs.claw.open(),
+)
+```
+
+Resource validation spans both branches, because either may execute. If both branches claim the same hardware, the framework raises at validation time.
+
+### Background Steps
+
+`background()` starts a step asynchronously and returns immediately, letting the next step in the sequence proceed while the background step runs concurrently. Use `wait_for_background()` to synchronize later:
+
+```python
+from raccoon import *
+
+seq([
+    # Launch the servo move, then immediately start driving — no waiting
+    background(Defs.arm.down(), name="arm"),
+    drive_forward(30),
+    # Wait for the arm to finish before continuing
+    wait_for_background("arm"),
+    Defs.claw.open(),
+])
+```
+
+Background steps differ from `parallel()` in two ways:
+
+- They do **not** block the sequence — execution continues to the next step immediately.
+- They are **preemptable**: if a later foreground step claims a resource that the background step holds, the background step is cancelled with a warning. The foreground step takes priority.
+
+`wait_for_background()` without a name waits for **all** currently running background steps:
+
+```python
+seq([
+    background(scan_step()),
+    background(servo_step()),
+    do_something_else(),
+    wait_for_background(),   # wait for both scan_step and servo_step
+])
+```
+
+If a background step finishes before `wait_for_background()` is reached, the wait returns immediately.
+
+### Timeout Steps
+
+Wrap any step with a hard time limit using `timeout()`. If the step completes within the budget it finishes normally; if it exceeds the limit, the step is cancelled and `TimeoutError` propagates up the sequence, stopping the mission:
+
+```python
+from raccoon import *
+
+# Give the arm motor 5 seconds to reach position — cancel if it stalls
+timeout(
+    motor_move_to(Defs.arm_motor, position=300, velocity=800),
+    seconds=5.0,
+)
+
+# Ensure the operator presses the button within 30 seconds
+timeout(wait_for_button(), seconds=30.0)
+```
+
+Use `timeout_or()` when you want a recovery action instead of an error:
+
+```python
+from raccoon import *
+
+# Try driving 30 cm; if stuck after 3 s, back up 5 cm instead
+timeout_or(
+    drive_forward(30),
+    seconds=3.0,
+    fallback=drive_backward(5),
+)
+```
+
+`timeout_or()` never raises — if the primary step times out, the fallback runs and the sequence continues normally.
+
+| Function | Timeout behavior |
+|----------|-----------------|
+| `timeout(step, seconds)` | Raises `TimeoutError` — mission stops |
+| `timeout_or(step, seconds, fallback)` | Runs `fallback` — mission continues |
+
+### Watchdog Timers
+
+Watchdogs are keepalive timers that cancel the mission if they are not "fed" within a deadline. Use them to detect stuck hardware: arm a watchdog before a critical phase, feed it after each step that must complete, and disarm it when the phase is done. If any step hangs and the feed never arrives, the watchdog fires, the mission is cancelled, and the shutdown mission runs.
+
+```python
+from raccoon import *
+
+seq([
+    start_watchdog("scoring", timeout=5.0),  # Arm: cancel if not fed within 5 s
+    drive_forward(30),
+    feed_watchdog("scoring"),                 # Feed: reset the deadline
+    drive_forward(30),
+    feed_watchdog("scoring"),                 # Feed again for the next step
+    stop_watchdog("scoring"),                 # Disarm: phase complete
+])
+```
+
+| Step | Parameters | What it does |
+|------|-----------|-------------|
+| `start_watchdog(name, timeout)` | `name: str = "default"`, `timeout: float` | Arms a watchdog; fires after `timeout` seconds if not fed |
+| `feed_watchdog(name)` | `name: str = "default"` | Resets the deadline to `now + timeout` |
+| `stop_watchdog(name)` | `name: str = "default"` | Disarms the watchdog; no expiry can fire after this |
+
+Multiple watchdogs can run simultaneously by using distinct names. Feeding or stopping a non-existent watchdog logs a warning but does not raise.
+
+The `WatchdogManager` behind these steps is also used internally by the robot runner for `Mission.time_budget` deadlines (see the [Mission Budget](#mission-time-budget) section below). On expiry, the watchdog cancels the main-mission task via the same code path as the global `shutdown_in` timer — the shutdown mission still runs, motors are stopped, and the process exits cleanly.
+
+### Environment-Gated Steps
+
+`run_if_env()` and its named shortcuts let you conditionally skip steps based on the flags `raccoon run` was launched with. The gate is evaluated at execution time (not when the step tree is built), so it always reflects the actual run mode:
+
+| Guard step | Runs when... | CLI flag it mirrors |
+|-----------|-------------|---------------------|
+| `run_unless_no_calibrate(step)` | `--no-calibrate` was **not** passed | `raccoon run --no-calibrate` |
+| `run_unless_no_checkpoints(step)` | `--no-checkpoints` was **not** passed | `raccoon run --no-checkpoints` |
+| `run_if_debug(step)` | `--debug` was passed | `raccoon run --debug` |
+| `run_if_dev(step)` | `--dev` was passed | `raccoon run --dev` |
+| `run_if_env(step, var, equals, negate)` | Custom env-var gate | (any variable) |
+
+```python
+from raccoon import *
+
+class M000SetupMission(SetupMission):
+    setup_time = 120
+
+    def sequence(self) -> Sequential:
+        return seq([
+            # Skip calibration on fast development runs
+            run_unless_no_calibrate(calibrate(distance_cm=50)),
+
+            # Only show an interactive pause in debug mode
+            run_if_debug(wait_for_button("Check arm position")),
+
+            # A dev-only sanity hop
+            run_if_dev(drive_forward(5)),
+        ])
+```
+
+The typical workflow: develop and iterate with `raccoon run --no-calibrate --no-checkpoints` to skip the slow setup steps. Run without flags on the competition robot.
+
+The generic `run_if_env()` lets you gate on any environment variable:
+
+```python
+from raccoon.step.logic import run_if_env
+
+# Only run when MY_FLAG=1
+run_if_env(some_step(), "MY_FLAG")
+
+# Only run when DEMO_MODE is unset
+run_if_env(some_step(), "DEMO_MODE", equals=None)
+
+# Run unless MY_FLAG=1 (inverted)
+run_if_env(some_step(), "MY_FLAG", negate=True)
+```
+
 ### Inline Code with `run()`
 
 Execute arbitrary Python code as a step:
@@ -229,12 +403,20 @@ seq([
 ])
 ```
 
-## Setup Mission Pattern
+## Setup Mission
 
-The setup mission runs before the match starts. Common pattern:
+### Extending `SetupMission`
+
+The setup mission runs before the match starts. It **must** extend `SetupMission`, not plain `Mission`. The robot runner enforces this with a `TypeError` at startup if it receives a plain `Mission` instance:
 
 ```python
-class M00SetupMission(Mission):
+from raccoon import *
+from src.hardware.defs import Defs
+
+
+class M000SetupMission(SetupMission):
+    setup_time = 120  # 2-minute countdown shown on the UI
+
     def sequence(self) -> Sequential:
         return seq([
             # Home all servos to known positions
@@ -242,25 +424,122 @@ class M00SetupMission(Mission):
             Defs.claw.closed(),
             Defs.arm.up(),
 
-            # Run distance calibration
+            # Run distance calibration (skip with raccoon run --no-calibrate)
+            run_unless_no_calibrate(calibrate(distance_cm=50)),
+        ])
+```
+
+> `calibrate()` defaults to `distance_cm=30.0`. The example above passes `50` explicitly for a more accurate run — pass whatever distance your table allows.
+
+### `setup_time`: Countdown Timer
+
+Set `setup_time` (seconds, integer) as a class attribute to display a countdown in the UI during the entire setup phase. The clock ticks independently on the robot — no LCM messages required.
+
+```python
+class M000SetupMission(SetupMission):
+    setup_time = 120   # 120 seconds shown on every UI screen during setup
+```
+
+Set `setup_time = 0` (the default) to disable the timer.
+
+### Controlling the Timer with Steps
+
+By default the countdown starts the moment the setup mission begins. Use the timer control steps to defer the start until you are physically ready:
+
+| Step | What it does |
+|------|-------------|
+| `pause_setup_timer()` | Freezes the clock at its current remaining value |
+| `start_setup_timer()` | Resets to `setup_time` and starts counting (full duration from now) |
+| `resume_setup_timer()` | Unpauses the clock without resetting — continues from where it stopped |
+
+```python
+from raccoon import *
+
+class M000SetupMission(SetupMission):
+    setup_time = 120
+
+    def sequence(self) -> Sequential:
+        return seq([
+            # Freeze the clock — time is not running yet
+            pause_setup_timer(),
+
+            # Prepare hardware without burning setup time
+            Defs.claw.closed(),
+            Defs.arm.up(),
+
+            # Operator presses button: clock starts NOW, full 120 s remaining
+            wait_for_button("Ready? Press to start timer"),
+            start_setup_timer(),
+
+            # Run calibration while the countdown is live
             calibrate(distance_cm=50),
         ])
 ```
 
+All three steps are no-ops outside a `SetupMission` — you can leave them in shared step functions without worrying about calling context.
+
+### `pre_start_gate()`: Customizing the Wait-for-Light
+
+After the setup sequence completes, the robot normally waits for the start light signal before running main missions. Override `pre_start_gate()` to customize or bypass this:
+
+```python
+class M000SetupMission(SetupMission):
+    setup_time = 120
+
+    def sequence(self) -> Sequential:
+        return seq([calibrate(distance_cm=50)])
+
+    async def pre_start_gate(self, robot) -> None:
+        # Wait for a button press instead of the light sensor
+        from raccoon.step import wait_for_button
+        await wait_for_button("Press to start").run_step(robot)
+
+class QuickTestSetup(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([motor_off(Defs.arm_motor)])
+
+    async def pre_start_gate(self, robot) -> None:
+        pass  # Start immediately — no waiting
+```
+
+The default `pre_start_gate()` delegates to the robot's built-in wait-for-light / wait-for-button logic defined in `robot.physical`.
+
+## Mission Time Budget
+
+Each mission can declare a `time_budget` (seconds) as a class-level attribute. If the mission runs longer than its budget, the `WatchdogManager` cancels it and routes through the shutdown path — the shutdown mission still runs, subsequent missions do not.
+
+```python
+class M010ScoringMission(Mission):
+    time_budget = 30.0   # Cancel this mission if it exceeds 30 s
+
+    def sequence(self) -> Sequential:
+        return seq([
+            drive_forward(50),
+            Defs.claw.open(),
+            drive_backward(25),
+        ])
+```
+
+`time_budget = None` (the default) means no deadline. The budget watchdog is armed automatically by the robot runner — you do not need to call `start_watchdog()` manually for this use case.
+
 ## Mission Registration
 
-Missions are registered in the Robot class. This is salso automatically generated for you. **Don't edit this!** To change it, edit the `raccoon.project.yaml` file:
+Missions are registered in the Robot class. This is also automatically generated for you. **Don't edit this!** To change it, edit the `raccoon.project.yml` file:
 
 ```python
 class Robot(GenericRobot):
     # ...
-    setup_mission = M00SetupMission()         # Runs before start signal
+    setup_mission = M000SetupMission()        # Runs before start signal
     missions = [                               # Run in order after start
-        M01DriveToConeMission(),
-        M02CollectConeMission(),
-        M03CollectBotguyMission(),
+        M010DriveToConeMission(),
+        M020CollectConeMission(),
+        M030CollectBotguyMission(),
     ]
-    shutdown_mission = M99ShutdownMission()    # Runs when timer expires
+    shutdown_mission = M99ShutdownMission()    # Always runs at the end
 ```
 
-Missions execute in list order. If mission 1 finishes, mission 2 starts immediately. If the `shutdown_in` timer fires during any mission, that mission is cancelled and the shutdown mission runs.
+Missions execute in list order. If mission 1 finishes, mission 2 starts immediately.
+
+The **shutdown mission always runs** — both when all main missions complete normally and when the `shutdown_in` timer fires mid-mission. Use it for guaranteed cleanup (park motors, retract arms, turn off LEDs) regardless of how the match ended. Do not rely on it as an error-only path; it executes unconditionally.
+
+> If the `shutdown_in` timer fires during a mission, that mission is cancelled first, and then the shutdown mission runs.

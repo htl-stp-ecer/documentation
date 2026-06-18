@@ -1,7 +1,7 @@
 ---
 title: "IR Sensor Calibration (K-Means)"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 3
 ---

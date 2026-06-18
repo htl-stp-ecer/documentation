@@ -1,9 +1,9 @@
 ---
 title: "Custom Steps"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 6
+weight: 9
 ---
 
 # Custom Steps
@@ -37,7 +37,7 @@ Use it in a mission like any other step:
 ```python
 from src.steps.cone_container_steps import down_cone_container
 
-class M02CollectMission(Mission):
+class M020CollectMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(20),
@@ -101,6 +101,21 @@ from raccoon.step.annotation import dsl_step
 
 @dsl_step(tags=["custom"])
 class MyCustomStep(Step):
+    def __init__(self, value: float = 1.0) -> None:
+        super().__init__()
+        self._value = value
+
+    def _generate_signature(self) -> str:
+        """Return a unique string identity for this step instance.
+
+        Required on every Step subclass. The framework uses this string
+        as the key in the timing database — if two different steps share
+        the same signature, their timing records are merged and anomaly
+        detection becomes unreliable. Include all parameters that
+        materially change behavior.
+        """
+        return f"MyCustomStep(value={self._value:.2f})"
+
     async def _execute_step(self, robot: GenericRobot) -> None:
         """Called once when the step runs. Must be async."""
         # Your logic here
@@ -115,6 +130,8 @@ The `@dsl_step` decorator generates:
 - `MyCustomStepBuilder` — a builder class with fluent setters for every `__init__` parameter
 - `my_custom_step()` — a `snake_case` factory function you call in missions
 
+> **`_generate_signature()` is required.** The base class provides a fallback that returns `self.__class__.__name__`, but that means every instance of your step — regardless of parameters — shares the same timing bucket. If you have, say, `drive_forward(10)` and `drive_forward(50)` both using the default signature, the timing system thinks they are the same step and mixes their measurements. Always override it to include the parameters that distinguish different instances.
+
 If you don't need a generated builder (e.g., the step has no parameters), you can use `@dsl` instead to just register it for discovery without code generation:
 
 ```python
@@ -122,6 +139,9 @@ from raccoon.step.annotation import dsl
 
 @dsl(tags=["custom"])
 class SimpleStep(Step):
+    def _generate_signature(self) -> str:
+        return "SimpleStep()"
+
     async def _execute_step(self, robot: GenericRobot) -> None:
         # ...
         pass
@@ -146,6 +166,9 @@ class WaitForAnalogRange(Step):
         self.max_value = max_value
         self.poll_interval: float = 1.0 / poll_hz
 
+    def _generate_signature(self) -> str:
+        return f"WaitForAnalogRange(min={self.min_value}, max={self.max_value}, hz={int(1/self.poll_interval)})"
+
     async def _execute_step(self, robot: GenericRobot) -> None:
         while True:
             value = self.sensor.read()
@@ -169,7 +192,7 @@ wait_for_analog_range(Defs.light_sensor, min_value=1000, max_value=2000).skip_ti
 
 ### Example: Custom Motion Step (100 Hz Loop)
 
-For steps that need a tight control loop, use `MotionStep` as your base. It provides a fixed-rate 100 Hz update loop:
+For steps that need a tight control loop, use `MotionStep` as your base. It provides a fixed-rate update loop. The default rate is **100 Hz** — controlled by the class attribute `hz: int = 100`. Override it in your subclass to use a different rate (e.g. `hz = 50` for slower control loops that don't need full 100 Hz precision):
 
 ```python
 from raccoon import GenericRobot
@@ -181,17 +204,22 @@ from raccoon.step.motion.motion_step import MotionStep
 class DriveUntilBump(MotionStep):
     """Drive forward until the IMU detects a collision."""
 
+    hz = 100  # Update rate in Hz — override to change (e.g. hz = 50)
+
     def __init__(self, speed: float = 0.3, accel_threshold: float = 0.5) -> None:
         super().__init__()
         self.speed = speed
         self.accel_threshold = accel_threshold
+
+    def _generate_signature(self) -> str:
+        return f"DriveUntilBump(speed={self.speed:.2f}, accel_threshold={self.accel_threshold:.2f})"
 
     def on_start(self, robot: GenericRobot) -> None:
         """Called once before the loop starts."""
         self.drive = robot.drive
 
     def on_update(self, robot: GenericRobot, dt: float) -> bool:
-        """Called every 10ms. Return True when done."""
+        """Called every tick (1/hz seconds). Return True when done."""
         self.drive.set_desired_velocity(self.speed, 0, 0)
 
         accel = abs(robot.defs.imu.get_accel()[0])
@@ -208,6 +236,14 @@ class DriveUntilBump(MotionStep):
 ```
 
 This generates `drive_until_bump(speed=0.3, accel_threshold=0.5)` with `.speed()` and `.accel_threshold()` builder methods.
+
+The `hz` class attribute controls how often `on_update` is called. The framework targets `1/hz` seconds between calls; `dt` in `on_update` is the actual elapsed time since the previous call (in seconds) so you can use it for integration. Common values:
+
+| `hz` | Interval | When to use |
+|------|---------|------------|
+| `100` (default) | 10 ms | Tight motion control, fast sensor loops |
+| `50` | 20 ms | Slower control loops, vision-based feedback |
+| `25` | 40 ms | Very slow processes (e.g., temperature sensors) |
 
 ## Resource Declarations
 
@@ -236,7 +272,7 @@ src/
 │   ├── grabber_steps.py       # Grabber operations
 │   └── alignment_steps.py     # Custom alignment routines
 └── missions/
-    └── m01_mission.py          # Imports from steps/
+    └── m010_mission.py          # Imports from steps/
 ```
 
 Function-based steps can reference `Defs` directly (they're coupled to your robot's hardware). If you want portable steps that work across robots, accept hardware as parameters:

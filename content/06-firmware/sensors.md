@@ -1,34 +1,63 @@
 ---
 title: "Sensor Reading"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 4
 ---
 
 ## Analog Sensor Ports
 
-The Wombat exposes six general-purpose analog input ports (AIN0–AIN5) plus a battery voltage monitor. All seven are scanned by ADC1.
+The Wombat exposes six general-purpose analog input ports (AIN0–AIN5) plus a battery voltage monitor. All eight ADC1 inputs — including an internal VREFINT channel — are scanned continuously via circular DMA.
 
-**ADC1 channel assignments:**
+### ADC1 channel assignments
 
-| Port | GPIO | ADC channel | Rank |
-|---|---|---|---|
-| AIN0 | PB1 | ADC1_IN9 | 1 |
-| AIN1 | PC1 | ADC1_IN11 | 2 |
-| AIN2 | PC2 | ADC1_IN12 | 3 |
-| AIN3 | PC3 | ADC1_IN13 | 4 |
-| AIN4 | PC4 | ADC1_IN14 | 5 |
-| AIN5 | PC5 | ADC1_IN15 | 6 |
-| Battery | PC0 | ADC1_IN10 | 7 |
+| Port | GPIO | ADC1 channel | Rank | Sample time |
+|---|---|---|---|---|
+| AIN0 | PB1 | ADC1_IN9 | 1 | 112 cycles |
+| AIN1 | PC1 | ADC1_IN11 | 2 | 112 cycles |
+| AIN2 | PC2 | ADC1_IN12 | 3 | 112 cycles |
+| AIN3 | PC3 | ADC1_IN13 | 4 | 112 cycles |
+| AIN4 | PC4 | ADC1_IN14 | 5 | 112 cycles |
+| AIN5 | PC5 | ADC1_IN15 | 6 | 112 cycles |
+| Battery | PC0 | ADC1_IN10 | 7 | 480 cycles (max — high source impedance) |
+| VREFINT | internal | ADC_CHANNEL_VREFINT | 8 | 480 cycles (max — for VDDA compensation) |
 
-ADC1 is software-triggered, scan mode, 12-bit resolution. The six sensor channels use 112-cycle sample time; the battery voltage channel uses the maximum 480-cycle sample time for best accuracy (battery ADC connects through a resistor divider with higher source impedance).
+`ANALOG_SENSOR_COUNT` is defined as **8** (6 analog ports + battery + VREFINT).
 
-`sampleAnalogPorts()` is called periodically from the TIM6 interrupt at `ANALOG_SENSOR_SAMPLING_INTERVAL`. It calls `HAL_ADC_Start_DMA(&hadc1, ...)` which fills `analogReader.adcRaw[7]` via DMA2 stream 0.
+### Continuous oversampling with circular DMA
 
-The ADC completion callback for ADC1 sets a `NEW_DATA` flag in `analogReader.state`. The main loop's `updatingAnalogValuesInSpiBuffer()` then copies the raw counts directly into `txBuffer.analogSensor[6]` and `txBuffer.batteryVoltage` using `memcpy`, as these fields are adjacent in the struct.
+ADC1 runs in **continuous scan mode** with circular DMA (`DMAContinuousRequests = ENABLE`). `startContinuousAnalogSampling()` is called once at boot and never stopped. Each complete DMA cycle fills `adcDmaBuffer[8]` and triggers `HAL_ADC_ConvCpltCallback`, which accumulates samples into `adcAccum[8]` and increments `adcSampleCount`.
 
-**Battery voltage conversion** is performed on the Pi side in `SpiReal::readSensorData()`:
+The output rate is controlled by `ANALOG_OUTPUT_INTERVAL` (4000 µs = **250 Hz** output rate). On every main-loop iteration, `updatingAnalogValuesInSpiBuffer()` checks if any samples have accumulated, takes an atomic snapshot of `adcAccum[]` and `adcSampleCount`, resets the accumulators, and computes averages. This is oversampling: many raw ADC samples are averaged between output frames, reducing quantization noise.
+
+### VDDA compensation
+
+The eighth ADC1 rank is the internal **VREFINT** voltage reference (~1.21 V, independent of VDDA). By comparing the measured VREFINT count against the factory calibration value stored in Flash at `0x1FFF7A2A` (measured at exactly VDDA = 3.3 V, 30 °C), the firmware computes a real-time VDDA scale factor:
+
+```c
+// Factory VREFINT calibration (12-bit count at VDDA = 3.3V)
+#define VREFINT_CAL (*(volatile uint16_t*)0x1FFF7A2AU)
+
+// Updated every output frame from the oversampled average of rank 8
+uint32_t vrefintAvg = localAccum[7] / count;
+if (vrefintAvg > 0)
+    vddaScale = (float)VREFINT_CAL / (float)vrefintAvg;
+```
+
+All analog sensor readings and battery voltage are then scaled by `vddaScale` before being written to `txBuffer`:
+
+```c
+for (int i = 0; i < 6; i++)
+    txBuffer.analogSensor[i] = (int16_t)((float)(localAccum[i] / count) * vddaScale);
+txBuffer.batteryVoltage = (int16_t)((float)(localAccum[6] / count) * vddaScale);
+```
+
+This means the values in `txBuffer` are always normalized as if VDDA were exactly 3.3 V, compensating for any power supply sag during high-current motor operation. The BEMF ADC also reads `vddaScale` for the same reason.
+
+### Battery voltage conversion
+
+Battery voltage conversion is performed on the Pi side in `SpiReal::readSensorData()`:
 
 ```cpp
 const float stmVoltage = 3.3f;
@@ -39,13 +68,15 @@ float rawVoltage = adcCount * stmVoltage * voltageDividerFactor / adcResolution;
 
 A further exponential moving average filter (α = 0.05) smooths the battery voltage before it is published to LCM.
 
-**Raw ADC values** in `txBuffer.analogSensor` are 12-bit counts (0–4095) stored as `int16_t`. Conversion to physical units (e.g., voltage or reflectance) is the responsibility of user code or libstp sensor wrappers.
+### Raw ADC values
+
+`txBuffer.analogSensor[6]` values are VDDA-compensated 12-bit equivalent counts (0–4095) stored as `int16_t`. Conversion to physical units (e.g., voltage or reflectance) is the responsibility of user code or raccoon-lib sensor wrappers.
 
 ## Digital Input Ports
 
 Ten general-purpose digital inputs (DIN0–DIN9) plus the on-board button are read each SPI cycle.
 
-**GPIO pin assignments:**
+### GPIO pin assignments
 
 | Port | GPIO |
 |---|---|
@@ -63,7 +94,7 @@ Ten general-purpose digital inputs (DIN0–DIN9) plus the on-board button are re
 
 `readDigitalInputs()` iterates over all ten port pins. A pin LOW reads as 1 (logic is inverted — these inputs are typically pulled high and pulled low by the sensor). The button (PB0) uses normal logic (HIGH = pressed).
 
-The function packs all eleven bits into a `uint16_t`, which is written to `txBuffer.digitalSensors` inside the SPI completion callback for minimum latency. The Pi reads this word and demultiplexes individual bits into separate LCM topics (`libstp/digital/0/value`, `libstp/digital/1/value`, …, `libstp/digital/10/value`).
+The function packs all eleven bits into a `uint16_t`, which is written to `txBuffer.digitalSensors` inside the SPI completion callback for minimum latency. The Pi reads this word and demultiplexes individual bits into separate LCM topics (`raccoon/digital/0/value`, `raccoon/digital/1/value`, …, `raccoon/digital/10/value`).
 
 ## IMU (MPU-9250 / AK8963)
 
@@ -75,7 +106,7 @@ The firmware uses the InvenSense **eMPL** (embedded Motion Processing Library) a
 
 On startup, `runImuSelfTest()` calls `mpu_run_6500_self_test()` to run the factory self-test routine. If the gyro and accelerometer pass (result bits 0 and 1 set), the function extracts the measured factory biases and pushes them into the hardware offset registers (`mpu_set_gyro_bias_reg`, `mpu_set_accel_bias_6500_reg`). This eliminates the static offset that every IMU chip has from manufacturing variation.
 
-Note: the magnetometer self-test is not performed. The comment in the code reads: "compass is fucked since we use SPI and I am too lazy to fix invensense shit." The InvenSense library was originally written for I²C; the SPI HAL shim (`mpu9250_hal.c`) maps the library's `hal_i2c_write`/`hal_i2c_read` calls to the SPI driver. The AK8963 is on an auxiliary I²C bus inside the MPU-9250 package and is accessed through the MPU-9250's I²C master mode regardless of whether the STM32→MPU-9250 bus is I²C or SPI.
+Note: the magnetometer self-test is not performed. The InvenSense library was originally written for I²C; the SPI HAL shim (`mpu9250_hal.c`) maps the library's `hal_i2c_write`/`hal_i2c_read` calls to the SPI driver. The AK8963 is on an auxiliary I²C bus inside the MPU-9250 package and is accessed through the MPU-9250's I²C master mode regardless of whether the STM32→MPU-9250 bus is I²C or SPI.
 
 ### MPL Configuration
 
@@ -128,9 +159,25 @@ The Pi can override these at runtime by setting new 3×3 signed-char matrices in
 - **Accelerometer vector** in world frame (scaled to m/s² by × 9.80665)
 - **Linear acceleration** (gravity removed) via `inv_get_linear_accel`
 - **Velocity** from integrated linear acceleration (experimental — decays with factor 0.998 per cycle to limit drift)
-- **Heading** in degrees derived from the quaternion: `atan2(q1*q2 - q0*q3, q0^2 + q2^2 - 0.5)` (NB: this uses q30 fixed-point intermediate values)
+- **Heading** in degrees derived from the quaternion: `atan2(q1*q2 - q0*q3, q0^2 + q2^2 - 0.5)` (uses q30 fixed-point intermediate values)
 
 When new data is available and the SPI bus is not busy, `txBuffer.imu` is updated atomically from the local `imu` struct.
+
+### Flash-based IMU Calibration Storage
+
+The SPI protocol includes a `PI_BUFFER_UPDATE_SAVE_IMU_CAL` update flag (bitmask `0x08`). When the Pi sets this flag in the `RxBuffer.updates` field, the STM32 main loop calls `cal_save_to_flash()`.
+
+**Current behaviour: `cal_save_to_flash()` is a no-op.** It returns `INV_SUCCESS` immediately without writing anything to Flash. The reason is a confirmed hardware issue: on the STM32F427VI used in the Wombat, erasing and reprogramming Flash sector 12 (Bank 2) blocks the firmware main loop for multiple minutes in practice — PWM registers stop updating and servos freeze. The comment in `flash_cal.c` explains this in detail.
+
+IMU calibration is therefore ephemeral: the MPL `inv_enable_in_use_auto_calibration` feature re-runs on every boot and converges within 2–3 minutes of normal motion. The robot re-calibrates during `M000SetupMission` anyway, so cold-start accuracy in the first seconds is not a concern.
+
+The API is preserved so that:
+
+- Pi-side code can call `save_imu_calibration()` without checking a capability flag.
+- `cal_load_from_flash()` returns `INV_ERROR_CALIBRATION_LOAD` so the startup code takes the "starting fresh" branch.
+- `cal_has_saved_data()` always returns `0`.
+
+If this feature is reinstated in the future, the note in `flash_cal.c` recommends using the HAL interrupt-based Flash programming variants and a low-priority background task.
 
 ### SPI3 Configuration
 

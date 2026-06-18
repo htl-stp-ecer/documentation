@@ -1,9 +1,9 @@
 ---
 title: "Troubleshooting And Recovery"
 author: "OpenAI Codex"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 8
+weight: 9
 description: "Source-verified recovery playbooks for raccoon connect, sync, run, update, logs, services, and migrations."
 ---
 
@@ -16,7 +16,7 @@ It is intentionally operational. The question here is not "what does the happy p
 Source of truth:
 
 - [update.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/update.py)
-- [status.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/status.py)
+- [doctor.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/doctor.py)
 - [logs.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/logs.py)
 - [migrate.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/migrate.py)
 - [project_services.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/project_services.py)
@@ -26,7 +26,7 @@ Source of truth:
 When something feels broken, start here:
 
 ```bash
-raccoon status
+raccoon doctor
 raccoon update --check
 raccoon migrate --dry-run
 ```
@@ -37,7 +37,9 @@ That separates most failures into three buckets:
 - package version drift
 - project schema drift
 
-## `raccoon status` says not connected
+Note: `raccoon status` is **not** a registered CLI command — `raccoon doctor` is the correct command for system health information.
+
+## `raccoon doctor` says not connected
 
 Symptoms:
 
@@ -45,7 +47,7 @@ Symptoms:
 - remote project status missing
 - Pi package versions unavailable
 
-What `status` actually does:
+What `doctor` actually does when checking connectivity:
 
 - tries to auto-connect from the current project connection config first
 - otherwise tries the first known Pi
@@ -55,10 +57,10 @@ Recovery:
 
 ```bash
 raccoon connect <pi-address>
-raccoon status
+raccoon doctor
 ```
 
-If you are not inside a project, `status` can still show known Pis and package data, but it cannot resolve project-specific remote state.
+If you are not inside a project, `raccoon doctor` can still show known Pis and package data, but it cannot resolve project-specific remote state.
 
 ## The Pi is reachable, but `raccoon-server` is down
 
@@ -86,7 +88,7 @@ Why this matters:
 
 If both normal connection and direct SSH fail, you are no longer in a CLI-level recovery path. At that point it is a network, credentials, or robot-OS problem.
 
-## `raccoon update` shows packages “ahead of bundle”
+## `raccoon update` shows packages "ahead of bundle"
 
 This is not automatically an error.
 
@@ -273,7 +275,7 @@ Current behavior:
 Practical interpretations:
 
 - `raccoon update --laptop-only` is still meaningful
-- `raccoon status` may still help you repair connection state
+- `raccoon doctor` may still help you repair connection state
 
 If you know the robot is reachable but the CLI has no saved connection:
 
@@ -287,9 +289,9 @@ Then retry:
 raccoon update --pi-only
 ```
 
-## Project is on the Pi, but `status` says remote project not found
+## Project is on the Pi, but `raccoon doctor` shows remote project not found
 
-`status` matches remote projects by the local project's UUID.
+`raccoon doctor` matches remote projects by the local project's UUID.
 
 That means this can fail because of:
 

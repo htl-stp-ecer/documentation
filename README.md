@@ -57,7 +57,7 @@ Output lands in `public/`.
 content/
   00-quick-start/       Getting started guide
   01-botui/             BotUI web interface
-  02-programming/       LibSTP SDK and DSL reference
+  02-programming/       raccoon SDK and DSL reference
     algorithms/         Algorithm deep-dives (line following, lineup, etc.)
   03-web-ide/           Web IDE usage
   04-raccoon-cli/       raccoon CLI command reference

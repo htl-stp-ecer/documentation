@@ -1,9 +1,9 @@
 ---
 title: "Making Your Robot Competition Ready"
 author: "Tobias Madlberger"
-date: 2026-04-10
+date: 2026-06-18
 draft: false
-weight: 16
+weight: 20
 ---
 
 # Making Your Robot Competition Ready
@@ -171,7 +171,7 @@ from raccoon import *
 from src.hardware.defs import Defs
 
 
-class M99ShutdownMission(Mission):
+class M999ShutdownMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             # Lift anything that could snag another robot
@@ -195,11 +195,13 @@ Rules of thumb for shutdown missions:
 In `config/missions.yml`:
 
 ```yaml
-- M00SetupMission: setup
-- M99ShutdownMission: shutdown
-- M01DriveToConeMission
-- M02CollectConeMission
+- M000SetupMission: setup
+- M999ShutdownMission: shutdown
+- M001DriveToConeMission
+- M002CollectConeMission
 ```
+
+> **Naming convention:** The project scaffold generates missions with **3-digit zero-padded prefixes** — `M000`, `M001`, `M999` — not 2-digit. Match this convention so that class names, file names, and config entries stay consistent. The framework locates shutdown missions by the `shutdown` role tag, so the class name itself doesn't matter, but diverging from the scaffold convention confuses tooling.
 
 The tag `shutdown` is what makes it a shutdown mission. Only one shutdown mission is allowed per robot — if you list multiple, the last one wins. If you don't list one at all, **no shutdown cleanup runs when the timer fires** — the current mission is simply cancelled and the robot goes idle with whatever state the cancellation left it in. This is usually fine (the cancellation already stops motors), but you won't get the "arms up" safety.
 
@@ -221,8 +223,8 @@ Before you travel, walk through this list once. Every item here is something we'
 
 ### Missions
 
-- [ ] `SetupMission: setup` is listed first in `config/missions.yml`.
-- [ ] A `ShutdownMission: shutdown` is listed.
+- [ ] A setup mission (e.g. `M000SetupMission: setup`) is listed first in `config/missions.yml`.
+- [ ] A shutdown mission (e.g. `M999ShutdownMission: shutdown`) is listed.
 - [ ] The shutdown mission has no drive steps, no sensor waits, and ends with `fully_disable_servos()`.
 - [ ] Main missions are listed in the order you want them to execute.
 

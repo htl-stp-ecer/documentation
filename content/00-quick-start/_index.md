@@ -1,7 +1,7 @@
 ---
 title: "Quick Start"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 1
 ---
@@ -182,10 +182,10 @@ raccoon run
 
 This does everything in one command:
 1. Saves a local checkpoint (safety snapshot)
-2. Syncs your files to the robot
-3. Runs code generation on the robot (`defs.py`, `robot.py`)
-4. Executes `src/main.py`, streaming output to your terminal
-5. Saves another checkpoint and pulls any updated files back
+2. Runs code generation **locally on your laptop** — generates `defs.py` and `robot.py` from your YAML config
+3. Syncs your files (including the generated ones) to the robot
+4. Executes `src/main.py` on the robot, streaming output to your terminal
+5. Pulls any files updated on the robot back to your laptop
 
 You should see the robot boot, run the setup mission, and wait. Press **Ctrl+C** to stop.
 
@@ -202,16 +202,18 @@ That's expected. The robot is running correctly.
 Create a smoke test mission:
 
 ```bash
-raccoon create mission M01SmokeMission
+raccoon create mission M010SmokeMission
 ```
 
-Open the generated file in `src/missions/m01_smoke_mission.py` and add a simple sequence:
+Mission names use a **three-digit** zero-padded prefix. `M000` is reserved for the setup mission, `M999` for shutdown, and regular missions start at `M010` and increment by 10 (`M010`, `M020`, `M030`, …).
+
+Open the generated file in `src/missions/m010_smoke_mission.py` and add a simple sequence:
 
 ```python
 from raccoon import *
 
 
-class M01SmokeMission(Mission):
+class M010SmokeMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(30),   # drive 30 cm forward
@@ -222,8 +224,8 @@ class M01SmokeMission(Mission):
 Then register it in `config/missions.yml`:
 
 ```yaml
-- SetupMission: setup
-- M01SmokeMission
+- M000SetupMission: setup
+- M010SmokeMission
 ```
 
 Run it:
@@ -258,4 +260,4 @@ Your robot is running. Here's where to go from here:
 
 ## Optional: IDE Setup
 
-Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). You'll have full tab completion on all libstp types out of the box — no special interpreter configuration needed.
+Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). You'll have full tab completion on all `raccoon` types out of the box — no special interpreter configuration needed. Stubs are provided for the `raccoon.*` namespace and are installed alongside the library.

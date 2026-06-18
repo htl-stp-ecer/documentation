@@ -1,7 +1,7 @@
 ---
 title: "Wait for Light"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 4
 ---
@@ -10,7 +10,7 @@ weight: 4
 
 In Botball competitions, robots start when a light signal turns on. The robot must detect this light reliably — without false-triggering from ambient changes (people walking past, overhead lighting shifting) and without missing a weak signal. LibSTP's `wait_for_light` step solves this using a 1D Kalman filter for baseline tracking and a multi-phase workflow with a built-in test mode.
 
-The approach is based on the paper [*"Comprehensive Light-Start Methods in Botball"*](https://ecer.pria.at/archive/ecer-2024/papers/Comprehensive_Light-Start_Methods_in_Botball.pdf) by James Gosling, Matthias Rottensteiner, and Alexander Müllner (ECER 2024), which compares several noise reduction techniques and proposes the Kalman filter + downward-facing sensor combination used here.
+The approach is based on the paper [*"Comprehensive Light-Start Methods in Botball"*](https://ecer.pria.at/archive/ecer-2024/papers/Comprehensive_Light-Start_Methods_in_Botball.pdf) by James Gosling, Matthias Rottensteiner, and Alexander Müllner (ECER 2023), which compares several noise reduction techniques and proposes the Kalman filter + downward-facing sensor combination used here.
 
 ## The Problem
 
@@ -26,7 +26,7 @@ Naive approaches fail in predictable ways:
 
 ### Sensor Mounting
 
-The sensor faces **downward** toward the table surface, with no shielding (no black tape, no straw). When the start lamp turns on above the robot, light reflects off the table and reaches the sensor. This downward-facing mount reduces environmental noise by up to 76% compared to a horizontal mount (Gosling et al., 2024), because the sensor's field of view is dominated by the table (a stable reflector) rather than the room.
+The sensor faces **downward** toward the table surface, with no shielding (no black tape, no straw). When the start lamp turns on above the robot, light reflects off the table and reaches the sensor. This downward-facing mount reduces environmental noise by up to 76% compared to a horizontal mount (Gosling et al., 2023), because the sensor's field of view is dominated by the table (a stable reflector) rather than the room.
 
 ### Phase 1: Warm-Up (Baseline Establishment)
 
@@ -50,7 +50,7 @@ While in test mode, the Kalman filter continues updating the baseline on non-tri
 
 Once the operator has confirmed detection works (by pressing the button after at least one successful test trigger), the step transitions to **armed** mode. Now a trigger will actually start the mission.
 
-A key detail: when transitioning from test mode to armed, the step sets a **needs_clear gate**. The sensor must first see an above-threshold reading before it will accept triggers. This prevents an instant false start if the lamp happens to still be on from the last test.
+A key detail: when transitioning from test mode to armed, the step sets a **needs_clear gate**. The gate clears only when the raw sensor reading is at or above the trigger threshold — that is, when the lamp is demonstrably off. This prevents an instant false start if the lamp happens to still be on from the last test trigger. Once the sensor confirms the lamp is off, the gate clears and the step will fire normally on the next lamp-on event.
 
 The Kalman filter's process variance is also reduced (from 0.01 to 0.001) after warm-up, making the baseline more stable — it tracks slow ambient drift but won't chase the lamp signal.
 

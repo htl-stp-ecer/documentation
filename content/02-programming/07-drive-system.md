@@ -1,9 +1,9 @@
 ---
 title: "Drive System"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 8
+weight: 11
 ---
 
 # Drive System
@@ -160,10 +160,25 @@ kinematics = MecanumKinematics(
 )
 ```
 
-- All wheels forward → robot drives forward
-- All wheels inward → robot strafes right
-- Diagonal pattern → robot drives at an angle
-- **Full omnidirectional movement**
+Wheel spin patterns for common motions:
+
+| Motion | FL | FR | BL | BR |
+|--------|----|----|----|----|
+| Drive forward | forward | forward | forward | forward |
+| Strafe right (`vy > 0`) | forward | backward | backward | forward |
+| Spin CCW | backward | forward | backward | forward |
+| **Full omnidirectional movement** | | | | |
+
+For strafing right, front-left and back-right spin forward; front-right and back-left spin backward. This produces a net rightward translation with no rotation.
+
+`MecanumKinematics` accepts an optional `velocity_command_gain` parameter (a per-axis gain for efficiency compensation, calibrated by `auto_tune()`):
+
+```python
+kinematics = MecanumKinematics(
+    ...
+    velocity_command_gain=(1.0, 1.0, 1.0),  # (vx, vy, wz) scaling
+)
+```
 
 The mecanum model defines:
 
@@ -215,40 +230,140 @@ Those conventions are assumed consistently by the kinematics models, drive layer
 
 Getting these values wrong will cause the robot to over- or under-turn and drive inaccurate distances.
 
+## Arc Motion
+
+Arc steps drive the robot along a circular arc — forward motion combined with simultaneous turning. They are essential for smooth cornering without a full stop.
+
+### `drive_arc_left` / `drive_arc_right`
+
+Drive forward while turning left or right through the specified angle:
+
+```python
+from raccoon.step.motion import drive_arc_left, drive_arc_right
+
+# Quarter-circle turn to the left (CCW) with 30 cm radius
+drive_arc_left(radius_cm=30, degrees=90)
+
+# Gentle sweep to the right (CW) at half speed
+drive_arc_right(radius_cm=50, degrees=45, speed=0.5)
+```
+
+Parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius_cm` | `float` | required | Turning radius in cm (measured from arc centre to robot centre) |
+| `degrees` | `float` | required | Arc angle — how many degrees the robot rotates |
+| `speed` | `float` | `1.0` | Fraction of max speed, 0.0–1.0 |
+
+The arc length travelled is `2 * pi * radius_cm * (degrees / 360)` cm. A 90° arc with 30 cm radius travels about 47 cm along the curve.
+
+### `strafe_arc_left` / `strafe_arc_right`
+
+Mecanum robots only. The robot strafes laterally while simultaneously rotating, tracing a circular arc:
+
+```python
+from raccoon.step.motion import strafe_arc_left, strafe_arc_right
+
+# Strafe arc: move laterally while turning left (CCW)
+strafe_arc_left(radius_cm=30, degrees=90)
+
+# Strafe arc: move laterally while turning right (CW)
+strafe_arc_right(radius_cm=50, degrees=45, speed=0.5)
+```
+
+These require a mecanum or omni-wheel drivetrain capable of lateral motion. Internally the step derives the lateral velocity from the angular velocity as `vy = |omega| * radius` to produce coordinated acceleration along the arc.
+
+### `drive_arc_segment`
+
+Instead of specifying radius and arc angle separately, `drive_arc_segment` lets you specify the desired **heading change** and **travel distance** along the arc. The radius is computed automatically:
+
+```text
+radius = distance_cm / radians(|heading_degrees|)
+```
+
+```python
+from raccoon.step.motion import drive_arc_segment
+
+# Curve left by 10 degrees over 25 cm of travel
+drive_arc_segment(heading_degrees=10, distance_cm=25)
+
+# Curve right by 30 degrees over 40 cm at half speed
+drive_arc_segment(heading_degrees=-30, distance_cm=40, speed=0.5)
+```
+
+Parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `heading_degrees` | `float` | Positive = left/CCW, negative = right/CW |
+| `distance_cm` | `float` | Distance along the arc path (always positive) |
+| `speed` | `float` | Fraction of max speed, 0.0–1.0 (default 1.0) |
+
+`drive_arc_segment` is the idiomatic factory for fixed-curve motion when you know how far you want to travel rather than the turning radius. It raises `ValueError` if `heading_degrees` is zero (which would imply infinite radius — use `drive_forward` instead) or if `distance_cm` is not positive.
+
+## Speed Mode
+
+`set_speed_mode()` toggles the firmware's BEMF closed-loop velocity control on or off. In normal mode (SpeedMode disabled), the STM32 measures wheel velocity via back-EMF and uses it to maintain accurate cm distances and angles. SpeedMode disables these measurements, granting roughly 10% additional top speed at the cost of distance and angle precision.
+
+```python
+from raccoon.step.motion import set_speed_mode, drive_forward
+from raccoon.step.condition import on_black
+
+seq([
+    set_speed_mode(True),                              # engage SpeedMode
+    drive_forward(speed=1.0).until(on_black(sensor)),  # sensor-terminated only
+    set_speed_mode(False),                             # return to normal mode
+])
+```
+
+**When SpeedMode is active:**
+- All motion steps must terminate via a sensor condition (`.until(...)`), time limit, or stall detection
+- Distance-based or angle-based goals raise `std::logic_error` — the controller has no velocity feedback to honour them
+- Use `set_speed_mode(False)` before any step that uses a distance or angle target
+
+Parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | `bool` | required | `True` = SpeedMode on (BEMF off), `False` = return to normal |
+| `timeout_s` | `float` | `0.5` | Max seconds to wait for firmware ACK before raising |
+
+The step publishes an LCM command, waits for the firmware's acknowledgement on the retained `raccoon/feature/bemf_enabled` channel, then updates the library's internal speed-mode flag. If no ACK arrives within `timeout_s` it raises `RuntimeError` to prevent library and firmware state from diverging.
+
 ## Motion PID Config
 
 The motion PID controls *how accurately the robot follows planned trajectories* (distance and heading). This is separate from the velocity PID above.
 
 ```python
 motion_pid_config = UnifiedMotionPidConfig(
-    # How accurately the robot reaches target distance
+    # Library defaults — replace with your robot's tuned values
     distance=PidConfig(
-        kp=7.875, ki=0.0, kd=0.0,
+        kp=2.0, ki=0.0, kd=0.5,       # library defaults
         integral_max=10.0,
         integral_deadband=0.01,
-        derivative_lpf_alpha=0.5,
+        derivative_lpf_alpha=0.3,
         output_min=-10.0, output_max=10.0,
     ),
 
-    # How accurately the robot maintains heading
     heading=PidConfig(
-        kp=7.875, ki=0.0, kd=0.0625,
+        kp=2.0, ki=0.0, kd=0.3,       # library defaults
         integral_max=10.0,
         integral_deadband=0.01,
-        derivative_lpf_alpha=0.5,
+        derivative_lpf_alpha=0.3,
         output_min=-10.0, output_max=10.0,
     ),
 
-    # Maximum velocities and accelerations
+    # Maximum velocities and accelerations (set by auto_tune / characterize_drive)
     linear=AxisConstraints(
         max_velocity=0.2368,       # m/s (your robot's top speed)
-        acceleration=0.2798,       # m/s^2
-        deceleration=2.0532,       # m/s^2 (can be higher than accel)
+        acceleration=0.2798,       # m/s²
+        deceleration=2.0532,       # m/s² (can be higher than accel)
     ),
     angular=AxisConstraints(
         max_velocity=2.9424,       # rad/s
-        acceleration=7.6122,      # rad/s^2
-        deceleration=16.1491,    # rad/s^2
+        acceleration=7.6122,       # rad/s²
+        deceleration=16.1491,      # rad/s²
     ),
     lateral=AxisConstraints(       # Only for mecanum
         max_velocity=0.2209,
@@ -257,11 +372,14 @@ motion_pid_config = UnifiedMotionPidConfig(
     ),
 
     # Tolerances: when to consider "arrived"
-    distance_tolerance_m=0.005,    # 5mm
-    angle_tolerance_rad=0.017,     # ~1 degree
+    # Library defaults: 10 mm distance, ~2° angle
+    distance_tolerance_m=0.01,    # 10 mm (library default)
+    angle_tolerance_rad=0.035,    # ~2 degrees (library default)
     velocity_ff=1.0,
 )
 ```
+
+> **Defaults vs. tuned values:** The library's built-in defaults are `distance_tolerance_m=0.01` (10 mm) and `angle_tolerance_rad=0.035` (~2°), with PID gains `kp=2.0, kd=0.5` (distance) and `kp=2.0, kd=0.3` (heading). The values in your `raccoon.project.yml` are specific to your robot and are written there by `auto_tune()`. Do not copy hardcoded values from one robot's config to another — run `auto_tune()` on each robot instead.
 
 ### Axis Constraints
 
@@ -277,14 +395,85 @@ These values are measured automatically by the `calibrate()` and `auto_tune()` s
 
 ## Auto-Tuning
 
-LibSTP includes automatic tuning steps that measure your robot's actual performance and set the PID gains and axis constraints:
+LibSTP includes automatic tuning steps that measure your robot's actual performance and set the PID gains, axis constraints, and tolerances.
+
+### `auto_tune()` — Full Pipeline
+
+`auto_tune()` runs the complete calibration pipeline in sequence:
 
 ```python
 # In your setup mission:
 auto_tune()
 ```
 
-This drives the robot through a series of test maneuvers, measures the response, and updates the configuration. Run it on a flat surface with enough room (at least 1m in each direction).
+The full signature has roughly 20 parameters:
+
+```python
+auto_tune(
+    # Which axes to tune (auto-detected by default)
+    vel_axes=None,
+    characterize_axes=None,
+    motion_axes=None,
+
+    # Toggle individual phases (all True by default unless noted)
+    tune_bemf_velocity=True,      # per-motor ticks_to_rad vs. calibration board
+    tune_vel_lpf=True,            # IIR velocity filter alpha
+    tune_static_friction=True,    # kS per motor
+    tune_firmware_pid=True,       # STM32 MAV-mode inner velocity PID
+    tune_encoder_cal=False,       # IMU encoder cal (superseded by bemf, disabled)
+    tune_characterize=True,       # max velocity / accel / decel per axis
+    tune_velocity=True,           # chassis velocity-command gain
+    tune_motion=True,             # distance/heading PID via real trials
+    tune_tolerances=True,         # distance/angle tolerances from residuals
+
+    # BEMF sweep parameters
+    pwm_min_percent=30,
+    pwm_max_percent=90,
+    pwm_steps=6,
+    sweeps=2,
+
+    # Characterization parameters
+    characterize_trials=3,
+    characterize_power_percent=100,
+
+    # Persistence and confirmation
+    persist=True,         # write results to raccoon.project.yml
+    step_confirm=True,    # pause for button press before each phase
+)
+```
+
+**Key `auto_tune()` facts:**
+
+- `persist=True` (default) writes all tuned values to `raccoon.project.yml`. This modifies your project configuration file, which is intentional — the values are loaded on every subsequent run.
+- `step_confirm=True` (default) pauses before each phase and asks for a button press. This gives you time to position the robot correctly between phases.
+- The BEMF velocity phase (`tune_bemf_velocity`) requires a **calibration board** connected and providing ground-truth position — this is the phase that benefits most from accurate positioning.
+- Run `auto_tune()` on a flat surface with at least 1 m clearance in every direction.
+
+### Individual Tuning Phases
+
+You can run phases individually when you only need to re-tune one aspect:
+
+```python
+from raccoon.step.motion import (
+    auto_tune_vel_lpf,
+    auto_tune_static_friction,
+    auto_tune_bemf_velocity,
+    auto_tune_firmware_pid,
+    auto_tune_velocity,
+    auto_tune_motion,
+)
+
+# Re-run only the velocity LPF (e.g., after changing motors)
+auto_tune_vel_lpf()
+
+# Re-run only the static friction measurement
+auto_tune_static_friction()
+
+# Re-run only the motion PID on selected axes
+auto_tune_motion(axes=["linear", "angular"])
+```
+
+All individual phase factories accept `persist=True` (default), which writes their results to `raccoon.project.yml` just like the full `auto_tune()` pipeline.
 
 ## Common Tuning Issues
 
@@ -296,3 +485,4 @@ This drives the robot through a series of test maneuvers, measures the response,
 | Turns over/undershoot | `wheelbase` measurement wrong or `heading.kp` wrong | Re-measure wheelbase, tune heading PID |
 | Robot is sluggish | `max_velocity` too low or `acceleration` too low | Increase values or re-run characterization |
 | Robot jerks when starting | `kS` (static friction feedforward) too low | Increase kS |
+| SpeedMode motions don't stop | Distance/angle goal used while SpeedMode is active | Add `.until(condition)` or call `set_speed_mode(False)` first |

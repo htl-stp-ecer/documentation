@@ -1,9 +1,9 @@
 ---
 title: "Table Maps"
 author: "OpenAI Codex"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 17
+weight: 22
 description: "The actual .ftmap contract: runtime v1 shape, IDE v2 shape, codegen resolution, and coordinate conventions."
 ---
 
@@ -197,13 +197,15 @@ So if you are debugging a project map issue, check all three layers:
 
 ## Bundled scenes
 
-The scene fixtures in `raccoon-lib/scenes/` are currently documented as v1:
+The scene fixtures in `raccoon-lib/scenes/` are v1 format and are the reference files for the runtime schema:
 
-- `empty_table.ftmap`
-- `single_line.ftmap`
-- `wall_box.ftmap`
+| Scene | Table dimensions | Contents |
+|-------|-----------------|----------|
+| `empty_table.ftmap` | 200×100 cm | No lines or obstacles |
+| `single_line.ftmap` | 200×100 cm | One 1.5 cm wide horizontal line across the middle |
+| `wall_box.ftmap` | **100×100 cm** | Four wall segments forming a 40×40 cm box at the center |
 
-These are useful reference files because they show the runtime-accepted single-layer schema directly.
+> **`wall_box.ftmap` is 100×100 cm**, not 200×100 like the other two bundled scenes. When writing sim tests using this scene, use start positions within the 0–100 cm range on both axes or the robot will start outside the table boundary.
 
 ## What still matters for future cleanup
 

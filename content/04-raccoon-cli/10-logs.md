@@ -1,9 +1,9 @@
 ---
 title: "logs"
 author: "OpenAI Codex"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 10
+weight: 11
 description: "How raccoon logs actually works: local vs remote runs, filtering, following, sources, clearing, and project services."
 ---
 

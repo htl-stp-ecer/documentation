@@ -1,9 +1,9 @@
 ---
 title: "sync"
 author: "OpenAI Codex"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 9
+weight: 10
 description: "How raccoon sync actually works: backends, verification, sync counters, and failure modes."
 ---
 

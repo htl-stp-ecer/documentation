@@ -1,71 +1,131 @@
 ---
 title: "Bot UI"
 author: "Jakob Schlögl"
-date: 2026-03-05
+date: 2026-06-18
 draft: false
 weight: 1
 ---
 
 # Bot UI
-The Robot UI is the touchscreen interface displayed on the robot's screen. It gives you access to multiple features without needing a laptop or any other device. Everything is executed directly on the robot. 
+
+The Robot UI (BotUI) is the touchscreen interface displayed on the robot's screen. It gives you access to all robot features — sensor graphs, program execution, network settings, and system management — without needing a laptop or any other device. Everything runs directly on the Raspberry Pi.
 
 ## Installation
-### Requirements
-Make sure the following versions are installed:
-- Flutter: `>= 3.35.0`
-- Dart: `>= 3.9.0 < 4.0.0`
 
-The following tools are required but do not have strict version constraints:
-- Python 3 (used by `install.py`)
-- SSH & SCP (for deployment to the Raspberry Pi)
-- flutterpi_tool (for build, run, and deployment)
-- Git (with a configured SSH key for Git dependencies)
+### Requirements
+
+The Flutter toolchain is version-pinned via **FVM (Flutter Version Management)**. The exact version is declared in `botui/.fvmrc`:
+
+```json
+{
+  "flutter": "3.32.7"
+}
+```
+
+Install FVM and activate the pinned version before doing anything else:
+
+```bash
+dart pub global activate fvm
+fvm install    # reads .fvmrc and installs 3.32.7
+fvm use        # activates it for this project
+```
+
+The `build.sh` script automatically detects FVM and prefixes all Flutter commands with `fvm`. If `fvm` is not on `PATH` it falls back to the system-installed `flutter`, which is appropriate for CI environments that provision Flutter 3.32.7 directly.
+
+Additional tools required:
+
+| Tool | Purpose |
+|------|---------|
+| Python 3 | `install.py` deployment script |
+| SSH & SCP | Uploading the build to the Raspberry Pi |
+| `flutterpi_tool` | ARM64 cross-compile for flutter-pi (installed by `build.sh` automatically) |
+| Git (SSH key configured) | Fetching Git-hosted dependencies (e.g. `sleek_circular_slider`) |
+| C cross-compiler (`aarch64-linux-gnu-gcc`) | Building `libraccoon_ring_bridge.so` (see below) |
+
+Dart SDK constraint is `^3.5.4` (`>=3.5.4 <4.0.0`), as declared in `pubspec.yaml`.
 
 ### Clone the Repository
-Clone the project from the official HTL-STP-ECER GitHub repository using one of the following methods. This project uses submodules, so it must be cloned with `--recurse-submodules`:
+
+The project uses Git submodules for `raccoon-transport`. Always clone with `--recurse-submodules`:
+
 ```bash
 git clone https://github.com/htl-stp-ecer/botui.git --recurse-submodules
 ```
-or via SSH:
+
+Via SSH:
+
 ```bash
 git clone git@github.com:htl-stp-ecer/botui.git --recurse-submodules
 ```
-or using GitHub CLI:
+
+Via GitHub CLI:
+
 ```bash
 gh repo clone htl-stp-ecer/botui -- --recurse-submodules
 ```
 
-### Project Setup
-Navigate into the project directory and install dependencies:
+If you already cloned without `--recurse-submodules`, initialise submodules manually:
+
 ```bash
-cd botui
-dart pub get
+git submodule update --init --recursive
+```
+
+### Project Setup
+
+Fetch Flutter and Dart dependencies. Use `flutter pub get` (not `dart pub get`) so that Flutter plugin registration is performed correctly:
+
+```bash
+fvm flutter pub get
 ```
 
 ### Code Generation
-Run the code generation step:
+
+BotUI uses `riverpod_generator`, `freezed`, and `json_serializable` for code generation. Run the build runner once after cloning (and again whenever you change annotated files):
+
 ```bash
-dart run build_runner build -d
+fvm flutter pub run build_runner build -d
 ```
 
+The `-d` flag deletes conflicting outputs from previous runs.
+
 ### Build & Deployment
-The project provides scripts for building and deploying to your Raspberry Pi. You can customize the behavior using the following environment variables:
 
-- **`RPI_HOST`** – IP address of the Raspberry Pi. \
-Default: `192.168.4.1`
-- **`RPI_USER`** – SSH user for deployment. \
-Default: `pi`
-- **`BUILD_NUMBER`** – Optional build identifier to tag your deployment. \
-Default: `0`
+Use `build.sh` to compile and `install.py` to deploy. The two are combined in `deploy.sh`:
 
-All variables have sensible defaults, so setting them is optional. To deploy, simply run:
 ```bash
 chmod +x deploy.sh
 ./deploy.sh
 ```
 
+Internally `build.sh`:
+1. Runs `flutter pub get` and `build_runner`.
+2. Cross-compiles the app for ARM64 using `flutterpi_tool build --arch=arm64 --cpu=pi3 --release`.
+3. Cross-compiles `libraccoon_ring_bridge.so` — the shared library that embeds `raccoon_ring` (the shared-memory transport from the `raccoon-transport` submodule) — and copies it into the build output directory. This `.so` is required at runtime; the build will fail with an error if it cannot be produced.
+
+`install.py` then:
+1. Stops the `flutter-ui` systemd service on the Pi via SSH.
+2. Copies the entire build output to `/home/pi/stp-velox` on the Pi using SCP.
+3. Writes a `version` file so `raccoon-server` can report the UI version.
+4. Installs or updates the systemd unit file.
+5. Enables and starts `flutter-ui.service`.
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RPI_HOST` | `192.168.68.110` | IP address of the target Raspberry Pi |
+| `RPI_USER` | `pi` | SSH user on the Pi |
+
+Override them on the command line if your Pi is on a different address:
+
+```bash
+RPI_HOST=192.168.1.42 ./deploy.sh
+```
+
 ## Features
-- [Dashboard]({{< ref "/01-botui/00-dashboard" >}}): The first screen you see when starting the robot.
-- [Sensors & Actors]({{< ref "/01-botui/01-sensors-actors" >}}): A screen for all the sensor and actor graphs.
-- [Programs]({{< ref "/01-botui/02-programs" >}}): Here you can see all your executable programs.
-- [Settings]({{< ref "/01-botui/03-settings" >}}): The settings of the robot can be found here.
+
+- [Dashboard]({{< ref "/01-botui/00-dashboard" >}}): The first screen displayed after boot; entry point to all other features.
+- [Sensors & Actors]({{< ref "/01-botui/01-sensors-actors" >}}): Real-time graphs and direct control for all sensors and actuators.
+- [Programs]({{< ref "/01-botui/02-programs" >}}): Browse, launch, and monitor executable programs on the robot.
+- [Settings]({{< ref "/01-botui/03-settings" >}}): Network, display, system, camera, and robot personality configuration.
+- [Calibration Board]({{< ref "/01-botui/04-calibration-board" >}}): USB-C daughterboard for precision odometry and IMU calibration.

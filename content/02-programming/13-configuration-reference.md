@@ -1,9 +1,9 @@
 ---
 title: "Configuration Reference"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
-weight: 14
+weight: 18
 ---
 
 This page is a complete reference for every key in every configuration file used by a raccoon/libstp project. Configuration is split across several YAML files that are assembled by raccoon's include-aware loader at build time. All paths are relative to the project root.
@@ -32,10 +32,34 @@ The root project descriptor. Only a handful of keys live here directly; the rest
 |-----|------|-------------|
 | `name` | `string` | Human-readable project name. Displayed in the raccoon CLI and web IDE. Set once at `raccoon create`. |
 | `uuid` | `string` | A unique identifier for the project (UUID v4). Used by the raccoon daemon to route commands to the correct project on the Pi. Set once at `raccoon create`, never change manually. |
+| `format_version` | `integer` | Schema version of this project file. Written by `raccoon migrate` and checked by `raccoon run` against `raccoon-lib.MIN_FORMAT_VERSION`. Projects at an older version than the library requires will not run until `raccoon migrate` is executed. Omit or leave at `0` for newly-created projects. |
 | `robot` | `!include` | Delegates to `config/robot.yml`. The entire robot subsystem configuration lives there. |
 | `missions` | `!include` | Delegates to `config/missions.yml`. The ordered list of missions. |
 | `definitions` | `!include` | Delegates to `config/hardware.yml`. All hardware object definitions. |
 | `connection` | `!include` | Delegates to `config/connection.yml`. SSH and daemon connection settings. |
+| `simulation` | `mapping` | **Optional.** Overrides simulator defaults used by the Web-IDE's simulation mode. See the `simulation:` section below. |
+
+### `simulation:` (optional)
+
+Configures the Web-IDE simulator that runs when you use the `simulate=real` run configuration. When this block is absent, the simulator uses an empty table scene and falls back to `robot.physical.start_pose` for the starting position.
+
+```yaml
+simulation:
+  scene: empty_table.ftmap          # path to a .ftmap file (project-relative or absolute)
+  start_pose:                       # overrides robot.physical.start_pose for simulation only
+    x_cm: 0.0
+    y_cm: 0.0
+    theta_deg: 0.0
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `simulation.scene` | `string` | *(empty table)* | Path to a `.ftmap` file used as the simulation arena. Can be project-relative or absolute. |
+| `simulation.start_pose.x_cm` | `float` | from `physical.start_pose.x_cm` | Simulation-only starting X position (cm). Overrides `physical.start_pose` for simulation runs only. |
+| `simulation.start_pose.y_cm` | `float` | from `physical.start_pose.y_cm` | Simulation-only starting Y position (cm). |
+| `simulation.start_pose.theta_deg` | `float` | from `physical.start_pose.theta_deg` | Simulation-only starting heading (degrees). |
+
+This block is intentionally separate from `physical.start_pose` so you can place the robot at a different starting position in simulation without affecting real-robot runs.
 
 ---
 
@@ -141,35 +165,17 @@ The `vel_config` is translated into a `ChassisVelocityControlConfig` struct at c
 
 ---
 
-### `odometry`
+### `odometry` (deprecated — platform-managed)
 
-Selects the odometry model used to estimate the robot's pose (position + heading) during autonomous motion.
-
-Can be specified in two forms:
-
-**Short form** (type name only):
-```yaml
-odometry: FusedOdometry
-```
-
-**Long form** with configuration:
-```yaml
-odometry:
-  type: FusedOdometry
-  config:
-    bemf_trust: 1.0
-```
-
-Supported `type` values (case-insensitive): `FusedOdometry`, `fused`, `ImuOdometry`, `imu`.
-
-When `type` is `FusedOdometry`, the optional `config` sub-block maps to `FusedOdometryConfig`:
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `config.bemf_trust` | `float` | `0.95` | Complementary filter coefficient. `1.0` = rely entirely on BEMF-derived velocity; `0.0` = rely entirely on IMU accelerometer integration. Values between `0.8` and `1.0` are typical. |
-| `config.imu_ready_timeout_ms` | `integer` | `1000` | Maximum milliseconds to wait for the IMU to become ready on startup. |
-| `config.enable_accel_fusion` | `bool` | `true` | Enable the complementary filter that fuses BEMF estimates with IMU linear acceleration. When `false`, only BEMF is used for velocity. |
-| `config.turn_axis` | `string` | `"world_z"` | Which axis to use for yaw rate. Accepted values: `"world_z"`, `"body_x"`, `"body_y"`, `"body_z"`. Change to a body axis only if the robot's up-axis is not the sensor's body Z. |
+> **Note:** The `odometry:` key in `robot.yml` is **silently ignored** by the code generator. Odometry is now platform-managed: the runtime selects and configures the odometry implementation automatically based on the detected hardware. You do not need to specify this section, and any values you set (type, `bemf_trust`, `imu_ready_timeout_ms`, etc.) have **no effect**.
+>
+> If your project's `robot.yml` still contains an `odometry:` block, you will see this message in the codegen log:
+> ```
+> Ignoring 'robot.odometry' in config: odometry is now platform-managed
+> and no longer codegen-emitted. You can remove this section from robot.yml.
+> ```
+>
+> You can safely delete the entire `odometry:` block from your `robot.yml`. The robot will continue to work correctly.
 
 ---
 
@@ -239,7 +245,7 @@ When the drive command saturates the actuators, the controller de-rates its outp
 
 #### Motion profile constraints
 
-These three sub-blocks are **populated automatically by `raccoon calibrate characterize_drive`** and should not be edited manually. They are commented out in the scaffold until characterization is run.
+These three sub-blocks are **populated automatically by `raccoon calibrate step-response`** and should not be edited manually. They are commented out in the scaffold until characterization is run.
 
 ```yaml
 motion_pid:
@@ -281,7 +287,8 @@ Geometric description of the robot body. Used to compute sensor positions relati
 | `rotation_center.y_cm` | `float` | `length_cm / 2` | Y position of the rotation centre, measured from the rear edge in centimetres. |
 | `start_pose.x_cm` | `float` | `30.0` | Starting X position on the game field in centimetres. Used for absolute pose tracking when a field map is available. |
 | `start_pose.y_cm` | `float` | `20.0` | Starting Y position on the game field in centimetres. |
-| `start_pose.theta_deg` | `float` | `90.0` | Starting heading in degrees. `0` = facing right (+X), `90` = facing up (+Y). |
+| `start_pose.theta_deg` | `float` | `0.0` | Starting heading in degrees. `0` = facing right (+X), `90` = facing up (+Y). The scaffold template ships with `90.0` as a preset value, but the code default when `start_pose` is absent is `0.0`. |
+| `table_map` | `mapping` | — | **Optional.** Path to a `.ftmap` file used for on-robot localization. When present, the code generator emits a `table_map` class attribute on the generated `Robot` class (accessible as `Robot.table_map`), allowing steps to query field-relative coordinates. |
 | `sensors` | `list` | `[]` | List of sensor placement descriptors. Each entry has `name`, `x_cm`, `y_cm`, and optionally `clearance_cm`. The `name` must match a key in `definitions`. |
 
 **Sensor entry sub-keys:**
@@ -349,13 +356,14 @@ All `AnalogSensor` instances are also collected into the `Defs.analog_sensors` l
 
 ### Hardware type: `IRSensor`
 
-Maps to `libstp.sensor_ir.IRSensor` (subclass of `AnalogSensor`).
+Maps to `raccoon.sensor_ir.IRSensor` (subclass of `AnalogSensor`).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `type` | `string` | — | Must be `IRSensor`. |
 | `port` | `integer` | — | **Required.** Hardware port number (analog channel). |
-| `calibrationFactor` | `float` | `1.0` | Raw ADC scale factor applied before probability computation. **Set automatically by `raccoon calibrate sensors`.** |
+
+IR sensor calibration data (`whiteThreshold`, `blackThreshold`, `whiteMean`, `blackMean`, `whiteStdDev`, `blackStdDev`) is stored in the process-wide `CalibrationStore` keyed by port number — it is **not** a YAML key. There is no `calibrationFactor` field. Use `raccoon calibrate servos` to interactively calibrate servos; IR sensor thresholds are captured live via the `WFLMeasureScreen`/`DistanceMeasureScreen` calibration workflows.
 
 ### Hardware type: `SensorGroup`
 
@@ -384,6 +392,37 @@ front:
   follow_kp: 0.6
 ```
 
+### Special hardware entry: `wait_for_light_sensor`
+
+The key name `wait_for_light_sensor` is reserved. When `hardware.yml` contains an entry with exactly this name, the code generator treats it specially: in addition to generating the normal hardware attribute, it also emits `Defs.wait_for_light_mode` and optionally `Defs.wait_for_light_drop_fraction` as companion attributes.
+
+```yaml
+wait_for_light_sensor:
+  type: IRSensor
+  port: 11
+  mode: auto              # optional — "auto" (default) or "legacy"
+  drop_fraction: 0.35     # optional — threshold drop fraction for detection
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | `string` | — | Must be `IRSensor`. |
+| `port` | `integer` | — | **Required.** Analog port number for the light sensor. |
+| `mode` | `string` | `"auto"` | Detection algorithm. `"auto"` uses an adaptive Kalman-filter approach; `"legacy"` uses a fixed-threshold comparison. |
+| `drop_fraction` | `float` | — | **Optional.** Fraction by which the signal must drop from baseline to count as a light trigger. When absent, the default in the Wait-for-Light step is used. |
+
+The `mode` and `drop_fraction` keys are consumed entirely by the code generator; they are stripped from the hardware object constructor call and emitted as separate `Defs` class attributes instead:
+
+```python
+# Generated output (simplified):
+class Defs:
+    wait_for_light_sensor = IRSensor(11)
+    wait_for_light_mode = "auto"
+    wait_for_light_drop_fraction = 0.35   # only if drop_fraction was set
+```
+
+These attributes are read by the built-in Wait-for-Light step and calibration screens; you do not need to pass them manually.
+
 ---
 
 ## `config/motors.yml`
@@ -403,21 +442,22 @@ Maps to `libstp.hal.Motor`.
 
 #### `calibration` sub-keys
 
-| Key | Type | Default (C++) | Description | Set by calibration |
-|-----|------|---------------|-------------|-------------------|
-| `ticks_to_rad` | `float` | `2π / 1440 ≈ 0.00436` | Encoder ticks per radian of shaft rotation. Converts raw position counter increments to radians. The scaffold default `0.00002` is a placeholder; the correct value depends on the encoder resolution and gear ratio. | `raccoon calibrate rpm` |
-| `vel_lpf_alpha` | `float` | `0.5` | Low-pass filter coefficient for the velocity estimate derived from BEMF ticks. `1.0` = no filtering (raw BEMF); `0.0` = completely frozen. Lower values smooth at the cost of lag. | `raccoon calibrate motors` |
-| `ff.kS` | `float` | `0.0` | Feedforward static friction constant. Added to every non-zero velocity command to overcome stiction. | `raccoon calibrate motors` |
-| `ff.kV` | `float` | `0.0` | Feedforward velocity constant. Scales the target velocity to compute an open-loop motor command. | `raccoon calibrate motors` |
-| `ff.kA` | `float` | `0.0` | Feedforward acceleration constant. | `raccoon calibrate motors` |
-| `pid.kp` | `float` | `0.0` | Proportional gain for the per-motor velocity PID loop. | `raccoon calibrate motors` |
-| `pid.ki` | `float` | `0.0` | Integral gain for the per-motor velocity PID. | `raccoon calibrate motors` |
-| `pid.kd` | `float` | `0.0` | Derivative gain for the per-motor velocity PID. | `raccoon calibrate motors` |
-| `bemf_scale` | `float` | — | Linear scale applied to raw BEMF ticks before converting to rad/s. | `raccoon calibrate rpm` |
-| `bemf_offset` | `float` | — | Constant offset added after `bemf_scale` to zero out BEMF noise at rest. | `raccoon calibrate rpm` |
-| `ticks_per_revolution` | `float` | — | Encoder ticks per full shaft revolution, computed from RPM data. Informational; not read at runtime. | `raccoon calibrate rpm` |
+These map directly to fields on the C++ `MotorCalibration` struct in `raccoon-lib/modules/libstp-foundation/include/foundation/motor.hpp`.
 
-The `ff` and `pid` sub-keys within `calibration` are nested mappings. The code generator uses docstring introspection to detect that `MotorCalibration` accepts `ff` and `pid` as nested `Feedforward` and `PidGains` objects respectively, so the YAML nesting is preserved correctly.
+| Key | Type | C++ default | Description | Written by |
+|-----|------|-------------|-------------|-----------|
+| `ticks_to_rad` | `float` | `2π / 1440 ≈ 0.004363` | Converts raw encoder tick counts to radians of shaft rotation. Must be strictly positive. The scaffold placeholder `0.00002` is wrong for most hardware; run `raccoon calibrate ticks` to measure the real value. | `raccoon calibrate ticks` |
+| `vel_lpf_alpha` | `float` | `0.5` | IIR low-pass filter coefficient for the BEMF-derived velocity estimate. `1.0` = no filtering (raw); `0.0` = frozen. Must be in `[0, 1]`. Lower values smooth velocity at the cost of lag. | `raccoon calibrate autotune` |
+| `bemf_offset` | `float` | `0.0` | Per-motor BEMF zero-offset (ADC counts) subtracted on the STM32 before integrating encoder ticks. Corrects for drift so the tick integral stays proportional to wheel angle. | `raccoon calibrate autotune` |
+| `pid.kp` | `float` | `1.0` | Proportional gain for the optional per-motor velocity PID loop. The `pid` block is **optional** — omit it entirely to disable per-motor closed-loop control. | `raccoon calibrate autotune` |
+| `pid.ki` | `float` | `0.0` | Integral gain for the per-motor velocity PID. | `raccoon calibrate autotune` |
+| `pid.kd` | `float` | `0.0` | Derivative gain for the per-motor velocity PID. | `raccoon calibrate autotune` |
+| `static_friction_pct` | `float` | `0.0` | Minimum open-loop PWM duty (as a percent) required to overcome motor stiction, measured during the autotune static-friction phase. `0.0` = unmeasured / not applied. | `raccoon calibrate autotune` |
+
+> **What does NOT exist on `MotorCalibration`:**
+> - `ff.kS`, `ff.kV`, `ff.kA` — there is no `ff` (feedforward) sub-object at the per-motor level. Chassis-level feedforward lives under `drive.vel_config.vx.ff` / `wz.ff` in `robot.yml`, not inside each motor's `calibration` block.
+> - `bemf_scale` — not a field in the C++ struct; the struct has `bemf_offset` only.
+> - `ticks_per_revolution` — not a runtime field; the struct uses `ticks_to_rad` directly.
 
 Minimal scaffold entry:
 
@@ -431,7 +471,7 @@ left_motor:
     vel_lpf_alpha: 1.0
 ```
 
-After motor calibration:
+After running `raccoon calibrate ticks` and `raccoon calibrate autotune`:
 
 ```yaml
 left_motor:
@@ -439,16 +479,11 @@ left_motor:
   port: 0
   inverted: false
   calibration:
-    ticks_to_rad: 0.00436
-    vel_lpf_alpha: 0.8
-    bemf_scale: 0.000312
-    bemf_offset: -0.0041
-    ticks_per_revolution: 1440.0
-    ff:
-      kS: 0.042
-      kV: 0.981
-      kA: 0.003
-    pid:
+    ticks_to_rad: 0.004363      # written by: raccoon calibrate ticks
+    vel_lpf_alpha: 0.8           # written by: raccoon calibrate autotune
+    bemf_offset: -0.0041         # written by: raccoon calibrate autotune
+    static_friction_pct: 3.2     # written by: raccoon calibrate autotune
+    pid:                         # optional — only present after autotune
       kp: 0.12
       ki: 0.0
       kd: 0.0
@@ -566,30 +601,38 @@ Controls how `raccoon` connects to the robot over the network and copies files v
 
 ---
 
+## Calibration commands
+
+raccoon has four calibration subcommands. Run them in order for a newly-built robot.
+
+| Command | What it does |
+|---------|-------------|
+| `raccoon calibrate ticks` | Phase 1 — measure encoder ticks per revolution from a physical rotation jig. Writes `ticks_to_rad` for each motor. |
+| `raccoon calibrate autotune` | Phase 2 — run `auto_tune()` as a mission step on the robot. Measures `vel_lpf_alpha`, `bemf_offset`, `static_friction_pct`, and optionally `pid.*` for each motor. |
+| `raccoon calibrate servos` | Phase 3 — interactively jog servos to find their named positions. Writes `offset` values to `config/servos.yml`. |
+| `raccoon calibrate step-response` | Records motor step-response data (CSV + plot). Used to manually fit motion profile constraints. Does **not** write values automatically — review the plot and set `motion_pid.linear.*` / `angular.*` manually. |
+
+> **Commands that do not exist:** `raccoon calibrate rpm`, `raccoon calibrate motors`, `raccoon calibrate sensors`, and `raccoon calibrate characterize_drive` are not registered in the CLI and will produce a "No such command" error. Use the commands listed above.
+
 ## Calibration-populated keys summary
 
 Several keys are written back to config files automatically by raccoon calibration commands. These should not be edited by hand unless you know the exact values.
 
 | Config path | Calibration command | What it measures |
 |-------------|---------------------|------------------|
-| `definitions.<motor>.calibration.ticks_to_rad` | `raccoon calibrate rpm` | Encoder ticks per radian (requires physical rotation measurement jig) |
-| `definitions.<motor>.calibration.bemf_scale` | `raccoon calibrate rpm` | Linear BEMF scaling factor |
-| `definitions.<motor>.calibration.bemf_offset` | `raccoon calibrate rpm` | BEMF zero-offset correction |
-| `definitions.<motor>.calibration.ticks_per_revolution` | `raccoon calibrate rpm` | Informational ticks-per-revolution value |
-| `definitions.<motor>.calibration.vel_lpf_alpha` | `raccoon calibrate motors` | LPF coefficient for velocity estimate |
-| `definitions.<motor>.calibration.ff.kS` | `raccoon calibrate motors` | Motor static friction (stiction) feedforward |
-| `definitions.<motor>.calibration.ff.kV` | `raccoon calibrate motors` | Motor velocity feedforward constant |
-| `definitions.<motor>.calibration.ff.kA` | `raccoon calibrate motors` | Motor acceleration feedforward constant |
-| `definitions.<motor>.calibration.pid.kp` | `raccoon calibrate motors` | Per-motor velocity PID proportional gain |
-| `definitions.<motor>.calibration.pid.ki` | `raccoon calibrate motors` | Per-motor velocity PID integral gain |
-| `definitions.<motor>.calibration.pid.kd` | `raccoon calibrate motors` | Per-motor velocity PID derivative gain |
-| `robot.motion_pid.linear.max_velocity` | `raccoon calibrate characterize_drive` | Measured maximum forward speed (m/s) |
-| `robot.motion_pid.linear.acceleration` | `raccoon calibrate characterize_drive` | Measured linear acceleration (m/s²) |
-| `robot.motion_pid.linear.deceleration` | `raccoon calibrate characterize_drive` | Measured linear deceleration (m/s²) |
-| `robot.motion_pid.lateral.max_velocity` | `raccoon calibrate characterize_drive` | Measured maximum strafe speed (m/s) — mecanum only |
-| `robot.motion_pid.lateral.acceleration` | `raccoon calibrate characterize_drive` | Measured lateral acceleration (m/s²) — mecanum only |
-| `robot.motion_pid.lateral.deceleration` | `raccoon calibrate characterize_drive` | Measured lateral deceleration (m/s²) — mecanum only |
-| `robot.motion_pid.angular.max_velocity` | `raccoon calibrate characterize_drive` | Measured maximum turn speed (rad/s) |
-| `robot.motion_pid.angular.acceleration` | `raccoon calibrate characterize_drive` | Measured angular acceleration (rad/s²) |
-| `robot.motion_pid.angular.deceleration` | `raccoon calibrate characterize_drive` | Measured angular deceleration (rad/s²) |
-| `definitions.<ir_sensor>.calibrationFactor` | `raccoon calibrate sensors` | IR sensor K-means calibration factor |
+| `definitions.<motor>.calibration.ticks_to_rad` | `raccoon calibrate ticks` | Encoder ticks per radian (requires physical rotation measurement jig) |
+| `definitions.<motor>.calibration.vel_lpf_alpha` | `raccoon calibrate autotune` | IIR low-pass filter coefficient for the BEMF velocity estimate |
+| `definitions.<motor>.calibration.bemf_offset` | `raccoon calibrate autotune` | Per-motor BEMF zero-offset (ADC counts) |
+| `definitions.<motor>.calibration.static_friction_pct` | `raccoon calibrate autotune` | Minimum PWM% to overcome motor stiction |
+| `definitions.<motor>.calibration.pid.kp` | `raccoon calibrate autotune` | Per-motor velocity PID proportional gain |
+| `definitions.<motor>.calibration.pid.ki` | `raccoon calibrate autotune` | Per-motor velocity PID integral gain |
+| `definitions.<motor>.calibration.pid.kd` | `raccoon calibrate autotune` | Per-motor velocity PID derivative gain |
+| `robot.motion_pid.linear.max_velocity` | Manual (after `raccoon calibrate step-response`) | Measured maximum forward speed (m/s) |
+| `robot.motion_pid.linear.acceleration` | Manual (after `raccoon calibrate step-response`) | Measured linear acceleration (m/s²) |
+| `robot.motion_pid.linear.deceleration` | Manual (after `raccoon calibrate step-response`) | Measured linear deceleration (m/s²) |
+| `robot.motion_pid.lateral.max_velocity` | Manual | Measured maximum strafe speed (m/s) — mecanum only |
+| `robot.motion_pid.lateral.acceleration` | Manual | Measured lateral acceleration (m/s²) — mecanum only |
+| `robot.motion_pid.lateral.deceleration` | Manual | Measured lateral deceleration (m/s²) — mecanum only |
+| `robot.motion_pid.angular.max_velocity` | Manual (after `raccoon calibrate step-response`) | Measured maximum turn speed (rad/s) |
+| `robot.motion_pid.angular.acceleration` | Manual (after `raccoon calibrate step-response`) | Measured angular acceleration (rad/s²) |
+| `robot.motion_pid.angular.deceleration` | Manual (after `raccoon calibrate step-response`) | Measured angular deceleration (rad/s²) |

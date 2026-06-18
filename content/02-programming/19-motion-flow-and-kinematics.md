@@ -1,9 +1,9 @@
 ---
 title: "Motion Flow and Kinematics"
 author: "OpenAI Codex"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 20
+weight: 24
 ---
 
 # Motion Flow and Kinematics
@@ -13,9 +13,9 @@ This page describes the actual control stack that turns a mission step into moto
 1. Python mission code asks for a motion step.
 2. The step layer creates a native motion controller with distance, heading, and constraint settings.
 3. The motion controller generates chassis-space velocity targets (`vx`, `vy`, `wz`).
-4. The drive layer closes the velocity loop using encoder-derived chassis velocity and IMU yaw rate.
-5. The kinematics layer converts the corrected chassis command into wheel angular velocities.
-6. Motor adapters convert those wheel targets into firmware-facing units and send them to the platform.
+4. **On real hardware:** the drive layer forwards the chassis command directly to the STM32 via `ChassisControlContext`. The STM32 runs inverse kinematics and per-wheel velocity PIDs entirely on-MCU. The Pi-side control loop is bypassed.
+5. **In simulation/mock:** the drive layer closes the velocity loop on the Pi using encoder-derived chassis velocity and IMU yaw rate, then the kinematics layer converts the corrected command into wheel angular velocities.
+6. Motor adapters convert wheel targets into firmware-facing units and send them to the platform.
 
 That separation is deliberate. Motion planning, drive control, wheel geometry, and hardware transport live in different layers so you can change one without rewriting the others.
 
@@ -25,14 +25,15 @@ That separation is deliberate. Motion planning, drive control, wheel geometry, a
 graph TD
     A["Mission code<br/>drive_forward(), turn_left(), drive_angle()"] --> B["Python step DSL<br/>MotionStep wrappers"]
     B --> C["C++ motion primitives<br/>LinearMotion / DiagonalMotion / TurnMotion"]
-    C --> D["Drive controller<br/>per-axis velocity control"]
-    D --> E["Kinematics<br/>chassis ↔ wheels"]
-    E --> F["MotorAdapter + HAL"]
-    F --> G["STM32 motor control"]
+    C --> D["Drive layer<br/>Drive::update()"]
 
-    G -. encoder velocity .-> E
-    G -. wheel feedback .-> D
-    D -. yaw-rate feedback .-> C
+    D -->|"Real hardware<br/>ChassisControlContext sink registered"| HW["STM32 coprocessor<br/>Inverse kinematics + per-wheel PIDs"]
+    D -->|"Simulation / mock<br/>no sink — Pi-side path"| E["Kinematics<br/>chassis ↔ wheels (Pi-side)"]
+    E --> F["MotorAdapter + HAL"]
+    F --> HW
+
+    HW -. encoder velocity .-> E
+    HW -. yaw-rate feedback .-> C
 ```
 
 ## Chassis Coordinate System
@@ -61,9 +62,30 @@ The usual mission-facing factories such as `drive_forward`, `strafe_right`, `tur
 
 ## Drive Layer
 
-The drive layer accepts a desired chassis velocity and corrects it before it reaches the wheels.
+The drive layer accepts a desired chassis velocity and decides how to execute it. Its behaviour is fundamentally different between real hardware and simulation.
 
-It runs three independent axis controllers:
+### Real Hardware: `ChassisControlContext` Bypass
+
+On a real Wombat robot, the platform bundle registers a sink in `ChassisControlContext` at startup. When `Drive::update()` detects that sink, it **bypasses the entire Pi-side velocity control loop** and forwards the body-frame chassis velocity command (`vx, vy, wz`) directly to the STM32 coprocessor via that sink:
+
+```cpp
+// From drive.cpp
+if (foundation::ChassisControlContext::instance().command(
+        desired_.vx, desired_.vy, desired_.wz))
+{
+    return {};  // Pi does nothing further — STM32 owns the control loop
+}
+```
+
+The STM32 then:
+1. Applies the inverse kinematics matrix entirely on-MCU.
+2. Runs per-wheel velocity PIDs in firmware.
+
+This means on real hardware, **the Pi-side PID parameters for `vx`, `vy`, and `wz` have no effect on robot motion**. Tuning the drive controller configuration changes only the simulation/mock behaviour. The on-MCU loop runs at the STM32's control rate, not at the Pi's update rate.
+
+### Simulation / Mock: Pi-Side Velocity PIDs
+
+When no `ChassisControlContext` sink is registered (mock or simulator mode), execution falls through to the host-side control path. The drive layer runs three independent axis controllers:
 
 - `vx` uses `kinematics.estimate_state().vx`
 - `vy` uses `kinematics.estimate_state().vy`
@@ -84,7 +106,14 @@ Important current implementation details:
 - the controller output is not used as an actuator saturation limit
 - the result is treated as a corrected chassis velocity command and passed to kinematics
 
-That means the drive layer is a chassis-space velocity corrector, not a full motor-voltage controller.
+The drive layer in simulation is a chassis-space velocity corrector; on real hardware it is a transparent forwarding layer to the STM32.
+
+### Summary: Where the Loop Runs
+
+| Environment | Pi-side PIDs | STM32-side PIDs | Who does inverse kinematics? |
+|-------------|-------------|-----------------|------------------------------|
+| Real hardware (Wombat) | **No-op** — bypassed | Yes — active | STM32 firmware |
+| Mock / Simulator | Active | Not applicable | Pi (kinematics layer) |
 
 ## Kinematics Layer
 

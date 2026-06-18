@@ -1,9 +1,9 @@
 ---
 title: "Project Structure"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 2
+weight: 3
 ---
 
 # Project Structure
@@ -32,9 +32,13 @@ Use the Raccoon CLI to scaffold a new project:
 raccoon create project MyRobot
 ```
 
-This generates the full directory layout, YAML configuration, and starter Python files. See [Raccoon CLI]({{< ref "04-raccoon-cli" >}}) for details on the CLI commands.
+This command **clones the [raccoon-example](https://github.com/htl-stp-ecer/raccoon-example) repository** at the tag matching your installed CLI version (falling back to the default branch if no matching tag exists), then patches the project name and a fresh UUID into `raccoon.project.yml` and `pyproject.toml`. This gives you a fully working reference project as a starting point rather than an empty skeleton.
 
-> **Note:** You can also create the project files manually, but the CLI scaffold saves significant setup time and ensures the correct structure.
+After cloning, the CLI optionally launches `raccoon wizard` to walk you through hardware configuration interactively. Pass `--no-wizard` to skip that step.
+
+See [Raccoon CLI]({{< ref "04-raccoon-cli" >}}) for details on all CLI commands.
+
+> **Note:** You can also clone the example repo manually and rename it, but `raccoon create project` handles the UUID patching and git history initialization automatically.
 
 ## Directory Layout
 
@@ -54,17 +58,15 @@ my-robot/
     ├── main.py                  # Entry point — creates Robot, calls start()
     ├── hardware/
     │   ├── __init__.py          # Required for Python imports
-    │   ├── defs.py              # Hardware definitions (motors, servos, sensors)
-    │   └── robot.py             # Robot class (kinematics, drive, odometry, missions)
+    │   ├── defs.py              # Hardware definitions (motors, servos, sensors) — GENERATED
+    │   ├── defs.pyi             # Type stub for IDE autocomplete — GENERATED
+    │   └── robot.py             # Robot class (kinematics, drive, missions) — GENERATED
     ├── missions/
     │   ├── __init__.py          # Required for Python imports
-    │   ├── m00_setup_mission.py # Runs before the match (calibration, homing)
-    │   ├── m01_first_task.py    # First autonomous mission
-    │   ├── m02_second_task.py   # Second autonomous mission
-    │   └── m99_shutdown.py      # Cleanup after timeout
-    ├── service/
-    │   ├── __init__.py          # Required for Python imports
-    │   └── my_service.py        # Stateful logic shared across missions
+    │   ├── m000_setup_mission.py # Runs before the match (calibration, homing)
+    │   ├── m010_first_task.py    # First autonomous mission
+    │   ├── m020_second_task.py   # Second autonomous mission
+    │   └── m999_shutdown.py      # Cleanup after timeout
     └── steps/
         ├── __init__.py          # Required for Python imports
         └── my_custom_steps.py   # Reusable custom step functions
@@ -127,8 +129,8 @@ definitions:
   # ... more hardware ...
 
 missions:
-  - M01SetupMission: setup
-  - M99ShutdownMission: shutdown
+  - M000SetupMission: setup
+  - M999ShutdownMission: shutdown
 
 connection:
   pi_address: 192.168.100.237
@@ -170,19 +172,18 @@ if __name__ == "__main__":
 
 > **This file is auto-generated** from the `definitions:` section of `raccoon.project.yml` by the Raccoon CLI. **Never edit this file by hand** — it gets overwritten every time code generation runs. Always make changes in the YAML file instead.
 
-Here's what the generated code looks like:
+Here's what the generated code looks like (imports are emitted per-class by the codegen; never write these by hand):
 
 ```python
-from raccoon import (
-    DigitalSensor, IRSensor, Motor, MotorCalibration,
-    SensorGroup, Servo, ServoPreset,
-)
-from raccoon import IMU as Imu
+from raccoon import DigitalSensor, IRSensor, Motor, MotorCalibration, Servo
+from raccoon import IMU
+from raccoon.step.motion.sensor_group import SensorGroup
+from raccoon.step.servo.preset import ServoPreset
 
 
 class Defs:
     # IMU and start button
-    imu = Imu()
+    imu = IMU()
     button = DigitalSensor(port=10)
 
     # Drive motors
@@ -203,13 +204,17 @@ class Defs:
     front_right_ir = IRSensor(port=0)
     front = SensorGroup(right=front_right_ir)
 
-    # Servos with named positions
+    # Servos with named positions (YAML type: Servo + positions: block)
     claw = ServoPreset(Servo(port=2), positions={"closed": 135, "open": 30})
     arm = ServoPreset(Servo(port=1), positions={"up": 32, "down": 160})
 
     # List of analog sensors for calibration
     analog_sensors = [front_right_ir]
 ```
+
+> **Never write these imports by hand.** The codegen resolves the correct module path for each class and emits the import automatically. In particular, `SensorGroup` is not exported from the top-level `raccoon` package — `from raccoon import SensorGroup` raises `ImportError`. Use codegen to manage `defs.py`.
+
+> **`defs.pyi` — IDE stub file.** The codegen also produces `src/hardware/defs.pyi` alongside `defs.py`. This stub gives IDE autocompletion the exact method signatures for `ServoPreset` named positions (e.g. `Defs.arm.up()`, `Defs.claw.closed()`) and `ArmPreset` positions. The `.pyi` file is regenerated on every codegen run and should not be edited by hand.
 
 See [Robot Definition]({{< ref "02-robot-definition" >}}) for details on each component type.
 
@@ -221,12 +226,14 @@ Here's what the generated code looks like:
 
 ```python
 from raccoon import (
-    DifferentialKinematics, Drive, FusedOdometry,
+    DifferentialKinematics, Drive,
     GenericRobot, PidGains, Feedforward,
-    # ... more imports ...
+    UnifiedMotionPidConfig,
+    # ... additional imports per configuration ...
 )
 from src.hardware.defs import Defs
-from src.missions.m01_first_mission import M01FirstMission
+from src.missions.m000_setup_mission import M000SetupMission
+from src.missions.m010_first_mission import M010FirstMission
 
 
 class Robot(GenericRobot):
@@ -240,13 +247,19 @@ class Robot(GenericRobot):
     )
 
     drive = Drive(kinematics=kinematics, vel_config=..., imu=defs.imu)
-    odometry = FusedOdometry(imu=defs.imu, kinematics=kinematics, ...)
+
+    # odometry is a @property generated by codegen — not a class attribute.
+    # It calls Platform.create_odometry(self.kinematics) on first access,
+    # returning the platform-canonical IOdometry implementation.
+    # FusedOdometry and Stm32Odometry are no longer user-visible.
 
     shutdown_in = 120  # seconds
-    missions = [M01FirstMission()]
-    setup_mission = M00SetupMission()
+    missions = [M010FirstMission()]
+    setup_mission = M000SetupMission()
     shutdown_mission = None
 ```
+
+> **`FusedOdometry` is not imported.** Odometry is now platform-managed. The generated `robot.py` exposes an `odometry` `@property` that calls `Platform.create_odometry(self.kinematics)` lazily on first access. You do not select `FusedOdometry` or `Stm32Odometry` in the YAML — that choice is made by the platform driver. If you add `odometry:` to `robot.yml`, the codegen logs a warning and ignores it.
 
 See [Robot Definition]({{< ref "02-robot-definition" >}}) for the full breakdown.
 
@@ -282,7 +295,7 @@ All class names use PascalCase with no underscores:
 
 | What | Example | Notes |
 |------|---------|-------|
-| Mission classes | `M01DriveToConeMission` | Prefix matches file number |
+| Mission classes | `M010DriveToConeMission` | 3-digit prefix matches file number |
 | Robot class | `Robot` | Always `Robot` |
 | Hardware defs | `Defs` | Always `Defs` |
 | Custom step classes | `WaitForAnalogRange` | Descriptive, verb-first |
@@ -310,9 +323,9 @@ All Python files use lowercase with underscores. No hyphens, no spaces:
 
 | What | Pattern | Example |
 |------|---------|---------|
-| Mission files | `m{NN}_{description}_mission.py` | `m01_drive_to_cone_mission.py` |
-| Setup mission | `m00_setup_mission.py` | Always `m00` |
-| Shutdown mission | `m99_shutdown_mission.py` | Always `m99` |
+| Mission files | `m{NNN}_{description}_mission.py` | `m010_drive_to_cone_mission.py` |
+| Setup mission | `m000_setup_mission.py` | Always `m000` (reserved) |
+| Shutdown mission | `m999_shutdown_mission.py` | Always `m999` (reserved) |
 | Custom step files | `{description}_steps.py` | `cone_container_steps.py` |
 | Hardware defs | `defs.py` | Always `defs.py` (generated) |
 | Robot class | `robot.py` | Always `robot.py` (generated) |
@@ -320,23 +333,27 @@ All Python files use lowercase with underscores. No hyphens, no spaces:
 
 ### Mission Numbering
 
-Missions use a two-digit prefix (`m00`–`m99`) as a **naming convention** for readability:
+Missions use a **three-digit** zero-padded prefix as a naming convention. The CLI regex is `^[Mm](\d{3})` — exactly three digits after the `M`:
 
-- `m00` — Setup mission (calibration, servo homing) by convention.
-- `m01`–`m98` — Main missions.
-- `m99` — Shutdown mission by convention.
+| Range | Purpose |
+|-------|---------|
+| `m000` | Reserved — setup mission |
+| `m010`–`m990` | Main missions (increment by 10) |
+| `m999` | Reserved — shutdown mission |
 
-The numbering is purely for human readability and file sorting — it does **not** control execution order. Execution order is determined by the `missions:` list in `raccoon.project.yml`:
+`raccoon create mission MyMission` assigns the next available number (starting at `M010`, then `M020`, `M030`, etc.) and creates the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
+
+Execution order is determined by the `missions:` list in `raccoon.project.yml`, not the file number:
 
 ```yaml
 missions:
-  - M01SetupMission: setup       # Runs as setup mission
-  - M02GrabPomsMission           # First main mission
-  - M03DriveToBasketMission      # Second main mission
-  - M99ShutdownMission: shutdown # Runs as shutdown mission
+  - M000SetupMission: setup       # Runs as setup mission (before start signal)
+  - M010GrabPomsMission           # First main mission
+  - M020DriveToBasketMission      # Second main mission
+  - M999ShutdownMission: shutdown # Runs as shutdown mission (after timeout or completion)
 ```
 
-The YAML list order defines the sequence. You could name a mission `m42_foo.py` and put it first in the list — it would run first regardless of the number.
+The YAML list order defines the sequence. The number is purely for human readability and file sorting. A mission named `m042_foo.py` that appears first in the YAML list runs first.
 
 ### Hardware Naming Pattern
 

@@ -1,9 +1,9 @@
 ---
 title: "Synchronizing Two Robots"
 author: "Tobias Madlberger"
-date: 2026-04-10
+date: 2026-06-18
 draft: false
-weight: 4
+weight: 6
 ---
 
 # Synchronizing Two Robots
@@ -45,7 +45,9 @@ Both robots look at their own clock. They never look at each other.
 
 Every robot has a `synchronizer` attached to it. The synchronizer captures `T=0` the moment the wait-for-light gate fires — i.e. the instant the start lamp is detected. This is what ties the two robots' clocks together: because the lamp turns on for both robots at the same physical moment, both synchronizers latch `T=0` at (nearly) the same instant, and `wait_for_checkpoint(20.0)` on Robot A fires at (nearly) the same wall-clock moment as `wait_for_checkpoint(20.0)` on Robot B.
 
-From that moment on, `wait_for_checkpoint(seconds)` pauses the current sequence until the mission clock reaches that absolute time.
+From that moment on, `wait_for_checkpoint(checkpoint_seconds)` pauses the current sequence until the mission clock reaches that absolute time.
+
+While waiting, a full-screen countdown is shown on the robot's display — the remaining seconds tick down in large digits so you can see at a glance when the robot will resume. The display automatically returns to the normal mission screen when the checkpoint fires.
 
 > If your robot is started by button press instead of a light (e.g. during development, or because the `wait_for_light_sensor` is not defined), the synchronizer latches `T=0` on the button press instead. See **[Making Your Robot Competition Ready]({{< ref "15-competition-ready" >}})** for how to enable the light-start gate.
 
@@ -84,7 +86,7 @@ The two risky moments are **T=12s** (A is in the middle) and **T=18s** (B is in 
 **Robot A's mission:**
 
 ```python
-class M01CrossCenterMission(Mission):
+class M010CrossCenterMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(40),
@@ -100,7 +102,7 @@ class M01CrossCenterMission(Mission):
 **Robot B's mission:**
 
 ```python
-class M01DropCubeMission(Mission):
+class M010DropCubeMission(Mission):
     def sequence(self) -> Sequential:
         return seq([
             drive_forward(20),
@@ -178,7 +180,7 @@ The collision check reads the same timestamped path data that the mission clock 
 
 ## Doing Something Useful While Waiting
 
-Idling at a checkpoint is a waste of seconds you can't get back. `do_until_checkpoint(seconds, task)` runs a task *until* the checkpoint is reached, then cancels it. Use it to scan for a line, sweep a scanner servo, poll a sensor, or make any other productive use of the wait time:
+Idling at a checkpoint is a waste of seconds you can't get back. `do_until_checkpoint(checkpoint, step)` runs a step *until* the checkpoint is reached, then cancels it. Use it to scan for a line, sweep a scanner servo, poll a sensor, or make any other productive use of the wait time:
 
 ```python
 seq([
@@ -198,6 +200,8 @@ seq([
 
 When T=12s hits, the loop is cancelled cleanly at the next `await` point and execution continues with `drive_forward(30)`.
 
+> **"At least until the checkpoint."** If the wrapped step finishes *before* the checkpoint, execution does not continue immediately — `do_until_checkpoint` still waits until the checkpoint time is reached. Think of it as "run this step, and in any case don't continue before T=12s." This is different from `do_while_active`, where the outer step ends as soon as the reference step ends.
+
 ## Limitations
 
 `wait_for_checkpoint()` is a simple tool, and it's important to know what it *isn't*.
@@ -212,11 +216,15 @@ When T=12s hits, the loop is cancelled cleanly at the next `await` point and exe
 ```python
 from raccoon.step.timing import wait_for_checkpoint, do_until_checkpoint
 
-# Pause until the mission clock reaches T=seconds (or return immediately if past).
-wait_for_checkpoint(seconds)
+# Pause until the mission clock reaches T=checkpoint_seconds
+# (returns immediately if the checkpoint has already passed).
+wait_for_checkpoint(checkpoint_seconds)
 
-# Run `task` until the checkpoint, then cancel it.
-do_until_checkpoint(seconds, task)
+# Run `step` until the checkpoint, then cancel it.
+# If step finishes early, still waits until checkpoint_seconds.
+do_until_checkpoint(checkpoint, step)
 ```
 
 Both live in `raccoon.step.timing` and can be placed anywhere inside a `seq([...])` or `parallel(...)` block, just like any other step.
+
+> **Use keyword arguments carefully.** The parameter names are `checkpoint_seconds` and `checkpoint` respectively. Using the wrong keyword name (e.g. `do_until_checkpoint(seconds=12.0, task=my_step)`) will raise a `TypeError`. Pass positionally or use the correct names: `do_until_checkpoint(checkpoint=12.0, step=my_step)`.

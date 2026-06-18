@@ -1,7 +1,7 @@
 ---
 title: "Line Following"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 1
 ---
@@ -13,8 +13,18 @@ Line following keeps the robot tracking along a black line (or its edge) using P
 ## Quick Start
 
 ```python
-# Two-sensor: follow a line for 50 cm
+from raccoon import *
+from src.hardware.defs import Defs
+
+# Single-sensor shortcut via SensorGroup: follow the right edge for 50 cm
 Defs.front.follow_right_edge(cm=50)
+
+# Two-sensor: follow a line for 50 cm using both sensors
+follow_line(
+    left_sensor=Defs.front.left,
+    right_sensor=Defs.front.right,
+    distance_cm=50,
+)
 
 # Single-sensor: follow the right edge of a line for 30 cm
 follow_line_single(
@@ -63,11 +73,13 @@ A PID controller converts the sensor error into a steering correction each cycle
 correction = Kp * error + Ki * integral(error) + Kd * d(error)/dt
 ```
 
-| Term | Default (two-sensor) | Default (single) | Effect |
-|------|:--------------------:|:-----------------:|--------|
-| `kp` | 0.4 | 1.0 | Sharpness of response to current error |
-| `ki` | 0.0 | 0.0 | Eliminates steady-state drift over time |
-| `kd` | 0.1 | 0.3 | Dampens oscillation around the line edge |
+| Term | Default | Effect |
+|------|:-------:|--------|
+| `kp` | 0.4 | Sharpness of response to current error |
+| `ki` | 0.0 | Eliminates steady-state drift over time |
+| `kd` | 0.1 | Dampens oscillation around the line edge |
+
+Both `follow_line` (two-sensor) and `follow_line_single` (single-sensor) use the same default gains: `kp=0.4, ki=0.0, kd=0.1`. There is no separate single-sensor gain set in the code — both classes start from the same baseline. Tune from these defaults rather than from different starting points.
 
 The correction is applied as an angular velocity override on top of the robot's forward motion. The result is smooth, proportional steering — not bang-bang switching.
 
@@ -123,9 +135,9 @@ strafe_follow_line(
 )
 ```
 
-**Angular correction** (default) applies the PID output as rotational velocity — the robot rotates to stay on the line.
+**Angular correction** (`directional_follow_line`) applies the PID output as rotational velocity — the robot rotates to stay on the line.
 
-**Lateral correction** (`strafe_follow_line`) keeps the heading locked using a secondary gyro-hold PID and instead strafes left/right to correct position. This is useful when the robot must maintain a specific orientation while following a line.
+**Lateral correction** (`strafe_follow_line`) enables `lateral_correction` mode in the underlying motion controller, which instead applies the PID output as lateral (strafe) velocity while the heading is held constant via the motion controller's built-in heading-hold. This is useful when the robot must maintain a specific orientation while following a line, for example to keep a side-mounted mechanism aligned.
 
 ## Stopping
 
@@ -135,32 +147,119 @@ Line following stops when either condition is met (whichever comes first):
 2. **Stop condition triggered** — a composable `.until()` condition fires
 
 ```python
+from raccoon import *
+from src.hardware.defs import Defs
+
 # Stop after 50 cm
-follow_line(..., distance_cm=50)
+follow_line(Defs.front.left, Defs.front.right, distance_cm=50)
 
 # Stop when another sensor sees black
-follow_line(..., distance_cm=100).until(on_black(Defs.rear.right))
+follow_line(Defs.front.left, Defs.front.right, distance_cm=100).until(on_black(Defs.rear.right))
 
-# Stop on timeout
-follow_line(...).until(after_seconds(5))
+# Stop on timeout — no distance needed, just a condition
+follow_line(Defs.front.left, Defs.front.right).until(after_seconds(5))
 ```
 
-If neither is provided, the step uses a very large default distance (effectively "follow forever until cancelled").
+> **Important:** At least one of `distance_cm` or `.until()` must be provided. Calling `follow_line()` or `follow_line_single()` without either raises a `ValueError` immediately. There is no "follow forever" fallback mode.
 
 ## Parameters
 
+### `follow_line` — Two-Sensor Profiled
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `left_sensor` / `right_sensor` | IRSensor | Required | Two-sensor variants: the sensors straddling the line |
-| `sensor` | IRSensor | Required | Single-sensor variants: the sensor tracking an edge |
-| `side` | `LineSide` | `LEFT` | Single-sensor: which edge of the line to track |
-| `distance_cm` | float | None | Distance to follow before stopping |
-| `speed` | float | 0.5 | Forward speed as fraction of max velocity (0.0–1.0) |
-| `kp`, `ki`, `kd` | float | See above | PID gains for steering correction |
+| `left_sensor` | IRSensor | Required | Left sensor, positioned to the left of the line |
+| `right_sensor` | IRSensor | Required | Right sensor, positioned to the right of the line |
+| `distance_cm` | float | `None` | Distance to follow; required if no `.until()` |
+| `speed` | float | `0.5` | Forward speed as fraction of max velocity (0.0–1.0) |
+| `kp` | float | `0.4` | Proportional PID gain |
+| `ki` | float | `0.0` | Integral PID gain |
+| `kd` | float | `0.1` | Derivative PID gain |
+
+### `follow_line_single` — Single-Sensor Profiled
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sensor` | IRSensor | Required | The single sensor tracking the edge |
+| `distance_cm` | float | `None` | Distance to follow; required if no `.until()` |
+| `speed` | float | `0.5` | Forward speed as fraction of max velocity (0.0–1.0) |
+| `side` | `LineSide` | `LEFT` | Which edge of the line to track |
+| `kp` | float | `0.4` | Proportional PID gain |
+| `ki` | float | `0.0` | Integral PID gain |
+| `kd` | float | `0.1` | Derivative PID gain |
+
+### `directional_follow_line` / `strafe_follow_line` — Directional Variants
+
+These directional variants accept `heading_speed` and `strafe_speed` separately (independent forward and lateral fractions), rather than a single `speed`. `strafe_follow_line` keeps the heading locked and corrects position via lateral strafing; `directional_follow_line` applies the PID output as angular velocity.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `left_sensor` / `right_sensor` | IRSensor | Required | The two sensors straddling the line |
+| `heading_speed` | float | `0.0` | Forward/backward fraction (-1.0 to 1.0) |
+| `strafe_speed` | float | `0.0` | Lateral fraction (-1.0 to 1.0) |
+| `distance_cm` | float | `None` | Distance (euclidean) to follow |
+| `kp`, `ki`, `kd` | float | `0.4 / 0.0 / 0.1` | PID gains |
+
+### `SensorGroup.follow_right_edge` Note
+
+`Defs.front.follow_right_edge(cm=50)` is a **single-sensor** convenience that internally calls `follow_line_single` with `self.right` (the right sensor of the group). Despite the group owning both sensors, only the right one is used. Use `follow_line(Defs.front.left, Defs.front.right, ...)` explicitly if you want the two-sensor variant.
+
+## Lateral (Strafe-Primary) Variants
+
+`LateralFollowLine` and `LateralFollowLineSingle` are the strafe-primary counterparts to `StrafeFollowLine`. Instead of the robot's primary motion being forward while it corrects via strafing, here the robot's primary motion is lateral (strafing) while it corrects via forward/backward motion.
+
+This is useful when the robot must travel sideways along a line — for example, following a line painted parallel to the robot's forward axis while the robot moves across the table laterally.
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+# Strafe right along a line (two-sensor), correcting with forward/backward motion
+lateral_follow_line(
+    left_sensor=Defs.front.left,
+    right_sensor=Defs.front.right,
+    speed=0.5,          # positive = strafes right
+    distance_cm=60,
+)
+
+# Strafe left along a line edge (single-sensor)
+lateral_follow_line_single(
+    sensor=Defs.front.left,
+    speed=-0.4,         # negative = strafes left
+    side=LineSide.LEFT,
+    distance_cm=40,
+)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `left_sensor` / `right_sensor` | IRSensor | Required | Two sensors straddling the line (for `lateral_follow_line`) |
+| `sensor` | IRSensor | Required | Single sensor tracking the edge (for `lateral_follow_line_single`) |
+| `speed` | float | `0.5` | Lateral speed fraction. Positive = strafe right, negative = strafe left |
+| `distance_cm` | float | `None` | Lateral distance to travel before stopping |
+| `side` | `LineSide` | `LEFT` | Single-sensor: which edge to track (relative to lateral travel direction) |
+| `kp`, `ki`, `kd` | float | `0.4 / 0.0 / 0.1` | PID gains for forward/backward correction |
+
+Sensor labeling for `LateralFollowLine`: when strafing right, `left_sensor` is the front-facing side sensor and `right_sensor` is the rear-facing side sensor. When strafing left, that geometry mirrors automatically.
+
+## All Line-Follow Steps Summary
+
+| Step | Motion direction | Correction method | Sensors |
+|------|-----------------|-------------------|---------|
+| `follow_line` | Forward | Rotation (angular velocity) | Two |
+| `follow_line_single` | Forward | Rotation (angular velocity) | One |
+| `directional_follow_line` | Any (heading + strafe) | Rotation (angular velocity) | Two |
+| `strafe_follow_line` | Forward | Strafing (heading stays locked) | Two |
+| `strafe_follow_line_single` | Forward | Strafing (heading stays locked) | One |
+| `lateral_follow_line` | Lateral (strafe primary) | Forward/backward | Two |
+| `lateral_follow_line_single` | Lateral (strafe primary) | Forward/backward | One |
+| `directional_follow_line_single` | Any (heading + strafe) | Rotation (angular velocity) | One |
 
 ## Tips
 
 1. **Start with default PID gains.** Only tune if the robot oscillates (lower `kp`, raise `kd`) or drifts off the line (raise `kp`).
 2. **Use two sensors when possible.** Two-sensor following is inherently more stable because the error signal is differential — ambient noise affects both sensors equally and cancels out.
 3. **Single-sensor edge tracking works best at moderate speed.** At high speeds the sensor crosses the edge too quickly for accurate readings.
-4. **Calibrate on the actual surface.** Line following accuracy depends directly on calibration quality — see [Calibration]({{< ref "10-calibration" >}}).
+4. **`follow_right_edge` uses only one sensor.** The `SensorGroup.follow_right_edge()` shortcut calls `follow_line_single` with only the right sensor. Use the explicit `follow_line()` factory with both sensors if you want two-sensor behavior.
+5. **You must provide `distance_cm` or `.until()`.** Both `follow_line` and `follow_line_single` raise a `ValueError` immediately if neither is provided.
+6. **Calibrate on the actual surface.** Line following accuracy depends directly on calibration quality — see [Calibration]({{< ref "10-calibration" >}}).

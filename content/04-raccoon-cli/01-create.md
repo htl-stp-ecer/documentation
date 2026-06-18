@@ -1,7 +1,7 @@
 ---
 title: "create"
 author: "Florian Schwanzer"
-date: 2026-03-19
+date: 2026-06-18
 draft: false
 weight: 2
 ---
@@ -34,11 +34,12 @@ raccoon create project <name> --no-wizard
 ### What it does
 
 1. Creates a new directory `<name>` at the target path
-2. Renders the project scaffold templates into the directory (see structure below)
-3. Assigns a unique UUID to the project in `raccoon.project.yml`
+2. Clones the example repository `htl-stp-ecer/raccoon-example` from GitHub at the matching version tag (requires internet access and `git` on your PATH)
+3. Assigns a unique UUID to the project in `raccoon.project.yml` and patches the project name
 4. Initializes a local git repository with an initial snapshot commit
 5. Unless `--no-wizard`: prompts for a Pi connection and launches the [setup wizard]({{< ref "/04-raccoon-cli" >}})
-6. Opens PyCharm if available and prints SSH interpreter setup instructions
+
+> **Internet access required.** `raccoon create project` clones a remote repository. If the matching version tag is not yet published, it falls back to cloning the default branch of the example repo.
 
 ### Generated project structure
 
@@ -103,8 +104,8 @@ connection:  !include 'config/connection.yml'
 
 ```yaml
 - SetupMission: setup
-- M01DriveToConeMission
-- M02CollectConeMission
+- M010DriveToConeMission
+- M020CollectConeMission
 ```
 
 **`config/servos.yml`** — servo port assignments and named positions (e.g. `up: 30`, `down: 160`). Commented-out examples are included in the scaffold.
@@ -113,14 +114,16 @@ connection:  !include 'config/connection.yml'
 
 ```bash
 raccoon create project ConeBot
-# Creates ./ConeBot/, scaffolds all files, initializes git, launches wizard
+# Clones the example repo, patches name/UUID, initializes git, launches wizard
 
 raccoon create project ConeBot --path ~/robots
 # Creates ~/robots/ConeBot/
 
 raccoon create project ConeBot --no-wizard
-# Scaffolds only — run 'cd ConeBot && raccoon wizard' to configure later
+# Clones and patches only — run 'cd ConeBot && raccoon wizard' to configure later
 ```
+
+> The exact file structure cloned from the example repository matches the version of raccoon you have installed. If the matching git tag is not yet published (e.g. on a pre-release build), raccoon falls back to the default branch of `htl-stp-ecer/raccoon-example`.
 
 ---
 
@@ -142,7 +145,7 @@ Must be run from inside a project directory (any subdirectory works — raccoon 
 ### Generated mission file
 
 ```python
-from libstp import *
+from raccoon import *
 
 from src.hardware.defs import Defs
 
@@ -152,7 +155,7 @@ class DriveToConeMission(Mission):
         return seq([])
 ```
 
-Fill in the `seq([...])` body with libstp steps. See the [Steps documentation]({{< ref "/02-programming/04-steps" >}}) for available steps.
+Fill in the `seq([...])` body with raccoon steps. See the [Steps documentation]({{< ref "/02-programming/04-steps" >}}) for available steps.
 
 ### Naming conventions
 
@@ -169,41 +172,41 @@ The `Mission` suffix is added automatically. If you accidentally include it in t
 **Recommended: use an `M##` prefix** to encode the execution order directly in the name. This keeps both the class names and filenames self-documenting:
 
 ```bash
-raccoon create mission M01DriveToZone
-raccoon create mission M02CollectSamples
-raccoon create mission M03ReturnToBase
+raccoon create mission M010DriveToZone
+raccoon create mission M020CollectSamples
+raccoon create mission M030ReturnToBase
 ```
 
 This produces:
 
 ```
 src/missions/
-├── m01_drive_to_zone_mission.py     → class M01DriveToZoneMission
-├── m02_collect_samples_mission.py   → class M02CollectSamplesMission
-└── m03_return_to_base_mission.py    → class M03ReturnToBaseMission
+├── m010_drive_to_zone_mission.py     → class M010DriveToZoneMission
+├── m020_collect_samples_mission.py   → class M020CollectSamplesMission
+└── m030_return_to_base_mission.py    → class M030ReturnToBaseMission
 ```
 
 And in `config/missions.yml`:
 
 ```yaml
 - SetupMission: setup
-- M01DriveToZoneMission
-- M02CollectSamplesMission
-- M03ReturnToBaseMission
+- M010DriveToZoneMission
+- M020CollectSamplesMission
+- M030ReturnToBaseMission
 ```
 
-> The `M00` slot is reserved by convention for the setup mission that ships with every new project.
+> The `M000` slot is reserved by convention for the setup mission that ships with every new project.
 
 ### Example
 
 ```bash
 cd ConeBot
 
-raccoon create mission M01DriveToGate
-# Created: src/missions/m01_drive_to_gate_mission.py
-# Added:   M01DriveToGateMission to config/missions.yml
+raccoon create mission M010DriveToGate
+# Created: src/missions/m010_drive_to_gate_mission.py
+# Added:   M010DriveToGateMission to config/missions.yml
 # Imported in src/main.py
 
-raccoon create mission M02CollectBall
-# Created: src/missions/m02_collect_ball_mission.py
+raccoon create mission M020CollectBall
+# Created: src/missions/m020_collect_ball_mission.py
 ```

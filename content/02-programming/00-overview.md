@@ -1,7 +1,7 @@
 ---
 title: "Architecture Overview"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
 weight: 1
 ---
@@ -101,7 +101,7 @@ When you call `drive_forward(25)`, the motion layer plans a trapezoidal velocity
 Abstract interfaces (`Motor`, `Servo`, `IMU`, `IRSensor`, etc.) that hide platform-specific details. The same mission code works whether you're running on a real Wombat or a mock driver for testing.
 
 ### Platform Layer (Orange)
-Concrete drivers that talk to actual hardware. The Wombat driver communicates with the STM32 firmware over LCM (a lightweight inter-process messaging protocol). The mock driver returns simulated values for testing.
+Concrete drivers that talk to actual hardware. The Wombat driver communicates with the STM32 firmware through the `raccoon_transport` layer (a custom IPC transport). The mock driver returns simulated values for testing.
 
 ## Module Map
 
@@ -112,24 +112,32 @@ Internally, the library is split into many `libstp-*` implementation modules, ea
 | `libstp-foundation` | Core | Types (`Pose`, `ChassisVelocity`), PID, math, logging |
 | `libstp-hal` | HAL | Abstract hardware interfaces |
 | `libstp-platforms` | Platform | Wombat and Mock drivers |
+| `libstp-transport-core` | Platform | Low-level IPC transport layer (`raccoon_transport`) used by Wombat driver |
 | `libstp-drive` | Control | Chassis velocity controller |
-| `libstp-kinematics` | Control | Differential and mecanum models |
-| `libstp-odometry` | Control | Position tracking (fused, STM32) |
-| `libstp-motion` | Motion | Linear, turn, and arc motion profiles |
+| `libstp-kinematics` | Control | Differential and mecanum kinematic models (`DifferentialKinematics`, `MecanumKinematics`) |
+| `libstp-odometry` | Control | Position tracking |
+| `libstp-motion` | Motion | Linear, turn, arc, and spline motion profiles; line-follow; lineup |
 | `libstp-sensor-ir` | Sensor | IR line sensor with calibration |
 | `libstp-sensor-et` | Sensor | Additional sensor types |
 | `libstp-servo` | Actuator | Servo control |
+| `libstp-arm` | Actuator | Arm inverse-kinematics system (`ArmChain`, `ArmPreset`); named position motion |
 | `libstp-button` | Input | Digital button handling |
-| `libstp-cam` | Sensor | Camera interface |
+| `libstp-cam` | Sensor | Camera interface (`CamSensor`) |
 | `libstp-calibration-store` | Support | Persistent calibration data |
-| `libstp-timing` | Support | Timing and synchronization |
+| `libstp-timing` | Support | Timing, checkpoint synchronization |
 | `libstp-async` | Support | Async/coroutine utilities |
-| `libstp-kmeans` | Algorithm | K-means clustering |
+| `libstp-kmeans` | Algorithm | K-means clustering for IR threshold calibration |
 | `libstp-debug` | Support | Debug utilities |
 | `libstp-screen` | Output | Display rendering |
 | `libstp-step` | Framework | Step execution framework (Python) |
-| `libstp-mission` | Framework | Mission lifecycle (Python) |
-| `libstp-robot` | Framework | Robot integration point (Python) |
+| `libstp-mission` | Framework | Mission lifecycle (`Mission`, `SetupMission`) |
+| `libstp-robot` | Framework | Robot integration point (`GenericRobot`) |
+| `libstp-localization` | Navigation | Particle-filter localization (`Localization`, `LocalizationConfig`) |
+| `libstp-map` | Navigation | Field map geometry (`WorldMap`, `MapSegment`) |
+| `libstp-sim` | Testing | Hardware simulator with physics model |
+| `libstp-testing` | Testing | Simulator test harness (`raccoon.testing.sim`) |
+| `libstp-threading` | Support | Thread-safe concurrency primitives |
+| `libstp-autotune` | Calibration | Automated PID and motion profile tuning |
 
 ## Data Flow: What Happens When You Call `drive_forward(25)`
 

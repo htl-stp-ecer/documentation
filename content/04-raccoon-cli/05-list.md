@@ -1,8 +1,8 @@
 ---
 title: "list"
 author: "Schwanzer Florian"
-date: 2026-03-26
-draft: true
+date: 2026-06-18
+draft: false
 weight: 6
 ---
 

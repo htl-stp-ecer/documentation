@@ -1,25 +1,135 @@
 ---
-title: "Floating Panels"
+title: "Tool Panels (Bottom and Right)"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 7
 ---
 
-## Floating Panels
+## Tool Panels
 
-Three floating panels can be toggled on/off from the toolbar. They can be moved and repositioned on the canvas.
+The Web IDE's supplementary views are **docked tool panels**, not floating overlays. They slide open from the bottom or the right side of the editor and are resizable. Only the **Timing Panel** is still a floating, draggable overlay (inside the flowchart canvas).
 
-### Run Logs
+### How to toggle panels
 
-Shows live output from the robot while a mission is running. Displays the same log stream as `raccoon run` in the terminal. Shows **IDLE** when no mission is running.
+| Panel | Location | Toggle icon | Stripe position |
+|-------|----------|-------------|-----------------|
+| **Logs** | Bottom | Code brackets `</>` | Left stripe, bottom |
+| **Table Visualization** | Bottom | Map icon | Left stripe, bottom |
+| **Arm Visualizer** | Bottom | Android / robot arm icon | Left stripe, bottom |
+| **Steps** (Step Library) | Right | Grid icon | Right stripe, top |
+| **Docs** (Step Docs) | Right | Book icon | Right stripe, top |
+| **Robot Config** | Right | Box icon | Right stripe, top |
 
-### Table Visualization
+Click the icon once to open the panel; click again to close it. Only one bottom panel and one right panel can be open at a time. Panel selections and sizes are saved in `localStorage`.
 
-A live top-down view of the table showing the robot's current position and planned path. Updates in real-time during a run.
+---
 
-- **Edit Path** button opens path planning mode — place waypoints on the table and the IDE generates the corresponding steps automatically
+## Run Logs (Bottom Panel)
 
-### Timing Panel
+The Logs panel shows the live output stream from the robot while a mission is running — the same log stream you see in the terminal when running `raccoon run`.
 
-Shows execution time for each step in the last run, both as a list and as a chart. Useful for identifying slow steps and optimising mission timing.
+**Auto-open:** When a run starts, the Logs panel opens automatically so you can see output immediately without manually toggling it.
+
+Key states:
+
+| State | Display |
+|-------|---------|
+| No mission running | "Idle" (lowercase) |
+| Run in progress | Live log lines appended in real time |
+| Run completed | Final log lines remain visible |
+
+Each log line shows the timestamp, level, and message from the raccoon runner. Errors appear in red.
+
+---
+
+## Table Visualization (Bottom Panel)
+
+A live top-down view of the competition table showing:
+
+- The **robot's current position and heading** (updated in real time during a run)
+- The **planned path** computed by the fast heuristic simulator or libstp
+- The **start pose** indicator
+- Recorded localization data from previous runs (if loaded)
+
+### Panel header controls
+
+| Control | Icon | Function |
+|---------|------|---------|
+| Fit to view | Expand | Zoom to fit the whole table |
+| Edit start pose | Flag (🚩) | Toggle start-pose edit mode (see [Settings]({{< ref "05-settings-modal" >}})) |
+| Edit map | Pencil (✏) | Switch to the map editor (TableEditorView) |
+| Close | Minus | Close the bottom panel |
+
+### Path Planning Mode
+
+The Table Visualization panel has an **Edit Path** button (map-marker icon) that opens a full-screen path planning overlay. This button is visible in the panel header when the panel is used in standalone mode. When path planning is active, it temporarily replaces the flowchart view so you can place waypoints on the full table.
+
+**How path planning works:**
+
+1. Open the Table Visualization bottom panel.
+2. Click **Edit Path** (map-marker icon) in the panel header.
+3. The center of the IDE switches to a full-screen planning overlay showing the table.
+4. Click on the table canvas to place **waypoints** (numbered markers).
+5. The IDE computes a path between waypoints and shows a preview.
+6. Click **Add Steps** to insert the generated steps into the flowchart, then click **Close**.
+
+#### Path modes
+
+| Mode | Description |
+|------|-------------|
+| `linear` | Waypoints connected by straight-line segments. Each segment becomes a `drive_forward` or `drive_arc` step. |
+| `spline` | Waypoints connected by a **Catmull-Rom spline**, producing smooth curves through all waypoints. |
+
+#### Spline heading mode
+
+When using spline mode, you can control how the robot's heading is computed at each waypoint:
+
+| Heading mode | Description |
+|-------------|-------------|
+| `tangent` | Heading automatically follows the direction of the spline curve at each point. Good for smooth, consistent curves. |
+| `explicit` | You set the heading at each waypoint manually. Use this when the robot needs to enter or leave a waypoint at a specific angle regardless of the path curve. |
+
+#### A* pathfinding
+
+When **A*** is enabled (default: on), the IDE uses A* search to route each linear segment around walls and obstacles defined in the map. This prevents the planner from generating paths that clip through map walls.
+
+When A* is disabled, segments are direct straight lines between waypoints regardless of obstacles.
+
+#### Strafe (Mecanum)
+
+For robots with a **Mecanum** drivetrain, the **Allow Strafe** option allows the path planner to generate lateral (sideways) movement steps in addition to forward/backward movement. Disable if your robot should only move forward and rotate.
+
+---
+
+## Arm Visualizer (Bottom Panel)
+
+The Arm Visualizer is a **Three.js 3D panel** for robotic arm chains. Open it with the robot arm icon (Android icon) in the left tool stripe.
+
+It provides:
+
+- A 3D rendered view of the arm chain geometry using OrbitControls (rotate, pan, zoom with mouse)
+- **FK (Forward Kinematics)** view: set joint angles, see the end-effector position
+- **IK (Inverse Kinematics)** view: drag the end-effector to a target, see the required joint angles
+- **Live control**: send joint angle commands directly to the robot while it is connected
+
+The arm configuration (joint count, lengths, axis directions) is read from the project's device info. The panel communicates with the IDE backend arm routes for IK computation and the Pi server for live hardware commands.
+
+---
+
+## Timing Panel (Floating, Inside Flowchart)
+
+The Timing Panel is the one remaining **floating overlay** in the Web IDE. It appears inside the flowchart canvas after a run completes and shows per-step execution data.
+
+**Content:**
+
+- **List view**: step name, duration (seconds), elapsed time from mission start
+- **Chart view**: bar chart of step durations for quick visual identification of slow steps
+
+**Interaction:**
+
+- Drag the panel to any position within the flowchart canvas. The position is remembered within the session.
+- Toggle between list and chart view using the view-mode control in the panel.
+- The panel is hidden while no run data is available.
+
+Use the Timing Panel to identify which steps are taking longer than expected and to verify that step durations match your mission timing budget.

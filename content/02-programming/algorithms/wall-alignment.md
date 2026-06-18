@@ -1,7 +1,7 @@
 ---
 title: "Wall Alignment"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 5
 ---
@@ -119,10 +119,10 @@ The noise floor of the IMU at rest is typically 0.05–0.1 m/s². Setting `accel
 The most common pattern is to drive most of the distance with odometry, then finish with wall alignment:
 
 ```python
-from libstp import *
+from raccoon import *
 from src.hardware.defs import Defs
 
-class M02AlignOnBackWall(Mission):
+class M020AlignOnBackWall(Mission):
     def sequence(self) -> Sequential:
         return seq([
             turn_right(90),

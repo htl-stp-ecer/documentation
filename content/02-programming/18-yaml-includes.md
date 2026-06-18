@@ -1,9 +1,9 @@
 ---
 title: "YAML Includes"
 author: "Docs Bot"
-date: 2026-05-28
+date: 2026-06-18
 draft: false
-weight: 18
+weight: 23
 description: "Exact semantics of !include and !include-merge, including recursive resolution and write-back behavior."
 ---
 
@@ -67,7 +67,7 @@ The include resolver is fully recursive and supports includes at any nesting dep
 
 That is not a documentation convention. It is implementation behavior in the library loader.
 
-The resolver also has a recursion cap to prevent infinite loops.
+The resolver also has a recursion cap of **20 levels** to prevent infinite loops. Exceeding this depth raises an error during resolution.
 
 ## Read behavior
 
@@ -92,6 +92,53 @@ The key guarantee is:
 - `!include` and `!include-merge` tags are written back as tags, not flattened away
 
 This is why a calibration step can update `config/motors.yml` even when the caller asked for a path through `raccoon.project.yml`.
+
+### Single-value write
+
+```python
+from raccoon.project_yaml import update_project_value
+
+# Writes ticks_to_rad into the file that owns
+# definitions.left_motor.calibration.ticks_to_rad
+update_project_value(
+    project_root,
+    ["definitions", "left_motor", "calibration", "ticks_to_rad"],
+    0.004363,
+)
+```
+
+Returns `True` on success.
+
+### Batch write (`yaml_write_many` / `update_project_values`)
+
+When multiple config values need to be updated atomically — for example after a full calibration run — use the batch API. It groups all writes by the physical file that owns each path and performs one file round-trip per file, rather than one per value.
+
+```python
+from raccoon.project_yaml import update_project_values
+
+# Atomically update multiple motor calibration keys.
+# Values destined for the same physical file are written in a single pass.
+update_project_values(project_root, {
+    ("definitions", "left_motor", "calibration", "ticks_to_rad"): 0.004363,
+    ("definitions", "left_motor", "calibration", "bemf_offset"): -0.0041,
+    ("definitions", "right_motor", "calibration", "ticks_to_rad"): 0.004312,
+    ("definitions", "right_motor", "calibration", "bemf_offset"): -0.0038,
+})
+```
+
+The `updates` argument is a `dict[tuple[str, ...], Any]` — key paths as tuples. Returns `True` if all writes succeeded.
+
+`update_project_values` is a thin wrapper around `yaml_write_many(project_root / "raccoon.project.yml", updates)`. If you already have the path to a different root file, call `yaml_write_many` directly:
+
+```python
+from raccoon.project_yaml import yaml_write_many
+from pathlib import Path
+
+yaml_write_many(Path("config/motors.yml"), {
+    ("left_motor", "calibration", "static_friction_pct"): 3.2,
+    ("right_motor", "calibration", "static_friction_pct"): 2.8,
+})
+```
 
 ## Why ordering matters
 

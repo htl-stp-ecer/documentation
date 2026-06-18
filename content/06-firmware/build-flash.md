@@ -1,10 +1,14 @@
 ---
 title: "Build and Flash"
 author: "Tobias Madlberger"
-date: 2026-03-22
+date: 2026-06-18
 draft: false
 weight: 6
 ---
+
+## Firmware Location
+
+The STM32 firmware lives in `stm32-data-reader/firmware/` (merged from the old standalone `Firmware-Stp/` repository). The shared SPI protocol header at `stm32-data-reader/shared/spi/pi_buffer.h` is used by both the firmware and the Pi-side reader.
 
 ## Toolchain
 
@@ -28,51 +32,75 @@ CMake >= 3.24 is also required.
 
 ## Build System
 
-The firmware uses CMake. The top-level `CMakeLists.txt` is at `Firmware-Stp/CMakeLists.txt`. It sets the target MCU family (`STM32F427xx`), defines the HSE oscillator frequency (`HSE_VALUE = 24000000` — note: the board uses the internal HSI oscillator, not HSE; the HSE define is legacy), and includes the libraries subdirectory.
+The firmware uses CMake. The top-level `CMakeLists.txt` is at `stm32-data-reader/firmware/CMakeLists.txt`. It sets the target MCU family (`STM32F427xx`), defines the HSE oscillator frequency (legacy define; the board uses the internal HSI oscillator), and links against:
 
-The application sources are compiled by `Firmware-Stp/Firmware/CMakeLists.txt`, which globs all `.c` files from each subdirectory and links against:
 - `stm32f4xx` — the STM32 HAL library
 - `mpl_prebuilt` — the InvenSense Motion Processing Library (binary blob)
 - `motion_driver` — the InvenSense MPU-9250 DMP firmware loader
 
-### Compiler Flags
+The ARM toolchain file at `stm32-data-reader/firmware/CMake/GNU-ARM-Toolchain.cmake` sets the critical compiler flags:
 
 ```
--mcpu=cortex-m4    # Target CPU
--mthumb            # Thumb-2 instruction set
--mfloat-abi=hard   # Hardware FPU
--mfpu=fpv4-sp-d16  # VFPv4 single-precision
--O2                # Optimisation (Release build)
--Wall              # All warnings
--gdwarf-2          # Debug information format
+-mcpu=cortex-m4       # Target CPU
+-mthumb               # Thumb-2 instruction set
+-mfloat-abi=hard      # Hardware FPU
+-mfpu=fpv4-sp-d16     # VFPv4 single-precision
+-Wall                 # All warnings
+-g3 -gdwarf-2         # Debug information
+--specs=nano.specs    # Newlib nano (reduces binary size)
+--specs=nosys.specs   # No syscalls stub
 ```
 
-The linker script is `Firmware-Stp/linker/STM32F427VITx_FLASH.ld`, which defines the memory regions (flash at 0x08000000, RAM at 0x20000000) and places the vector table at the flash origin.
+The linker script is `stm32-data-reader/firmware/linker/STM32F427VITx_FLASH.ld`, which defines the memory regions (flash at `0x08000000`, RAM at `0x20000000`) and places the vector table at the flash origin.
 
-### Build Steps
+## Building the Firmware
+
+### Recommended: Docker build (no local toolchain needed)
+
+The easiest path requires only Docker. The `build.sh` inside `firmware/` cross-compiles the firmware inside a pre-configured container:
 
 ```bash
-cd Firmware-Stp
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+cd stm32-data-reader/firmware
+bash build.sh
+```
+
+The combined top-level `build.sh` builds **both** the reader and the firmware in a single step:
+
+```bash
+# From stm32-data-reader/ root:
+./build.sh                   # reader (ARM64) + firmware (STM32)
+SKIP_FIRMWARE=1 ./build.sh   # reader only (faster iteration)
+CMAKE_BUILD_TYPE=Debug ./build.sh  # debug build
+```
+
+### Native build (toolchain installed locally)
+
+If you have `arm-none-eabi-gcc` installed, build without Docker:
+
+```bash
+cd stm32-data-reader/firmware
+mkdir -p build && cd build
+cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=../CMake/GNU-ARM-Toolchain.cmake ..
+cmake --build . -- -j$(nproc)
 ```
 
 The output files are generated in `build/Firmware/`:
-- `wombat.elf` — ELF binary with debug symbols
-- `wombat.bin` — flat binary for flashing
-- `wombat.hex` — Intel HEX format
-- `wombat.map` — linker map file
-- `wombat.lss` — extended listing with interleaved source
 
-CMake also runs `arm-none-eabi-size -B wombat.elf` to print the flash and RAM usage.
+| File | Contents |
+|---|---|
+| `wombat.elf` | ELF binary with debug symbols |
+| `wombat.bin` | Flat binary for flashing |
+| `wombat.hex` | Intel HEX format |
+| `wombat.map` | Linker map file |
+| `wombat.lss` | Extended listing with interleaved source |
+
+CMake also runs `arm-none-eabi-size -B wombat.elf` to report flash and RAM usage.
 
 ## Flashing
 
 ### Via ST-Link (recommended)
 
-The Wombat board exposes an SWD (Serial Wire Debug) header connected to an ST-Link programmer or any compatible SWD probe. Use `openocd`:
+The Wombat board exposes an SWD (Serial Wire Debug) header. Use `openocd`:
 
 ```bash
 openocd -f interface/stlink.cfg \
@@ -88,53 +116,73 @@ st-flash write build/Firmware/wombat.bin 0x08000000
 
 ### Via DFU (USB, no debugger needed)
 
-The STM32F427 has a built-in USB DFU bootloader in system memory. To enter DFU mode, hold BOOT0 high at reset. Then:
+The STM32F427 has a built-in USB DFU bootloader in system memory. To enter DFU mode, hold BOOT0 high at reset, then:
 
 ```bash
 sudo apt install dfu-util
 dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/Firmware/wombat.bin
 ```
 
+### Deploy to Pi (automated)
+
+The `deploy.sh` script at the repo root builds both components, copies the reader binary to the Pi, flashes the firmware over the network (SSH + openocd), and starts the service:
+
+```bash
+# From stm32-data-reader/:
+./deploy.sh                          # uses default Pi hostname
+RPI_HOST=192.168.1.100 ./deploy.sh   # override target
+```
+
 ### Verifying the Flash
 
-After flashing, open a serial terminal on the UART3 pins (PB10/PB11) at 115200 baud. The firmware does not print a startup banner by default, but the `stm32-data-reader` on the Pi can forward UART output to the application log when `uart.enabled = true` is set in its configuration.
+After flashing, the firmware immediately prints boot messages over UART3 (PB10/PB11, 115200 baud). You can monitor them directly via a serial terminal, or enable the Pi-side `UartMonitor` by setting `uart.enabled = true` in the reader configuration. The `UartMonitor` routes STM32 output to the application log and also watches for the periodic `[stp] hb #N` heartbeat line.
 
-A running STM32 can also be verified by observing the `txBuffer.updateTime` field via the `stm32-data-reader` log, which prints IMU values every 500 SPI cycles. If the timestamp increments, the STM32 is alive.
+A running STM32 can also be confirmed by observing the `stm32-data-reader` log: it prints the SPI protocol version match result at startup and logs IMU values every 500 SPI cycles via `imuLogCounter`. If `updateTime` in the `TxBuffer` increments, the STM32 is alive.
 
-## Building stm32-data-reader (Pi-side bridge)
+The reader also checks the protocol version at startup via `spi_probe_version()` and logs either `OK — no reflash needed` or `MISMATCH — firmware reflash will be triggered`.
 
-The `stm32-data-reader` is a separate CMake project that runs on the Raspberry Pi (aarch64):
+## Building the stm32-data-reader (Pi-side bridge)
+
+The `stm32-data-reader` is a C++20 CMake project that runs on the Raspberry Pi (aarch64).
+
+### Cross-compile for ARM64 (production)
 
 ```bash
 cd stm32-data-reader
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+./build.sh                              # Docker cross-compile, produces ARM64 binary
+FORCE_RECONFIGURE=1 ./build.sh          # Force CMake reconfiguration
 ```
 
-It depends on:
-- **LCM** (Lightweight Communications and Marshalling) — the underlying transport library
-- **raccoon-transport** — the message schema library (included as a subdirectory or installed)
-- **spdlog** — logging
+### Local development with mock SPI
 
-The build produces a single binary `stm32-data-reader` which should be run as a daemon on the robot:
+For development without hardware, enable the SPI mock (generates synthetic sensor data, no `/dev/spidev` required):
 
 ```bash
-./stm32-data-reader
+cd stm32-data-reader
+mkdir -p cmake-build-debug && cd cmake-build-debug
+cmake .. -DUSE_SPI_MOCK=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build . -j$(nproc)
 ```
 
-A mock SPI mode is available for development without hardware:
+The mock build produces the same binary interface as the real reader. You can use it to test command handling and data publishing logic on a development machine.
+
+### Runtime flags
 
 ```bash
-cmake .. -DUSE_SPI_MOCK=ON
+./stm32-data-reader --version   # Print STMREADER_VERSION and exit
 ```
 
-The mock mode generates synthetic sensor data and does not require `/dev/spidev`.
+The log level can be overridden at runtime without recompiling:
+
+```bash
+WOMBAT_LOG_LEVEL=debug ./stm32-data-reader   # valid: debug, info, warn, error
+```
+
+This sets the spdlog level immediately at startup before any service initialisation runs, so even early-init messages are visible at `debug`.
 
 ## Interrupt Priority Table
 
-Understanding the interrupt priority hierarchy is important for debugging timing issues. Higher preempt priority = lower number = can interrupt a lower-priority ISR.
+Understanding the interrupt priority hierarchy is important for debugging timing issues. A lower preempt number means higher priority and can interrupt a running ISR with a higher number.
 
 | ISR | Preempt | Sub | Purpose |
 |---|---|---|---|
@@ -159,36 +207,57 @@ The SPI2 completion ISR runs at the highest priority to ensure that new Pi comma
 
 1. Add ADC channel configuration in `adcInit.c` (for analog sensors) or GPIO initialisation in `gpio.c` (for digital sensors).
 2. Add reading/processing logic in the appropriate `Sensors/` file.
-3. Add a field to `TxBuffer` in `pi_buffer_struct.h` (STM32 side) and the corresponding field in `stm32-data-reader/shared/spi/pi_buffer.h` (shared header). Both must stay in sync.
-4. Populate the new field before the main loop calls `updatingAnalogValuesInSpiBuffer()`.
+3. Add a field to `TxBuffer` in the STM32-side struct and the corresponding field in the **shared header** `stm32-data-reader/shared/spi/pi_buffer.h`. Both sides of the SPI protocol use the same header — there is only one source of truth.
+4. Populate the new field before the main loop calls the relevant SPI buffer update function.
 5. In `stm32-data-reader`, unpack the field in `SpiReal::readSensorData()` and add a publish call in `DataPublisher`.
-6. Increment `TRANSFER_VERSION` in both `communication_with_pi.h` and `pi_buffer.h` so stale Pi processes are rejected.
+6. Increment `TRANSFER_VERSION` in `stm32-data-reader/shared/spi/pi_buffer.h`. This is the **single** definition — do not define it anywhere else.
 
 ### Changing PID Gains
 
-Default gains are in `pid.c`:
+Default gains are in `stm32-data-reader/firmware/Firmware/src/Actors/pid.c`:
 
 ```c
+// dt-EXPLICIT gains (per-second units).
+// kI was rescaled from the old dt-implicit default 0.045 by the nominal
+// MAV rate (~200 Hz/motor): kI_explicit = 0.045 * 200 = 9.0.
+// Both values produce identical closed-loop behaviour at 200 Hz, but the
+// explicit form is correct when the BEMF cadence varies (watchdog skips,
+// mode changes). Using 0.045 in per-second units would give 200× too little
+// integral authority.
 #define PID_DEFAULT_P  1.22f
-#define PID_DEFAULT_I  0.045f
+#define PID_DEFAULT_I  9.0f
 #define PID_DEFAULT_D  0.000f
+
+// Position (outer) loop — pure proportional.
+// The inner velocity PID already provides damping.
+#define PID_POS_DEFAULT_P  1.0f
+#define PID_POS_DEFAULT_I  0.0f
+#define PID_POS_DEFAULT_D  0.0f
 ```
 
-These are applied at startup. They can be overridden at runtime by sending a `motorPidSettings` block via the SPI protocol without reflashing. From libstp Python:
+These apply at startup. They can be overridden at runtime via the SPI `updates` bitmask without reflashing. From raccoon-lib Python:
 
 ```python
-motor.set_pid(kp=1.5, ki=0.05, kd=0.0)
+motor.set_pid(kp=1.5, ki=9.0, kd=0.0)
 ```
 
-This publishes to `libstp/motor/N/pid_cmd`, which `CommandSubscriber` picks up and forwards to the STM32 via the SPI `updates` bitmask.
+Note that `ki` here is in **per-second units** (the same convention as the firmware default). A value of `9.0` at 200 Hz gives the same integral contribution per cycle as the old `0.045` dt-implicit value.
 
 ### Changing BEMF Timing
 
-The BEMF cycle parameters are in `bemf.h`:
+The BEMF timing constants are in `stm32-data-reader/firmware/Firmware/include/Sensors/bemf.h`:
 
 ```c
-#define BEMF_SAMPLING_INTERVAL           5000  // µs
+// Interval between individual motor measurements in µs.
+// With 4 motors in round-robin, each motor is measured every 4 × 1250 = 5000 µs (200 Hz).
+#define BEMF_SAMPLING_INTERVAL           1250  // µs
+
+// Wait time after stopping a motor before starting the ADC conversion.
+// Motor back-EMF needs ~500 µs to settle after PWM is cut.
 #define BEMF_CONVERSION_START_DELAY_TIME  500  // µs
+
+// Watchdog: abort a stuck ADC2 conversion after this many µs.
+#define BEMF_WATCHDOG_TIMEOUT  (BEMF_SAMPLING_INTERVAL * 2)  // 2500 µs
 ```
 
-Reducing `BEMF_SAMPLING_INTERVAL` increases the position tracking update rate but also increases the fraction of time the motors are switched off for sampling, which reduces maximum effective torque. Reducing `BEMF_CONVERSION_START_DELAY_TIME` risks reading residual PWM switching noise rather than the true back-EMF. Both parameters must be chosen together for the specific H-bridge hardware used on the Wombat.
+Only one motor is stopped per cycle (round-robin), so the torque interruption at any moment is limited to one motor out of four. Reducing `BEMF_SAMPLING_INTERVAL` increases the per-motor update rate but also reduces effective torque on that motor. Reducing `BEMF_CONVERSION_START_DELAY_TIME` below 500 µs risks reading PWM switching noise instead of the true back-EMF.

@@ -1,9 +1,9 @@
 ---
 title: "Advanced Topics"
 author: "Tobias Madlberger"
-date: 2026-03-21
+date: 2026-06-18
 draft: false
-weight: 12
+weight: 16
 ---
 
 # Advanced Topics
@@ -132,7 +132,7 @@ If your logic is stateless and only touches one hardware component, a plain step
 Services extend `RobotService` and receive the robot instance in their constructor:
 
 ```python
-from libstp import RobotService
+from raccoon.robot import RobotService
 
 
 class CounterService(RobotService):
@@ -156,7 +156,8 @@ run(lambda robot: robot.get_service(CounterService).increment())
 A drum collector robot uses a motor to rotate a drum and a light sensor to detect pocket positions. The `DrumMotorService` owns both pieces of hardware and provides higher-level operations:
 
 ```python
-from libstp import RobotService, Motor, AnalogSensor
+from raccoon.robot import RobotService
+from raccoon.hal import IMotor, AnalogSensor
 
 class DrumMotorService(RobotService):
     def __init__(self, robot):
@@ -166,7 +167,7 @@ class DrumMotorService(RobotService):
         self._current_index = 0
 
     @property
-    def motor(self) -> Motor:
+    def motor(self) -> IMotor:
         return self.robot.defs.drum_motor
 
     @property
@@ -293,16 +294,16 @@ You don't interact with Raccoon Transport directly unless you're building platfo
 
 ## Logging
 
-LibSTP uses spdlog (C++) and Python's logging for diagnostics:
+Raccoon uses spdlog (C++) and a unified Python-accessible logging layer for diagnostics:
 
 ```python
-import libstp.foundation as logging
+import raccoon.foundation as logging
 
 # Set log level for specific source files
 logging.set_file_level("stm32_odometry.cpp", logging.Level.trace)
 logging.set_file_level("drive.py", logging.Level.trace)
 logging.set_file_level("linear_motion.cpp", logging.Level.trace)
-logging.set_file_level("libstp.step.base", logging.Level.debug)
+logging.set_file_level("raccoon.step.base", logging.Level.debug)
 ```
 
 Log levels (from most to least verbose): `trace`, `debug`, `info`, `warn`, `error`, `critical`.
@@ -337,20 +338,25 @@ The mock platform driver (`libstp-platforms/mock/`) returns simulated sensor val
 
 ## Build and Deploy
 
-### Building LibSTP
+### Building the Raccoon Library
 
-LibSTP cross-compiles from an x86 host to ARM64 (Raspberry Pi) using Docker:
+The library cross-compiles from an x86 host to ARM64 (Raspberry Pi) using Docker:
 
 ```bash
-cd /path/to/library
+cd /path/to/raccoon-lib
 bash build.sh           # Builds ARM64 .whl inside Docker
 ```
 
 The output is a Python wheel in `build-docker/`. The build uses:
-- CMake 3.15+ with Ninja
+- CMake 3.27+ (the scikit-build-core wheel build requires 3.27; the `CMakeLists.txt` itself
+  accepts `cmake_minimum_required(VERSION 3.15...3.27)`, but users on CMake < 3.27 will fail
+  the Python wheel build)
 - scikit-build-core for Python packaging
-- pybind11 2.13.6 for C++/Python bindings
+- pybind11 for C++/Python bindings
 - ccache for incremental builds
+
+`BUILD_TYPE` (e.g., `Release` vs `Debug`) is a `build.sh` concern — pass it to that script if
+needed; it is not read by `deploy.sh` or `install.py`.
 
 ### Deploying to the Robot
 
@@ -358,14 +364,25 @@ The output is a Python wheel in `build-docker/`. The build uses:
 RPI_HOST=192.168.100.237 bash deploy.sh
 ```
 
-This copies the wheel to the Raspberry Pi and installs it via pip. Environment variables:
+`deploy.sh` builds the wheel (via `build.sh` by default), then calls `install.py` to copy and
+install it on the Pi. The variables each script reads:
+
+**`deploy.sh` variables:**
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `RPI_HOST` | (required) | Raspberry Pi IP address |
-| `RPI_USER` | `pi` | SSH username |
-| `RPI_DIR` | `/home/pi/python-libs` | Install directory |
-| `BUILD_TYPE` | `Release` | CMake build type |
+| `RPI_HOST` | (required) | Raspberry Pi IP address or hostname |
+| `BUILD_DIR` | `build-docker` | Directory where `build.sh` places the wheel |
+| `BUILD_SCRIPT` | `build.sh` | Build script to invoke before deploying |
+
+**`install.py` variables (Pi deploy):**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RPI_HOST` | (required) | Raspberry Pi IP address or hostname |
+| `RPI_USER` | `pi` | SSH username on the Pi |
+| `PROJECT_NAME` | `raccoon` | Python package name to uninstall before reinstalling |
+| `PYTHON_CMD` | `python3` | Python interpreter command on the Pi |
 
 ### Installing Locally (for development)
 
