@@ -3,291 +3,503 @@ title: "Build and Flash"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 6
+weight: 10
 ---
 
-## Concept
+## Mental Model
 
-The firmware and the Pi-side bridge are two separate compiled artifacts that must stay in sync via the `TRANSFER_VERSION` constant. When they are out of sync, the `stm32-data-reader` detects the mismatch on startup and automatically reflashes the STM32.
+The robot firmware stack is two distinct compiled artifacts that must always stay in sync:
 
-There are two distinct compilation targets:
+1. **STM32 firmware** (`stm32-data-reader/firmware/`) — C/C++ cross-compiled for the Cortex-M4F inside the Wombat board. Produces `wombat.bin` / `wombat.elf`.
+2. **Pi bridge** (`stm32-data-reader/`) — C++20 cross-compiled for the Raspberry Pi's aarch64 CPU. Binary is `stm32_data_reader`.
 
-1. **STM32 firmware** (`stm32-data-reader/firmware/`) — cross-compiled for Cortex-M4F with `arm-none-eabi-gcc`, produces `wombat.bin` / `wombat.elf`.
-2. **stm32-data-reader** (`stm32-data-reader/`) — cross-compiled for aarch64 (Pi), a C++20 CMake project.
+Both artifacts share a single header, `stm32-data-reader/shared/spi/pi_buffer.h`, that defines the SPI wire protocol and the `TRANSFER_VERSION` constant (currently **21**). If the two sides disagree on that version, the Pi bridge detects the mismatch at startup and automatically reflashes the STM32 via `~/flashFiles/flash_wombat.sh`.
 
-Both are built by the same top-level `build.sh` script. The recommended development workflow is:
+The full build-to-run pipeline looks like this:
 
 ```mermaid
-graph LR
-    DEV["Change firmware source\n(stm32-data-reader/firmware/)"]
-    BUILD["./build.sh\nDocker cross-compile\nboth targets"]
-    DEPLOY["./deploy.sh\nCopy reader to Pi\nFlash firmware via SSH+openocd\nRestart service"]
-    VERIFY["Check logs\nstm32-data-reader prints\n'SPI version OK'\nor auto-reflash"]
-
-    DEV --> BUILD --> DEPLOY --> VERIFY
-    VERIFY -->|iterate| DEV
+flowchart LR
+    subgraph Laptop
+        A["Edit source\n(firmware/ or\nsrc/wombat/)"]
+        B["./build.sh\n(Docker)\nProduces:\n• build/stm32_data_reader\n• build/wombat.bin"]
+        A --> B
+    end
+    subgraph "deploy.sh (SSH)"
+        C["Copy binary +\nflash scripts\nto Pi"]
+        D["flash_wombat.sh\nstm32flash via\n/dev/ttyAMA0"]
+        E["systemctl restart\nstm32_data_reader"]
+        C --> D --> E
+    end
+    subgraph "Pi at runtime"
+        F["stm32_data_reader\nservice running"]
+        G["TRANSFER_VERSION\nprobe OK?\nIf not → auto-reflash"]
+        H["SPI loop live\nupdateTime ticking"]
+        F --> G --> H
+    end
+    B --> C
+    H -->|"iterate"| A
 ```
 
-If you only changed Python code, skip the build step — `raccoon sync` or `raccoon run` handles Python deployment without touching the firmware.
+If you only changed Python code, skip the build step entirely — `raccoon sync` or `raccoon run` handles Python deployment without touching either compiled artifact.
 
-## Firmware Location
+---
 
-The STM32 firmware lives in `stm32-data-reader/firmware/` (merged from the old standalone `Firmware-Stp/` repository). The shared SPI protocol header at `stm32-data-reader/shared/spi/pi_buffer.h` is used by both the firmware and the Pi-side reader.
-
-## Toolchain
-
-The firmware is compiled with the **ARM Embedded GCC** toolchain targeting the Cortex-M4F with hardware floating-point:
-
-| Tool | Package (Debian/Ubuntu) |
-|---|---|
-| Compiler | `arm-none-eabi-gcc` |
-| Assembler | `arm-none-eabi-as` |
-| Linker | `arm-none-eabi-ld` (via gcc) |
-| Object copy | `arm-none-eabi-objcopy` |
-| Size reporter | `arm-none-eabi-size` |
-
-Install on Ubuntu/Debian:
-
-```bash
-sudo apt install gcc-arm-none-eabi binutils-arm-none-eabi
-```
-
-CMake >= 3.24 is also required.
-
-## Build System
-
-The firmware uses CMake. The top-level `CMakeLists.txt` is at `stm32-data-reader/firmware/CMakeLists.txt`. It sets the target MCU family (`STM32F427xx`), defines the HSE oscillator frequency (legacy define; the board uses the internal HSI oscillator), and links against:
-
-- `stm32f4xx` — the STM32 HAL library
-- `mpl_prebuilt` — the InvenSense Motion Processing Library (binary blob)
-- `motion_driver` — the InvenSense MPU-9250 DMP firmware loader
-
-The ARM toolchain file at `stm32-data-reader/firmware/CMake/GNU-ARM-Toolchain.cmake` sets the critical compiler flags:
+## Repository Layout
 
 ```
--mcpu=cortex-m4       # Target CPU
--mthumb               # Thumb-2 instruction set
--mfloat-abi=hard      # Hardware FPU
--mfpu=fpv4-sp-d16     # VFPv4 single-precision
--Wall                 # All warnings
--g3 -gdwarf-2         # Debug information
---specs=nano.specs    # Newlib nano (reduces binary size)
---specs=nosys.specs   # No syscalls stub
+stm32-data-reader/
+├── firmware/                  # STM32 firmware (cross-compiled for Cortex-M4F)
+│   ├── build.sh               # Firmware-only Docker build (docker compose up)
+│   ├── Dockerfile             # Ubuntu + gcc-arm-none-eabi image
+│   ├── docker-compose.yml     # Mounts firmware/ + shared/ into container
+│   ├── CMakeLists.txt         # Top-level CMake; sets STM32F427xx target
+│   ├── CMake/
+│   │   └── GNU-ARM-Toolchain.cmake  # Toolchain file (compiler flags, sysroot)
+│   ├── Firmware/
+│   │   ├── CMakeLists.txt     # Collects sources, links libs, produces wombat.elf
+│   │   └── src/               # All C/C++ firmware source
+│   ├── linker/
+│   │   └── STM32F427VITx_FLASH.ld  # Memory map
+│   ├── libs/                  # HAL, CMSIS, InvenSense MPL
+│   └── flashFiles/
+│       ├── flash_wombat.sh    # Flashes via stm32flash over UART bootloader
+│       ├── reset_coprocessor.sh
+│       └── init_gpio.sh
+├── shared/
+│   └── spi/
+│       └── pi_buffer.h        # Single source of truth: TRANSFER_VERSION + structs
+├── src/wombat/                # Pi bridge C++20 source
+├── include/wombat/            # Pi bridge headers
+├── build.sh                   # Top-level: Pi bridge (Docker ARM64) + firmware
+├── deploy.sh                  # build.sh + install.py
+└── install.py                 # SCP + SSH: flash + install service on Pi
 ```
 
-The linker script is `stm32-data-reader/firmware/linker/STM32F427VITx_FLASH.ld`, which defines the memory regions (flash at `0x08000000`, RAM at `0x20000000`) and places the vector table at the flash origin.
+---
 
-## Building the Firmware
+## Toolchain Details
 
-### Recommended: Docker build (no local toolchain needed)
+### STM32 Firmware: GNU-ARM-Toolchain.cmake
 
-The easiest path requires only Docker. The `build.sh` inside `firmware/` cross-compiles the firmware inside a pre-configured container:
+The toolchain file at `firmware/CMake/GNU-ARM-Toolchain.cmake` configures CMake for a bare-metal cross-compile. Key settings:
+
+| Variable | Value | Why |
+|---|---|---|
+| `CMAKE_SYSTEM_NAME` | `Generic` | No OS — bare metal |
+| `CMAKE_SYSTEM_PROCESSOR` | `ARM` | Suppresses host-tool search |
+| `CMAKE_C_COMPILER` | `arm-none-eabi-gcc` | GNU ARM Embedded |
+| `CMAKE_CXX_COMPILER` | `arm-none-eabi-g++` | Same toolchain |
+| `CMAKE_TRY_COMPILE_TARGET_TYPE` | `STATIC_LIBRARY` | Avoids link test on bare metal |
+
+The core compiler flags applied to every translation unit:
+
+```
+-mthumb              # Thumb-2 instruction set (compact, efficient)
+-mcpu=cortex-m4      # Enables M4-specific instructions (DSP, etc.)
+-mlittle-endian      # STM32F4 is always LE
+-mfpu=fpv4-sp-d16    # VFPv4 single-precision FPU (16 double registers)
+-mfloat-abi=hard     # Pass float args in FPU registers (ABI compatible with libs)
+-mthumb-interwork    # Allow ARM/Thumb interworking (needed by startup code)
+--specs=nano.specs   # Newlib-nano: smaller printf/malloc footprint
+--specs=nosys.specs  # Stub out syscalls (no OS)
+```
+
+C-specific additions (`CMAKE_C_FLAGS`):
+```
+-fno-builtin         # Prevent GCC from substituting e.g. memcpy with builtins
+-Wall                # All warnings
+-std=gnu99           # GNU C99 (needed for some HAL macros)
+-fdata-sections      # Place each data object in its own section
+-ffunction-sections  # Place each function in its own section
+-g3 -gdwarf-2        # Full debug info (enables source-level GDB debugging)
+```
+
+C++ adds `-fno-rtti -fno-exceptions` to minimize binary size.
+
+The linker strips dead code via `-Wl,--gc-sections` and produces a map file for section-size analysis.
+
+### Memory Map (STM32F427VITx_FLASH.ld)
+
+```
+FLASH    (rx)  : ORIGIN = 0x08000000  LENGTH = 1024K   # Code (sectors 0-11, Bank 1)
+CAL_DATA (rw)  : ORIGIN = 0x08100000  LENGTH = 16K     # Calibration (sector 12, Bank 2)
+RAM      (xrw) : ORIGIN = 0x20000000  LENGTH = 192K    # SRAM1+SRAM2
+CCMRAM   (xrw) : ORIGIN = 0x10000000  LENGTH = 64K     # Core-coupled memory
+```
+
+`CAL_DATA` is placed on Bank 2 deliberately: erasing sector 12 for a calibration save does not stall instruction fetch from Bank 1, which stays fully live during the write. This is why UART heartbeats can go silent during a flash-calibration write while SPI/DMA keeps running without interruption.
+
+After a successful build, CMake runs `arm-none-eabi-size -B wombat.elf` to report flash and RAM usage.
+
+### Pi Bridge: Docker Debian ARM64
+
+The Pi bridge is built inside a `debian:13-slim` ARM64 container (see `stm32-data-reader/Dockerfile`). The container has:
+
+- CMake + Ninja (build system)
+- ccache (build cache, mounted as a Docker volume or host path)
+- liblcm-dev, libspdlog-dev (system libraries)
+- Clang + libclang (for any bindgen steps)
+
+The container builds natively for `linux/arm64/v8` — no QEMU emulation. QEMU binfmt is only needed if you're building on a non-ARM host; on Apple Silicon or ARM workstations it runs at full speed.
+
+---
+
+## Building
+
+### Path: Docker (recommended — no local toolchain needed)
+
+**Firmware only** (if you only changed STM32 code):
 
 ```bash
 cd stm32-data-reader/firmware
 bash build.sh
+# Output: firmware/build/Firmware/wombat.{elf,bin,hex,map,lss}
 ```
 
-The combined top-level `build.sh` builds **both** the reader and the firmware in a single step:
+Internally this runs `docker compose up --build --exit-code-from build-wombat-firmware`, which builds the Ubuntu + `gcc-arm-none-eabi` image defined in `firmware/Dockerfile`, mounts `firmware/` and `../shared/` into the container, then executes `build.sh` (which deletes any old `build/` directory, re-runs CMake, and builds with `$(nproc)` parallel jobs).
+
+**Pi bridge + firmware** (normal development cycle):
 
 ```bash
-# From stm32-data-reader/ root:
-./build.sh                   # reader (ARM64) + firmware (STM32)
-SKIP_FIRMWARE=1 ./build.sh   # reader only (faster iteration)
-CMAKE_BUILD_TYPE=Debug ./build.sh  # debug build
+cd stm32-data-reader
+./build.sh
 ```
 
-### Native build (toolchain installed locally)
+This:
+1. Builds the Pi bridge binary (`build/stm32_data_reader`) inside the ARM64 Debian container.
+2. Then runs the firmware Docker Compose step (unless `SKIP_FIRMWARE=1`).
+3. Copies `firmware/build/Firmware/wombat.bin` and `firmware/flashFiles/*` into `build/` so `install.py` finds them next to the reader binary.
 
-If you have `arm-none-eabi-gcc` installed, build without Docker:
+Useful env var overrides:
+
+```bash
+SKIP_FIRMWARE=1 ./build.sh          # Pi bridge only (faster when firmware unchanged)
+CMAKE_BUILD_TYPE=Debug ./build.sh   # Debug build (both artifacts)
+FORCE_RECONFIGURE=1 ./build.sh      # Force CMake re-configure (after CMakeLists.txt changes)
+REBUILD_IMAGE=1 ./build.sh          # Rebuild the Docker builder image
+```
+
+### Path: Native CMake (toolchain installed locally)
+
+Install the toolchain on Debian/Ubuntu:
+
+```bash
+sudo apt install gcc-arm-none-eabi binutils-arm-none-eabi cmake
+# cmake >= 3.24 is required
+```
+
+Build the firmware:
 
 ```bash
 cd stm32-data-reader/firmware
 mkdir -p build && cd build
-cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=../CMake/GNU-ARM-Toolchain.cmake ..
+cmake -G "Unix Makefiles" \
+      -DCMAKE_TOOLCHAIN_FILE=../CMake/GNU-ARM-Toolchain.cmake \
+      ..
 cmake --build . -- -j$(nproc)
+# Output in build/Firmware/:
+#   wombat.elf   — ELF with DWARF debug symbols (use this with GDB)
+#   wombat.bin   — flat binary for flashing
+#   wombat.hex   — Intel HEX (alternative flash format)
+#   wombat.map   — linker map (section sizes, symbol addresses)
+#   wombat.lss   — interleaved source+disassembly listing
 ```
 
-The output files are generated in `build/Firmware/`:
-
-| File | Contents |
-|---|---|
-| `wombat.elf` | ELF binary with debug symbols |
-| `wombat.bin` | Flat binary for flashing |
-| `wombat.hex` | Intel HEX format |
-| `wombat.map` | Linker map file |
-| `wombat.lss` | Extended listing with interleaved source |
-
-CMake also runs `arm-none-eabi-size -B wombat.elf` to report flash and RAM usage.
-
-## Flashing
-
-### Via ST-Link (recommended)
-
-The Wombat board exposes an SWD (Serial Wire Debug) header. Use `openocd`:
-
-```bash
-openocd -f interface/stlink.cfg \
-        -f target/stm32f4x.cfg \
-        -c "program build/Firmware/wombat.elf verify reset exit"
-```
-
-Or with `st-flash`:
-
-```bash
-st-flash write build/Firmware/wombat.bin 0x08000000
-```
-
-### Via DFU (USB, no debugger needed)
-
-The STM32F427 has a built-in USB DFU bootloader in system memory. To enter DFU mode, hold BOOT0 high at reset, then:
-
-```bash
-sudo apt install dfu-util
-dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/Firmware/wombat.bin
-```
-
-### Deploy to Pi (automated)
-
-The `deploy.sh` script at the repo root builds both components, copies the reader binary to the Pi, flashes the firmware over the network (SSH + openocd), and starts the service:
-
-```bash
-# From stm32-data-reader/:
-./deploy.sh                          # uses default Pi hostname
-RPI_HOST=192.168.1.100 ./deploy.sh   # override target
-```
-
-### Verifying the Flash
-
-After flashing, the firmware immediately prints boot messages over UART3 (PB10/PB11, 115200 baud). You can monitor them directly via a serial terminal, or enable the Pi-side `UartMonitor` by setting `uart.enabled = true` in the reader configuration. The `UartMonitor` routes STM32 output to the application log and also watches for the periodic `[stp] hb #N` heartbeat line.
-
-A running STM32 can also be confirmed by observing the `stm32-data-reader` log: it prints the SPI protocol version match result at startup and logs IMU values every 500 SPI cycles via `imuLogCounter`. If `updateTime` in the `TxBuffer` increments, the STM32 is alive.
-
-The reader also checks the protocol version at startup via `spi_probe_version()` and logs either `OK — no reflash needed` or `MISMATCH — firmware reflash will be triggered`.
-
-## Building the stm32-data-reader (Pi-side bridge)
-
-The `stm32-data-reader` is a C++20 CMake project that runs on the Raspberry Pi (aarch64).
-
-### Cross-compile for ARM64 (production)
-
-```bash
-cd stm32-data-reader
-./build.sh                              # Docker cross-compile, produces ARM64 binary
-FORCE_RECONFIGURE=1 ./build.sh          # Force CMake reconfiguration
-```
-
-### Local development with mock SPI
-
-For development without hardware, enable the SPI mock (generates synthetic sensor data, no `/dev/spidev` required):
+For the Pi bridge natively (only useful for unit-testing logic; produces an x86_64 binary with mock SPI):
 
 ```bash
 cd stm32-data-reader
 mkdir -p cmake-build-debug && cd cmake-build-debug
 cmake .. -DUSE_SPI_MOCK=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
+# Binary: cmake-build-debug/stm32_data_reader
+# No /dev/spidev0.0 needed — SpiMock generates synthetic sensor data
 ```
 
-The mock build produces the same binary interface as the real reader. You can use it to test command handling and data publishing logic on a development machine.
+---
+
+## Flashing the STM32
+
+### How it works: UART bootloader via GPIO
+
+The Wombat board does **not** use a hardware ST-Link or J-Link debugger probe. Instead the Raspberry Pi flashes the STM32 directly over the **STM32F427 built-in UART bootloader**, using:
+
+- **`/dev/ttyAMA0`** — Pi's hardware UART connected to STM32 USART3 (PB10/PB11)
+- **`stm32flash`** — open-source utility that speaks the STM32 bootloader protocol
+- **GPIO 17 (BOOT0)** and **GPIO 23 (RST)** — Pi GPIOs that control the two bootloader entry pins
+
+The entry sequence in `firmware/flashFiles/flash_wombat.sh`:
+
+```mermaid
+sequenceDiagram
+    participant Pi
+    participant STM32
+
+    Pi->>STM32: GPIO17 (BOOT0) → HIGH
+    Pi->>STM32: GPIO23 (RST) → LOW (reset pulse)
+    Pi->>STM32: GPIO23 (RST) → HIGH (release reset)
+    Note over STM32: STM32 samples BOOT0 at reset.<br/>BOOT0=1 → enters UART bootloader<br/>(no user firmware runs)
+    Pi->>STM32: stm32flash -v -e 8 -w wombat.bin /dev/ttyAMA0
+    Note over Pi,STM32: Sector-erase 8 sectors (4×16K + 1×64K + 3×128K = 512K)<br/>then program + verify
+    Pi->>STM32: GPIO17 (BOOT0) → LOW
+    Pi->>STM32: GPIO23 (RST) → reset pulse
+    Note over STM32: Reboots with BOOT0=0<br/>→ runs wombat.bin from flash
+```
+
+Why sector erase (`-e 8`) instead of mass erase: `stm32flash` 0.7 times out waiting for the ACK byte after the F4 mass-erase command, even though the chip eventually finishes. Eight sectors covers the entire 512 KB Bank 1 code area.
+
+### Manual flash (from the Pi)
+
+If `install.py` has already deployed the flash scripts:
+
+```bash
+ssh pi@<PI_IP>
+cd ~/flashFiles
+bash flash_wombat.sh              # flashes the wombat.bin already in ~/flashFiles
+bash flash_wombat.sh /path/to/other.bin  # flash an alternative binary
+```
+
+To reset the STM32 without reflashing (normal boot):
+
+```bash
+bash ~/flashFiles/reset_coprocessor.sh
+```
+
+### Automated deploy from laptop
+
+```bash
+cd stm32-data-reader
+./deploy.sh                          # build + deploy to default Pi (10.101.156.14)
+RPI_HOST=192.168.1.100 ./deploy.sh   # override target IP
+RPI_USER=ubuntu ./deploy.sh          # override SSH user (default: pi)
+```
+
+`deploy.sh` calls `build.sh` then `install.py`. `install.py` does (in order):
+
+1. Tests SSH connectivity.
+2. Stops `stm32_data_reader.service`.
+3. Copies `wombat.bin`, `flash_wombat.sh`, `reset_coprocessor.sh`, `init_gpio.sh` to `~/flashFiles/` on the Pi.
+4. Runs `flash_wombat.sh` over SSH.
+5. Copies the Pi bridge binary to `/home/pi/stm32_data_reader/`.
+6. Installs / reloads the systemd unit files.
+7. Enables `loginctl linger` for the `pi` user (keeps `/dev/shm/raccoon_ring_*` files alive across SSH disconnects).
+8. Starts `lcm-loopback-multicast.service` then `stm32_data_reader.service`.
+
+---
+
+## Running the Pi Bridge
+
+### As a systemd service (production)
+
+After `deploy.sh` completes, the reader runs as:
+
+```
+stm32_data_reader.service   (Requires: lcm-loopback-multicast.service)
+WorkingDirectory: /home/pi/stm32_data_reader
+ExecStart:        /home/pi/stm32_data_reader/stm32_data_reader
+Restart=always    RestartSec=5
+```
+
+Check status:
+
+```bash
+ssh pi@<PI_IP> "sudo systemctl status stm32_data_reader"
+ssh pi@<PI_IP> "sudo journalctl -u stm32_data_reader -f"
+```
+
+### Manually (for debugging)
+
+```bash
+ssh pi@<PI_IP>
+# Stop the service first so both don't fight over /dev/spidev0.0
+sudo systemctl stop stm32_data_reader
+cd /home/pi/stm32_data_reader
+WOMBAT_LOG_LEVEL=debug ./stm32_data_reader
+```
 
 ### Runtime flags
 
 ```bash
-./stm32-data-reader --version   # Print STMREADER_VERSION and exit
+./stm32_data_reader --version     # Print STMREADER_VERSION and exit
+WOMBAT_LOG_LEVEL=debug ./stm32_data_reader    # Maximum verbosity
+WOMBAT_LOG_LEVEL=warn  ./stm32_data_reader    # Warnings and errors only
 ```
 
-The log level can be overridden at runtime without recompiling:
+Valid log levels: `debug`, `info`, `warn`, `error`. The env override is applied before any service initialisation, so even early-init messages (SPI open, GPIO init) are visible at `debug`.
+
+Default configuration (from `include/wombat/core/Configuration.h`):
+
+| Parameter | Default | Notes |
+|---|---|---|
+| SPI device | `/dev/spidev0.0` | Hardware SPI bus |
+| SPI speed | 20 MHz | |
+| UART device | `/dev/ttyAMA0` | STM32 USART3 debug output |
+| UART baud | 115200 | 8N1 |
+| UART enabled | `true` | Can disable if `/dev/ttyAMA0` conflicts |
+| Main loop delay | 5 ms | ~200 Hz SPI polling rate |
+| BEMF on startup | enabled | Set `disableBemfOnStartup=true` for open-loop PWM only |
+
+---
+
+## Startup Sequence and Version Check
+
+On startup the application follows this sequence:
+
+```mermaid
+sequenceDiagram
+    participant main
+    participant App as Application
+    participant UART as UartMonitor
+    participant SPI as SpiReal/Spi.c
+
+    main->>App: initialize()
+    App->>UART: initialize() — open /dev/ttyAMA0
+    App->>SPI: spi_init(20MHz) + set_spi_mode(true)
+    App->>UART: drainFor(2000ms) — capture STM32 boot messages
+    App->>SPI: spi_probe_version() — read transferVersion from STM32
+    alt version == TRANSFER_VERSION (21)
+        App->>App: log "OK — no reflash needed"
+    else mismatch
+        App->>App: log "MISMATCH — firmware reflash will be triggered"
+        SPI->>SPI: reflash_stm() — system("bash ~/flashFiles/flash_wombat.sh")
+        SPI->>SPI: spi_reopen() — reopen /dev/spidev0.0
+        alt still mismatch after reflash
+            SPI->>SPI: abort (fatal)
+        end
+    end
+    App->>main: run() — main loop at ~200 Hz
+```
+
+The version probe sends a dummy SPI transfer and reads `rx.transferVersion` — the firmware writes `TRANSFER_VERSION` (21) into this field on every SPI exchange. If the field doesn't match, the Pi side invokes `flash_wombat.sh` inline (blocking), reopens the SPI device, and retries once. A second mismatch after reflash is a fatal error.
+
+---
+
+## Debugging
+
+### Checking if the STM32 is alive
+
+**Primary liveness signal:** `updateTime` in `TxBuffer`. The firmware increments this on every SPI ISR. The reader's `checkStm32Health()` compares successive values — if `updateTime` does not change for more than **10 seconds**, the reader logs an error and shuts down with `fatalShutdown_ = true`. The systemd unit restarts it after 5 seconds.
+
+**Periodic log lines** (even without debug-level logging) tell you the SPI loop is live:
+
+```
+# Every 500 SPI reads (~2.5s at 200 Hz):
+[HH:MM:SS.mmm] [info] SPI rx gyro=[x,y,z] accel=[x,y,z] quat=[w,x,y,z] heading=N
+
+# Every 200 SPI reads (~1s at 200 Hz):
+[HH:MM:SS.mmm] [info] SPI rx bemf=[m0,m1,m2,m3] pos=[p0,p1,p2,p3]
+```
+
+If these lines are absent, SPI communication has stalled.
+
+### Reading STM32 UART debug output
+
+The STM32 firmware writes debug messages over USART3 (PB10 TX, PB11 RX) at 115200 baud 8N1. The Pi bridge reads this port via `UartMonitor` (config: `uart.devicePath = "/dev/ttyAMA0"`, `uart.enabled = true`).
+
+All STM32 output is forwarded to the reader's spdlog log with the prefix `[STM32]`. Lines containing `[ERROR]`, `Error`, or `FAULT` are emitted at `error` level; lines containing `[WARN]` at `warn` level; everything else at `info`. You therefore see STM32 boot messages, sensor init status, and the heartbeat line in the same journal stream as the reader:
 
 ```bash
-WOMBAT_LOG_LEVEL=debug ./stm32-data-reader   # valid: debug, info, warn, error
+sudo journalctl -u stm32_data_reader -f
+# ...
+# [info]  [STM32] Starting firmware v1.4 ...
+# [info]  [STM32] IMU init OK
+# [info]  [STM32] [stp] hb #1
+# [info]  [STM32] [stp] hb #2
 ```
 
-This sets the spdlog level immediately at startup before any service initialisation runs, so even early-init messages are visible at `debug`.
+The heartbeat line `[stp] hb #N` is emitted by the firmware in its main loop at a slow rate. The reader tracks the last heartbeat timestamp but treats it as a **diagnostic-only** signal — not a liveness kill-switch. The firmware periodically disables UART TX interrupts for up to ~12 seconds while writing IMU calibration to flash sector 12 (verified 2026-06-02). During this time `updateTime` still increments over SPI, so the reader stays up and only emits a rate-limited warning:
 
-## Interrupt Priority Table
+```
+[warn] STM32 UART heartbeat silent for Ns (SPI still live; likely flash-write stall — not fatal)
+```
 
-Understanding the interrupt priority hierarchy is important for debugging timing issues. A lower preempt number means higher priority and can interrupt a running ISR with a higher number.
+If you want to monitor the UART directly without the reader running:
 
-| ISR | Preempt | Sub | Purpose |
-|---|---|---|---|
-| SPI2 | 0 | 0 | Pi SPI completion (safety-critical) |
-| DMA1 Stream 3 (SPI2 RX) | 0 | 1 | SPI2 DMA RX |
-| DMA1 Stream 4 (SPI2 TX) | 0 | 2 | SPI2 DMA TX |
-| DMA1 Stream 0 (SPI3 RX) | 1 | 1 | IMU SPI3 DMA RX |
-| SPI3 | 1 | 0 | IMU SPI completion |
-| DMA1 Stream 5 (SPI3 TX) | 1 | 2 | IMU SPI3 DMA TX |
-| ADC (ADC2) | 2 | 0 | BEMF ADC completion |
-| ADC (ADC2) | 2 | 3 | BEMF DMA completion |
-| ADC (ADC1) | 2 | 4 | Analog sensor completion |
-| DMA2 Stream 0 (ADC1) | 2 | 1 | Analog sensor DMA |
-| DMA2 Stream 2 (ADC2) | 2 | 0 | BEMF DMA |
-| TIM6 | 3 | 0 | 1 µs system tick + scheduling |
+```bash
+sudo systemctl stop stm32_data_reader
+screen /dev/ttyAMA0 115200   # Ctrl-A \ to quit
+# or:
+minicom -D /dev/ttyAMA0 -b 115200
+```
 
-The SPI2 completion ISR runs at the highest priority to ensure that new Pi commands are processed with minimum latency and the shutdown flag is enforced immediately. The BEMF ADC runs at lower priority so the SPI ISR can always preempt a BEMF processing routine if a new Pi command arrives during BEMF sampling.
+### Common failure modes
 
-## Modifying the Firmware
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `spi_init() failed` | `/dev/spidev0.0` not present or wrong permissions | Check `ls -l /dev/spidev*`; SPI must be enabled in `raspi-config` |
+| `STM32 health check failed: updateTime has not changed for >10s` | SPI bus stalled or firmware crashed | Check USART3 output for firmware fault; power-cycle Wombat |
+| `Version check: MISMATCH` at startup, loop of reflash attempts | `wombat.bin` not present in `~/flashFiles/` | Re-run `deploy.sh` |
+| `STM32 flash failed!` in install.py | `stm32flash` not installed on Pi, or wrong GPIO wiring | `sudo apt install stm32flash`; check GPIO 17/23 |
+| UART heartbeats stop but SPI is live | Firmware writing calibration to flash | Normal; wait ~12s for recovery |
+| Pi bridge crashes immediately after systemd restart | `/dev/shm/raccoon_ring_*` inode inconsistency | Do NOT wipe `/dev/shm` on restart; unit file deliberately omits `ExecStartPre` wipe |
 
-### Adding a New Sensor
+### Inspecting build artifacts
 
-1. Add ADC channel configuration in `adcInit.c` (for analog sensors) or GPIO initialisation in `gpio.c` (for digital sensors).
-2. Add reading/processing logic in the appropriate `Sensors/` file.
-3. Add a field to `TxBuffer` in the STM32-side struct and the corresponding field in the **shared header** `stm32-data-reader/shared/spi/pi_buffer.h`. Both sides of the SPI protocol use the same header — there is only one source of truth.
-4. Populate the new field before the main loop calls the relevant SPI buffer update function.
-5. In `stm32-data-reader`, unpack the field in `SpiReal::readSensorData()` and add a publish call in `DataPublisher`.
-6. Increment `TRANSFER_VERSION` in `stm32-data-reader/shared/spi/pi_buffer.h`. This is the **single** definition — do not define it anywhere else.
+```bash
+# Check flash+RAM usage:
+arm-none-eabi-size -B firmware/build/Firmware/wombat.elf
 
-### Changing PID Gains
+# Disassemble a function (e.g. pid_update):
+arm-none-eabi-objdump -d firmware/build/Firmware/wombat.elf | grep -A 50 "<pid_update>"
 
-Default gains are in `stm32-data-reader/firmware/Firmware/src/Actors/pid.c`:
+# Find section addresses in the map file:
+grep "pid_update\|motor_control\|SPI2_IRQHandler" firmware/build/Firmware/wombat.map
+
+# Confirm binary target architecture:
+file build/stm32_data_reader
+# → ELF 64-bit LSB executable, ARM aarch64
+```
+
+---
+
+## PID Default Gains (pid.c)
+
+Default gains are defined in `firmware/Firmware/src/Actors/pid.c`. They apply at power-on and can be overridden at runtime via SPI without reflashing.
 
 ```c
-// dt-EXPLICIT gains (per-second units).
-// kI was rescaled from the old dt-implicit default 0.045 by the nominal
-// MAV rate (~200 Hz/motor): kI_explicit = 0.045 * 200 = 9.0.
-// Both values produce identical closed-loop behaviour at 200 Hz, but the
-// explicit form is correct when the BEMF cadence varies (watchdog skips,
-// mode changes). Using 0.045 in per-second units would give 200× too little
-// integral authority.
+// Velocity (inner) loop — dt-EXPLICIT gains (per-second units)
 #define PID_DEFAULT_P  1.22f
-#define PID_DEFAULT_I  9.0f
+#define PID_DEFAULT_I  9.0f     // = 0.045 (old implicit) × 200 Hz nominal rate
 #define PID_DEFAULT_D  0.000f
 
-// Position (outer) loop — pure proportional.
-// The inner velocity PID already provides damping.
+// Position (outer) loop — pure proportional
 #define PID_POS_DEFAULT_P  1.0f
 #define PID_POS_DEFAULT_I  0.0f
 #define PID_POS_DEFAULT_D  0.0f
 ```
 
-These apply at startup. They can be overridden at runtime via the SPI `updates` bitmask without reflashing. From raccoon-lib Python:
+The key point about `kI = 9.0`: the firmware's `pid_update()` multiplies `kI` by the real `dt` (seconds) on each call — it is **per-second** units. The old value `0.045` was implicit (multiplied directly without `dt`). To produce identical closed-loop behaviour at the nominal 200 Hz BEMF rate:
+
+```
+kI_explicit = kI_implicit × rate = 0.045 × 200 = 9.0
+```
+
+Using `0.045` in the new explicit form would give 200× too little integral authority. If you are tuning from first principles, start with `kI = 9.0` and adjust from there.
+
+Override at runtime from Python (raccoon-lib):
 
 ```python
-motor.set_pid(kp=1.5, ki=9.0, kd=0.0)
+motor.set_pid(kp=1.22, ki=9.0, kd=0.0)   # ki is in per-second units
 ```
 
-Note that `ki` here is in **per-second units** (the same convention as the firmware default). A value of `9.0` at 200 Hz gives the same integral contribution per cycle as the old `0.045` dt-implicit value.
+---
 
-### Changing BEMF Timing
+## Adding a New Sensor or Protocol Field
 
-The BEMF timing constants are in `stm32-data-reader/firmware/Firmware/include/Sensors/bemf.h`:
+When you add a field to the SPI protocol:
 
-```c
-// Interval between individual motor measurements in µs.
-// With 4 motors in round-robin, each motor is measured every 4 × 1250 = 5000 µs (200 Hz).
-#define BEMF_SAMPLING_INTERVAL           1250  // µs
+1. Add the field to the appropriate struct (`TxBuffer` for STM32→Pi, `RxBuffer` for Pi→STM32) in `shared/spi/pi_buffer.h`. Both firmware and Pi bridge include this header directly — there is exactly one source of truth.
+2. Populate the field in the firmware (in the relevant `Sensors/` file, before the main-loop SPI buffer update).
+3. Unpack the field on the Pi side in `SpiReal::readSensorData()` (in `src/wombat/hardware/SpiReal.cpp`).
+4. Publish it via `DataPublisher`.
+5. Increment `TRANSFER_VERSION` in `pi_buffer.h`. The reader's startup probe will detect the new version and reflash automatically on first boot after deploy.
 
-// Wait time after stopping a motor before starting the ADC conversion.
-// Motor back-EMF needs ~500 µs to settle after PWM is cut.
-#define BEMF_CONVERSION_START_DELAY_TIME  500  // µs
+---
 
-// Watchdog: abort a stuck ADC2 conversion after this many µs.
-#define BEMF_WATCHDOG_TIMEOUT  (BEMF_SAMPLING_INTERVAL * 2)  // 2500 µs
-```
+## Related Pages
 
-Only one motor is stopped per cycle (round-robin), so the torque interruption at any moment is limited to one motor out of four. Reducing `BEMF_SAMPLING_INTERVAL` increases the per-motor update rate but also reduces effective torque on that motor. Reducing `BEMF_CONVERSION_START_DELAY_TIME` below 500 µs risks reading PWM switching noise instead of the true back-EMF.
-
-## Related pages
-
-- [SPI Communication Protocol](../spi-protocol/) — `TRANSFER_VERSION 21` and version mismatch behavior
-- [Motor Control](../motor-control/) — the BEMF constants defined in `bemf.h` that you may need to change
-- [Robot Services And systemd](../robot-services-and-systemd/) — how `stm32_data_reader.service` picks up the new binary after deploy
+- [SPI Communication Protocol](../spi-protocol/) — wire format, `TRANSFER_VERSION 21`, version mismatch behaviour
+- [Firmware Runtime and Scheduling](../firmware-runtime/) — clock tree, timer inventory, and interrupt priorities that constrain firmware timing budgets
+- [Pi Bridge Internals](../pi-bridge-internals/) — `SpiReal`/`SpiMock` switch, `USE_SPI_MOCK` build flag, and the `Application` startup sequence
+- [Motor Control](../motor-control/) — BEMF timing constants, velocity PID loop details
+- [Robot Services and systemd](../robot-services-and-systemd/) — `stm32_data_reader.service` lifecycle, linger, LCM multicast

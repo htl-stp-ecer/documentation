@@ -3,186 +3,178 @@ title: "Motor Control"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 3
+weight: 6
 ---
 
-## Concept
+## Mental model — why the hierarchy exists
 
-The STM32 runs a **hierarchical control loop** for each motor. At the bottom is open-loop PWM generation (~25 kHz). Above that is a back-EMF velocity measurement loop (200 Hz per motor in round-robin). Above that is a closed-loop velocity PID. Above that is a position trajectory generator. The Pi selects which level to engage by writing a 3-bit mode field into the SPI `RxBuffer`.
+The STM32 runs a **four-level control hierarchy** for each motor. Understanding which level is active, and which levels are bypassed, is the key to understanding every motor mode.
 
-The key insight behind the motor control design is that **all closed-loop work happens on the STM32**, not on the Pi. The Pi sends high-level commands (velocity setpoint, position target, chassis velocity vector) and the STM32 closes the loop within a single BEMF cycle (≤ 1250 µs). By the time the Pi's next SPI transfer arrives (5 ms later), the motor has already been updated four times.
+```
+Level 4 (highest):  Chassis kinematics   →  body-frame [vx, vy, wz] → per-wheel velocity
+Level 3:            Position trajectory   →  sqrt-decel profile → velocity setpoint
+Level 2:            Velocity PID          →  BEMF feedback → PWM duty setpoint
+Level 1 (lowest):   PWM generation        →  H-bridge enable pin, 25 kHz
+```
 
-### Motor mode state machine
+The Pi always commands at the *highest* level it needs. For simple open-loop testing, it commands Level 1 directly (PWM mode). For a move-to-position command, it commands Level 3 and lets the firmware run Levels 3, 2, and 1 independently on the STM32. By the time the next SPI transfer arrives (~5 ms), each motor has already been updated four times at the BEMF rate.
+
+**The key insight:** all closed-loop work happens on the STM32, not on the Pi. The Pi's SPI bus is not in any feedback loop.
+
+---
+
+## PWM Generation (Level 1)
+
+Each DC motor is driven by an H-bridge. The STM32 generates a PWM signal on the H-bridge enable pin and drives two direction pins (D0, D1) to set rotation direction.
+
+### Timer assignment
+
+The `motors[]` array in `motor.c` maps logical software port numbers to physical timers and channels. Note the deliberate reordering — the array comment says "motor 0 and 1 as well as 2 and 3 are switched to get right sequence of motor ports":
+
+| Software port | Physical motor | Timer | TIM Channel | GPIO (PWM) |
+|---|---|---|---|---|
+| 0 | MOT1 hardware | TIM1 | CH2 | MOT1_PWM_Pin |
+| 1 | MOT0 hardware | TIM1 | CH1 | MOT0_PWM_Pin |
+| 2 | MOT3 hardware | TIM8 | CH1 | MOT3_PWM_Pin |
+| 3 | MOT2 hardware | TIM1 | CH3 | MOT2_PWM_Pin |
+
+This cross-mapping is transparent to higher layers — all firmware code (BEMF, PID, MTP) uses the software port index consistently.
+
+### PWM frequency
+
+TIM1 and TIM8 are APB2-clocked timers. With the STM32F4 configured at 180 MHz HCLK and an APB2 prescaler of 2:
+
+| Parameter | Value |
+|---|---|
+| APB2 clock | 90 MHz |
+| TIM1/TIM8 input clock | 180 MHz (×2 because APB2 prescaler ≠ 1) |
+| Prescaler register | 17 (value = N−1 = 18−1) |
+| Timer tick frequency | 180 MHz / 18 = **10 MHz** |
+| Auto-reload register | 399 (period = 400 ticks) |
+| PWM frequency | 10 MHz / 400 = **25 kHz** |
+
+The compare register (`__HAL_TIM_SET_COMPARE`) accepts 0–399. `MOTOR_MAX_DUTYCYCLE = 399`. Duty cycle in percent = `(duty / 399) × 100`.
+
+### H-bridge direction encoding
+
+`motor_setDirection()` in `motor.c` writes the D0 and D1 GPIO pins:
+
+| D0 | D1 | `MOTOR_DIRECTION_CTL` enum | Effect |
+|---|---|---|---|
+| LOW | LOW | `OFF` | Motor coasts freely |
+| HIGH | LOW | `CCW` | Counter-clockwise |
+| LOW | HIGH | `CW` | Clockwise |
+| HIGH | HIGH | `SHORT_BREAK` | Both terminals shorted — regenerative braking |
+
+`applyMotorOutput(ch, motor_cmd)` combines sign-to-direction decoding with `motor_setDutycycle()`. Positive `motor_cmd` → CW; negative → CCW; magnitude → duty cycle.
+
+---
+
+## Back-EMF Velocity Measurement (Level 2 sensor)
+
+### Why BEMF instead of encoders
+
+The Wombat uses back-EMF rather than quadrature encoders. When a brushed DC motor spins, it generates a voltage proportional to speed across its terminals. By briefly cutting the PWM and measuring the differential voltage, the STM32 derives wheel velocity without separate encoder hardware.
+
+Each motor has two dedicated ADC pins connected to the motor terminals (high and low sides of the H-bridge output). The raw BEMF voltage is `ADC_high − ADC_low`.
+
+### Round-robin architecture
+
+The BEMF implementation measures **one motor per cycle** in round-robin, cycling 0→1→2→3→0. Only one motor is ever stopped at a time, reducing torque interruption compared to stopping all four simultaneously.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> OFF : power on / reset
+sequenceDiagram
+    participant TIM6 as TIM6 ISR (1250 µs)
+    participant BEMF as bemf.c state machine
+    participant ADC2 as ADC2 + DMA
+    participant Motor as H-bridge (current motor)
+    participant Update as update_motor()
 
-    OFF : MOT_MODE_OFF (0b000)\nDirection pins LOW, duty 0\nMotor coasts freely
-
-    BRAKE : MOT_MODE_PASSIV_BRAKE (0b001)\nDirection pins both HIGH\nMotor windings shorted — regenerative braking
-
-    PWM : MOT_MODE_PWM (0b010)\nOpen-loop duty −399 to +399\nNo encoder feedback
-
-    MAV : MOT_MODE_MAV (0b011)\nClosed-loop velocity PID\nSetpoint in BEMF ticks/s\nRequires BEMF enabled
-
-    MTP : MOT_MODE_MTP (0b100)\nSqrt-decel trajectory → velocity PID\nAbsolute position target\nDone flag set when within 40 ticks
-
-    CHASSIS : MOT_MODE_CHASSIS (0b101)\nPer-wheel target from chassis vector\n[vx, vy, wz] → fwd_matrix → per-wheel rad/s\nAll 4 motors share one chassis command
-
-    OFF --> PWM : set_motor_pwm()
-    OFF --> MAV : set_motor_velocity()
-    OFF --> MTP : set_motor_position()
-    OFF --> CHASSIS : set_chassis_velocity()
-    OFF --> BRAKE : motor_passive_brake()
-
-    PWM --> OFF : motor_off()
-    PWM --> BRAKE : motor_passive_brake()
-    PWM --> MAV : set_motor_velocity()
-    PWM --> MTP : set_motor_position()
-
-    MAV --> OFF : motor_off()
-    MAV --> BRAKE : motor_passive_brake()
-    MAV --> MTP : set_motor_position()
-    MAV --> PWM : set_motor_pwm()
-
-    MTP --> BRAKE : position reached (done flag)\nor motor_passive_brake()
-    MTP --> OFF : motor_off()
-
-    CHASSIS --> OFF : motor_off()
-    CHASSIS --> BRAKE : motor_passive_brake()
+    TIM6->>BEMF: tick (STOPPED state)
+    BEMF->>Motor: stop_motors_for_bemf_conv()<br/>Direction pins → OFF
+    Note over BEMF: state = WAITING_TO_START<br/>bemfCycleStartTime = now
+    TIM6->>BEMF: tick (500 µs later)
+    BEMF->>ADC2: startBemfReading()<br/>configureBemfAdc(motor)<br/>HAL_ADC_Start_DMA()
+    Note over BEMF: state = CONVERSION_ONGOING
+    ADC2-->>BEMF: HAL_ADC_ConvCpltCallback<br/>state = CONVERSION_DONE
+    BEMF->>BEMF: processBEMF()<br/>filter → dead-zone → position accum
+    BEMF->>Update: motor_data.bemf[ch] updated
+    Note over BEMF: bemfCurrentMotor = (ch+1) % 4<br/>state = STOPPED
 ```
 
-On every mode change, the firmware resets both PID controllers (zeroes `prevErr` and `iErr`), resets the trapezoidal profile velocity to 0, and clears the done flag. This prevents integral windup from a previous mode from affecting the new one.
-
-## PWM Generation
-
-Each DC motor is driven by an H-bridge. The STM32 generates a PWM signal for the enable pin of the H-bridge and drives two direction pins (D0, D1) to control direction.
-
-Four timer peripherals generate the PWM signals:
-
-| Timer | Motors | Channels | PWM frequency |
-|---|---|---|---|
-| TIM1 | Motor 0 (CH1), Motor 1 (CH2), Motor 2 (CH3) | PA8, PA9, PA10 | ~25 kHz |
-| TIM8 | Motor 3 (CH1) | PC6 | ~25 kHz |
-
-**PWM frequency calculation for TIM1/TIM8:**
-
-- APB2 clock = 90 MHz (HCLK/2)
-- TIM1/TIM8 input clock = 180 MHz (2× APB2 because APB2 prescaler ≠ 1)
-- Prescaler = 18 − 1 = 17
-- Timer frequency = 180 MHz / 18 = 10 MHz
-- Period = 400 − 1 = 399
-- PWM frequency = 10 MHz / 400 = **25 kHz**
-
-The compare register (`__HAL_TIM_SET_COMPARE`) accepts values from 0 (always off) to 399 (always on). This is `MOTOR_MAX_DUTYCYCLE`. The PWM duty cycle in percent is `(duty / 399) × 100`.
-
-**Direction control:**
-
-The H-bridge direction pins map as follows:
-
-| D0 | D1 | Effect |
-|---|---|---|
-| LOW | LOW | Coast (motor floats) |
-| HIGH | LOW | Counter-clockwise (CCW) |
-| LOW | HIGH | Clockwise (CW) |
-| HIGH | HIGH | Short brake (motor windings shorted) |
-
-Direction is set by `motor_setDirection()` which writes to the GPIO pins directly using HAL. Changing direction does not automatically stop the motor; the duty cycle remains unchanged until explicitly set.
-
-## Back-EMF (BEMF) Measurement
-
-The Wombat uses back-EMF rather than quadrature encoders for position feedback. When a brushed DC motor spins, it generates a voltage proportional to speed (back-EMF). By briefly stopping the PWM and sampling the voltage across the motor terminals, the STM32 can measure motor velocity.
-
-Each motor has two dedicated ADC pins connected to the motor terminals (the high and low sides of the H-bridge output). Back-EMF is the differential: `BEMF = ADC_high − ADC_low`.
-
-### Round-Robin BEMF Architecture
-
-The current BEMF implementation measures **one motor per cycle** in a round-robin fashion. This is a significant architectural change from older designs that stopped all four motors simultaneously. With round-robin, only one motor is ever stopped at a time, which reduces torque interruption from 4× simultaneous stops to a single brief stop that rotates across motors.
-
-**Timing:**
-
-- `BEMF_SAMPLING_INTERVAL` = **1250 µs** — the inter-measurement interval (one motor per cycle)
-- Each individual motor is therefore measured every **4 × 1250 = 5000 µs = 200 Hz**
-- `BEMF_CONVERSION_START_DELAY_TIME` = 500 µs — settle time after cutting PWM before ADC starts
-- `BEMF_WATCHDOG_TIMEOUT` = `2 × BEMF_SAMPLING_INTERVAL` = 2500 µs — hardware watchdog that force-aborts a stuck ADC2 conversion
-
-**ADC2 channel pairs (per motor, low + high):**
-
-| Motor | ADC Channel (low) | ADC Channel (high) |
-|---|---|---|
-| Motor 0 | ADC2_CH2 | ADC2_CH3 |
-| Motor 1 | ADC2_CH0 | ADC2_CH1 |
-| Motor 2 | ADC2_CH6 | ADC2_CH7 |
-| Motor 3 | ADC2_CH4 | ADC2_CH5 |
-
-ADC2 is **dynamically reconfigured** each cycle to scan only the two channels for `bemfCurrentMotor`. The DMA buffer holds just 2 elements: `buf[0]` = low channel, `buf[1]` = high channel. Sample time is `ADC_SAMPLETIME_480CYCLES` (maximum) per channel.
-
-### BEMF Measurement Cycle
-
-Each cycle runs as a state machine driven by TIM6 (`HAL_TIM_PeriodElapsedCallback`):
-
-1. Every 1250 µs, `stop_motors_for_bemf_conv()` cuts PWM for `bemfCurrentMotor` (direction pins set to OFF) and transitions to `WAITING_TO_START`.
-2. After 500 µs, `startBemfReading()` calls `configureBemfAdc(bemfCurrentMotor)` to reconfigure ADC2 for just this motor's two channels, then starts DMA.
-3. ADC2 completes, `HAL_ADC_ConvCpltCallback` fires and sets state to `CONVERSION_DONE`.
-4. `processBEMF()` runs the full signal chain (see below), then advances `bemfCurrentMotor = (bemfCurrentMotor + 1) % 4`.
-
-### BEMF Signal Processing Pipeline
-
-```c
-// Step 1: Raw differential, VDDA-normalized
-float raw = (buf[1] - buf[0]) * vddaScale;  // high - low
-
-// Step 2: Median-of-3 pre-filter (per-motor circular buffer, 3 samples)
-medianBuf[ch][medianIdx[ch]] = raw;
-medianIdx[ch] = (medianIdx[ch] + 1) % 3;
-float median = median3(medianBuf[ch][0], medianBuf[ch][1], medianBuf[ch][2]);
-
-// Step 3: IIR low-pass (alpha = 0.2)
-filtered = BEMF_FILTER_ALPHA * median + (1.0f - BEMF_FILTER_ALPHA) * prev;
-//  BEMF_FILTER_ALPHA = 0.2f
-
-// Step 4: Sanity guard — discard if |filtered| > MAX_BEMF_READING (2000)
-if (filtered > MAX_BEMF_READING || filtered < -MAX_BEMF_READING) { skip; }
-
-// Step 5: Offset correction + dead zone
-float corrected = filtered - bemf_offset_cfg[ch];  // Pi-calibrated per-motor offset
-if (corrected < BEMF_DEADZONE && corrected > -BEMF_DEADZONE)
-    corrected = 0.0f;
-//  BEMF_DEADZONE = 25.0f counts
-
-motor_data.bemf[ch] = (int32_t)corrected;
-```
-
-The two-stage filter (median-of-3 then IIR) rejects impulse noise (switching spikes, DMA glitches) in the first stage, then smooths the signal in the second. The dead zone of ±25 counts is applied after offset subtraction, not to the raw reading.
-
-**Key constants (from `bemf.h` / `bemf.c`):**
+**Timing constants (from `bemf.h`):**
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `BEMF_SAMPLING_INTERVAL` | 1250 µs | interval between individual motor measurements |
-| `BEMF_CONVERSION_START_DELAY_TIME` | 500 µs | settle time before ADC starts |
-| `BEMF_WATCHDOG_TIMEOUT` | 2500 µs | force-abort stuck ADC after this |
-| `BEMF_FILTER_ALPHA` | 0.2 | IIR weight for new sample |
-| `MAX_BEMF_READING` | 2000 | sanity guard — discard if exceeded |
-| `BEMF_DEADZONE` | 25.0 counts | dead band applied after offset subtraction |
+| `BEMF_SAMPLING_INTERVAL` | 1250 µs | Inter-measurement interval (one motor per cycle) |
+| `BEMF_CONVERSION_START_DELAY_TIME` | 500 µs | Settle time after cutting PWM before ADC starts |
+| `BEMF_WATCHDOG_TIMEOUT` | 2500 µs (= 2 × 1250 µs) | Force-abort a stuck ADC conversion |
 
-### BEMF Watchdog
+Each motor is measured every **4 × 1250 µs = 5 ms → 200 Hz**.
 
-`bemf_watchdog_check()` is called from TIM6 each tick. If the BEMF state machine is not in `STOPPED` and the cycle has been running longer than `BEMF_WATCHDOG_TIMEOUT` (2500 µs), the watchdog:
+### ADC2 channel pairs
+
+ADC2 is dynamically reconfigured each cycle to scan only the two channels for `bemfCurrentMotor`. `ADC_SAMPLETIME_480CYCLES` is used for both channels. The DMA buffer holds exactly 2 elements: `buf[0]` = low channel, `buf[1]` = high channel.
+
+| Software motor port | ADC Channel (low, rank 1) | ADC Channel (high, rank 2) |
+|---|---|---|
+| 0 | ADC_CHANNEL_2 | ADC_CHANNEL_3 |
+| 1 | ADC_CHANNEL_0 | ADC_CHANNEL_1 |
+| 2 | ADC_CHANNEL_6 | ADC_CHANNEL_7 |
+| 3 | ADC_CHANNEL_4 | ADC_CHANNEL_5 |
+
+### BEMF signal processing pipeline
+
+`processBEMF()` runs the following chain on each completed conversion:
+
+```mermaid
+flowchart LR
+    A["Raw differential\n(buf[1] - buf[0]) × vddaScale"] --> B
+    B["Median-of-3 pre-filter\n(3-sample ring buffer per motor)"] --> C
+    C["IIR low-pass\nalpha=0.2\nfiltered = 0.2×median + 0.8×prev"] --> D
+    D{"Sanity guard\n|filtered| > 2000?"}
+    D -- discard --> Z[skip this sample]
+    D -- keep --> E
+    E["Offset subtraction\ncorrected = filtered − bemf_offset_cfg[ch]"] --> F
+    F{"Dead-zone\n|corrected| < 25?"}
+    F -- yes --> G[corrected = 0.0]
+    F -- no --> H
+    G --> H
+    H["motor_data.bemf[ch] = corrected\ndt-aware position accumulation"]
+```
+
+**Two-stage filter rationale:** The median-of-3 stage rejects impulse noise (switching transients, DMA glitches) that a pure IIR would smear. The IIR then smooths the burst-free signal. The dead zone of ±25 counts is applied *after* offset subtraction, not to the raw reading.
+
+**Key signal-processing constants (from `bemf.c`):**
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `BEMF_FILTER_ALPHA` | 0.2 | IIR weight for the new sample |
+| `MAX_BEMF_READING` | 2000 | Sanity ceiling — readings beyond this are discarded |
+| `BEMF_DEADZONE` | 25.0 counts | Dead band applied after offset subtraction |
+| `MEDIAN_WINDOW` | 3 | Samples in the median pre-filter ring buffer |
+
+### BEMF zero-offset calibration
+
+The differential BEMF reading has a per-motor DC offset (~20–40 ADC counts) caused by amplifier and ADC settling artifacts. Integrating this offset accumulates phantom ticks that grow with time, worst at low speed. The Pi calibrates the per-motor offset via the kinematics config (`KinematicsConfig.bemf_offset[4]`), which is sent once at startup over the `KINEMATICS_CONFIG_CMD` LCM channel. The firmware stores the offsets in `bemf_offset_cfg[]` via `bemf_set_offset()` and subtracts them before the dead-zone check.
+
+### BEMF hardware watchdog
+
+`bemf_watchdog_check(now)` is called from TIM6 each tick. If the state machine is not `STOPPED` and the cycle has been running longer than `BEMF_WATCHDOG_TIMEOUT` (2500 µs), the watchdog:
 
 1. Calls `HAL_ADC_Stop_DMA()` to abort the stuck conversion
-2. Clears the DMA buffer
-3. Advances `bemfCurrentMotor` to skip the stuck motor
-4. Returns the state machine to `STOPPED`
+2. Clears the DMA buffer with `memset` to prevent stale data leaking
+3. Advances `bemfCurrentMotor = (bemfCurrentMotor + 1) % 4` to skip the stuck motor
+4. Returns state to `STOPPED`
 
-This prevents a single bad ADC conversion from stalling all motor updates indefinitely.
+This prevents a single bad ADC conversion from stalling all motor updates.
 
-### Position Accumulation (dt-aware)
+### dt-aware position accumulation
 
-Position is accumulated using the **actual elapsed time** between samples for each motor, not a fixed tick increment. This makes position a true time-integral of velocity (`∫ω dt`), immune to round-robin cadence jitter and watchdog skips:
+Position is accumulated using the **actual elapsed time** between BEMF samples for each motor, not a fixed 1250 µs tick. This makes position a true time-integral of velocity (`∫ω dt`):
 
 ```c
+// bemf.c — inside processBEMF(), after corrected is computed
 const uint32_t now_us = microSeconds;
 if (bemf_last_us[ch] != 0)
 {
@@ -191,7 +183,7 @@ if (bemf_last_us[ch] != 0)
 }
 bemf_last_us[ch] = now_us;
 
-// Extract whole ticks, keep fractional remainder
+// Transfer whole ticks to the integer counter, keep the fractional remainder
 int32_t whole = (int32_t)positionAccum[ch];
 if (whole != 0)
 {
@@ -200,180 +192,498 @@ if (whole != 0)
 }
 ```
 
-**Important:** this rescales position units compared to a naive `position += bemf` approach. The `KinematicsConfig.ticks_to_rad[4]` calibration factor must be determined empirically against this dt-aware accumulation.
+The unsigned subtraction `now_us - bemf_last_us[ch]` wraps correctly on the 32-bit `microSeconds` counter. The first sample only seeds the timestamp (no position update). The `positionAccum[]` float accumulator preserves sub-tick fractional position between updates.
 
-### Position Reset (on-STM32)
+**Consequence:** `KinematicsConfig.ticks_to_rad[4]` must be calibrated empirically against this dt-aware accumulation. The units are "accumulated (BEMF-count × seconds) ticks", not raw BEMF counts.
 
-Motor position counters are reset on the STM32 directly, not by Pi-side software offsets. The Pi sets bit N of `rxBuffer.motorPositionReset` and sets the `PI_BUFFER_UPDATE_MOTOR_POS_RESET` update flag. On the next SPI transaction, the STM32 main loop sets `motor_data.position[ch] = 0` for each bit that is set, then clears `motorPositionReset`.
+---
 
-From Python (raccoon-lib):
+## Motor Mode State Machine
 
-```python
-from raccoon_transport import Transport
-from raccoon_transport.types.raccoon import scalar_i32_t
-
-t = Transport()
-msg = scalar_i32_t()
-msg.value = 1  # non-zero triggers reset
-t.publish(Channels.motor_position_reset_command(port), msg.encode(), reliable=True)
-```
-
-After sending the reset, wait ~300–500 ms before reading the position or sending a new move command.
-
-## PID Control
-
-The firmware implements a discrete-time PID controller with **dt-explicit gains**. The `PidController` structure holds state for one motor:
+`update_motor()` is called once per motor per BEMF cycle. The control mode is 3 bits wide, packed into `rxBuffer.motorControlMode` at bit offset `3 × channel`:
 
 ```c
-typedef struct {
-    float kP;
-    float kI;      // per-second units
-    float kD;      // per-second units
-    float iMax;    // maximum integral contribution
-    float outMax;  // output saturation limit
-    float prevErr;
-    float iErr;    // integral accumulator (error × dt, not raw error)
-} PidController;
+const uint8_t ctlMode = (rxBuffer.motorControlMode >> (3 * channel)) & 0x07;
 ```
 
-### dt-Explicit `pid_update()`
+```mermaid
+stateDiagram-v2
+    [*] --> OFF : power on / reset
 
-The update function signature takes an explicit `dt` argument:
+    state "MOT_MODE_OFF (0b000)" as OFF
+    state "MOT_MODE_PASSIV_BRAKE (0b001)" as BRAKE
+    state "MOT_MODE_PWM (0b010)" as PWM
+    state "MOT_MODE_MAV (0b011)" as MAV
+    state "MOT_MODE_MTP (0b100)" as MTP
+    state "MOT_MODE_CHASSIS (0b101)" as CHASSIS
 
-```c
-int32_t pid_update(PidController* pid, int32_t goal, int32_t current, float dt);
+    OFF : OFF\nD0=LOW, D1=LOW, duty=0\nMotor coasts
+
+    BRAKE : PASSIVE BRAKE\nD0=HIGH, D1=HIGH, duty=0\nWindings shorted — regenerative
+
+    PWM : PWM (open-loop)\nSigned duty −399 to +399\nNo encoder feedback
+
+    MAV : MAV — Move At Velocity\nVelocity PID on BEMF\ntarget = BEMF ticks/s
+
+    MTP : MTP — Move To Position\nSqrt-decel profile → velocity PID\nDone when |error| ≤ 40 ticks
+
+    CHASSIS : CHASSIS\nBody [vx,vy,wz] → fwd_matrix\n→ per-wheel velocity PID
+
+    OFF --> PWM : setMotorPwm
+    OFF --> MAV : setMotorVelocity
+    OFF --> MTP : setMotorPosition
+    OFF --> CHASSIS : setChassisVelocity
+    OFF --> BRAKE : motorPassiveBrake
+
+    PWM --> OFF : motorOff
+    PWM --> BRAKE : motorPassiveBrake
+    PWM --> MAV : setMotorVelocity
+    PWM --> MTP : setMotorPosition
+
+    MAV --> OFF : motorOff
+    MAV --> BRAKE : motorPassiveBrake
+    MAV --> MTP : setMotorPosition
+    MAV --> PWM : setMotorPwm
+
+    MTP --> BRAKE : position reached\n(sticky done flag set)
+    MTP --> MTP : new goal position\n(resets done + profile)
+    MTP --> OFF : motorOff
+
+    CHASSIS --> OFF : motorOff
+    CHASSIS --> BRAKE : motorPassiveBrake
 ```
 
-`dt` is the elapsed time in seconds since this controller's previous update. Using explicit dt makes gains physically consistent: if the BEMF cycle fires late (watchdog skip, OS jitter), the integral and derivative automatically compensate. A fallback value of `PID_NOMINAL_DT = 1.0/200.0` (5 ms) is used if `dt` is zero, negative, or unreasonably large (> 100 ms).
+### Mode-change invariant
 
-```c
-// Integral: accumulates error × dt (units: error·seconds)
-pid->iErr += pErr * dt;
+When `ctlMode != prevControlMode[channel]`, `motor_on_mode_change()` fires before the new handler runs. It:
 
-// Derivative: rate of error change per second
-float dErr = (pErr - pid->prevErr) / dt;
+1. Logs the transition via UART3: `[stp] mot{N} mode {prev}->{new} pos={pos}`
+2. Calls `pid_reset()` on both `pidControllers[ch]` and `posPidControllers[ch]` (zeroes `prevErr` and `iErr`)
+3. Sets `profileVel[ch] = 0` (resets the trapezoidal ramp)
+4. Clears bit N of `motor_data.done`
 
-// Integral anti-windup (clamp contribution, back-calculate accumulator)
-float iTerm = pid->kI * pid->iErr;
-if (iTerm > pid->iMax)  { iTerm = pid->iMax;  pid->iErr = pid->iMax  / pid->kI; }
-if (iTerm < -pid->iMax) { iTerm = -pid->iMax; pid->iErr = -pid->iMax / pid->kI; }
+This prevents integral windup from a previous mode from contaminating the new one, and ensures MTP always starts from a stationary profile regardless of prior motion.
 
-float cmd = pid->kP * pErr + iTerm + pid->kD * dErr;
-cmd = clamp(cmd, -pid->outMax, pid->outMax);
-```
+### Shutdown guard
 
-### Default PID Gains
+Before the mode dispatch, `update_motor()` checks `rxBuffer.systemShutdown & SHUTDOWN_MOTOR`. If set, it forces D0=LOW, D1=LOW, duty=0 and returns immediately, bypassing all mode logic. This is the firmware-level safety interlock driven by the Pi-side `MotorWatchdog`.
 
-**Default velocity PID gains** (`pid_init()`):
+### BEMF-disable guard
 
-| Gain | Value | Notes |
-|---|---|---|
-| `kP` | 1.22 | |
-| `kI` | **9.0** | dt-explicit per-second; equivalent to the old 0.045 at 200 Hz (9.0 = 0.045 × 200) |
-| `kD` | 0.0 | |
-| `iMax` | 399 | full duty |
-| `outMax` | 399 | |
+If `FEATURE_BEMF_DISABLE` is set in `rxBuffer.featureFlags`, MAV and CHASSIS modes are blocked — the motor is held off and the function returns. PWM and MTP modes are unaffected by this flag (MTP uses position accumulated before BEMF was disabled; PWM is fully open-loop).
 
-**Default position PID gains** (`pid_init_position()`):
+---
 
-| Gain | Value | Notes |
-|---|---|---|
-| `kP` | 1.0 | |
-| `kI` | 0.0 | |
-| `kD` | 0.0 | |
-| `iMax` | 399 | |
-| `outMax` | 399 | |
-
-These are starting points. The optimal values depend on the motor, load, and battery voltage. The Pi can override them at any time via the `motorPidSettings` block in the `RxBuffer` combined with the appropriate update flag. From LCM, publish a `vector3f_t` (`x=kp, y=ki, z=kd`) to `raccoon/motor/N/pid_cmd` with `reliable=True`.
-
-**When tuning `kI`, always use per-second units.** A value of 1.0 means the integral term grows by 1.0 × (error × 1 second). The old implicit-dt convention (where kI was scaled by the loop rate) no longer applies.
-
-## Motor Operating Modes
-
-`update_motor()` is called once per motor per BEMF cycle (one motor at a time, round-robin). It reads `rxBuffer.motorControlMode`, extracts the 3-bit mode for the relevant channel, and dispatches to the corresponding handler.
+## Mode Reference
 
 ### `MOT_MODE_OFF` (0b000)
-Direction pins both LOW, duty cycle 0. Motor coasts.
+
+`motor_mode_off()` — D0=LOW, D1=LOW, duty=0. The motor coasts; the H-bridge outputs are open.
 
 ### `MOT_MODE_PASSIV_BRAKE` (0b001)
-Direction pins both HIGH, duty cycle 0. Both motor terminals are shorted through the H-bridge, providing regenerative braking.
+
+`motor_mode_brake()` — D0=HIGH, D1=HIGH, duty=0. Both motor terminals are shorted through the H-bridge, creating a back-EMF braking path. The motor decelerates regeneratively; stopping time depends on load and motor back-EMF constant.
 
 ### `MOT_MODE_PWM` (0b010)
-Direct open-loop PWM. `motorTarget[ch]` is the signed duty cycle (negative = reverse). The duty is passed to `applyMotorOutput()` which sets direction and calls `motor_setDutycycle()`. The range is −399 to +399.
+
+`motor_mode_pwm()` — Passes `rxBuffer.motorTarget[ch]` directly to `applyMotorOutput()`. Signed range −399 to +399. Positive = CW; negative = CCW. No encoder feedback of any kind.
+
+**LCM command:** `scalar_i32_t` on `Channels::motorPowerCommand(port)`. The Pi-side converts a −100…+100 percentage to a −400…+400 duty value (factor of 4), so the firmware sees the rescaled value. **No `reliable=True`** — this is a continuous stream.
 
 ### `MOT_MODE_MAV` — Move At Velocity (0b011)
-Closed-loop velocity control using the velocity PID. The offset-corrected, dead-zone-filtered BEMF reading is the process variable; `motorTarget[ch]` is the velocity setpoint (in BEMF ticks per second, with dt-explicit units). The PID output is the signed PWM duty.
+
+`motor_mode_mav()` — Closed-loop velocity control using the velocity PID. The BEMF reading after dead-zone filtering is the process variable; `rxBuffer.motorTarget[ch]` is the setpoint in BEMF ticks per second.
 
 ```c
 int32_t pidOut = pid_update(&pidControllers[ch], target, bemf_filtered, pidDt);
 applyMotorOutput(ch, pidOut);
 ```
 
-This mode requires BEMF to be enabled. If `FEATURE_BEMF_DISABLE` is set, the STM32 holds the motor off in this mode.
+The velocity PID output is the signed PWM duty (−399…+399), passed directly to `applyMotorOutput`. This mode requires BEMF to be enabled; if `FEATURE_BEMF_DISABLE` is set, the STM32 holds the motor off.
+
+**LCM command:** `scalar_i32_t` on `Channels::motorVelocityCommand(port)`. **No `reliable=True`** — continuous stream.
 
 ### `MOT_MODE_CHASSIS` — On-MCU Chassis Velocity (0b101)
-Derives a per-wheel velocity setpoint from `rxBuffer.chassisVelocity[3]` via forward kinematics, then runs the same velocity PID as MAV:
+
+`motor_mode_chassis()` — Derives a per-wheel velocity setpoint from `rxBuffer.chassisVelocity[3]` via the forward kinematics matrix, then runs the same velocity PID as MAV:
 
 ```c
 const int32_t chassisTarget = odometry_chassis_wheel_target(
     ch,
-    rxBuffer.chassisVelocity[0],  // vx m/s
-    rxBuffer.chassisVelocity[1],  // vy m/s
-    rxBuffer.chassisVelocity[2]); // wz rad/s
+    rxBuffer.chassisVelocity[0],  // vx m/s, body frame
+    rxBuffer.chassisVelocity[1],  // vy m/s, body frame
+    rxBuffer.chassisVelocity[2]); // wz rad/s, body frame
 int32_t pidOut = pid_update(&pidControllers[ch], chassisTarget, bemf_filtered, pidDt);
 applyMotorOutput(ch, pidOut);
 ```
 
-See the SPI protocol page for full details. `motorTarget` is ignored in this mode.
+`rxBuffer.motorTarget[ch]` is ignored in this mode. All four motors must be set to CHASSIS mode independently. The chassis velocity loop closes entirely on-MCU — no SPI round-trip is in the feedback path, making it deterministic.
+
+**LCM command:** `vector3f_t` (x=vx, y=vy, z=wz) on `Channels::CHASSIS_VELOCITY_CMD`. **No `reliable=True`** — continuous stream.
 
 ### `MOT_MODE_MTP` — Move To Position (0b100)
-Moves to an absolute position target (`motorGoalPosition[ch]`) using a **sqrt deceleration + trapezoidal acceleration profile** feeding the velocity PID:
+
+`motor_mode_mtp()` — Moves to an absolute position target (`rxBuffer.motorGoalPosition[ch]`) using a sqrt-deceleration plus trapezoidal acceleration profile feeding the velocity PID.
+
+**LCM command:** `vector3f_t` (x=speed_limit, y=goal_position) on `Channels::motorPositionCommand(port)`. Use `reliable=True`.
+
+See the dedicated section below for the full profile description.
+
+---
+
+## PID Control (Level 2)
+
+### Data structure
+
+```c
+// Actors/pid.h
+typedef struct {
+    float kP;
+    float kI;      // per-second units (dt-explicit)
+    float kD;      // per-second units (dt-explicit)
+    float iMax;    // maximum integral contribution (duty counts)
+    float outMax;  // output saturation limit (duty counts)
+    float prevErr;
+    float iErr;    // integral accumulator (error × elapsed seconds)
+} PidController;
+```
+
+One `pidControllers[4]` instance serves as the velocity (inner) loop for all four motors. A second `posPidControllers[4]` array exists but is currently unused in MTP mode — it is kept for API compatibility with the `PI_BUFFER_UPDATE_MOTOR_PID_POS` update flag.
+
+### dt-explicit `pid_update()`
+
+```c
+int32_t pid_update(PidController* pid, int32_t goal, int32_t current, float dt);
+```
+
+`dt` is the measured elapsed seconds since this motor's previous PID invocation, derived from the `microSeconds` hardware counter. If `dt` is out of range (`<= 0` or `> 0.1 s`), it falls back to the nominal 200 Hz period:
+
+```c
+// pid.c
+#define PID_NOMINAL_DT (1.0f / 200.0f)   // 5 ms fallback
+if (dt <= 0.0f || dt > 0.1f) dt = PID_NOMINAL_DT;
+```
+
+The full update:
+
+```c
+float pErr = (float)(goal - current);
+
+// Integral: accumulates error × dt
+pid->iErr += pErr * dt;
+
+// Derivative: rate of error change per second
+float dErr = (pErr - pid->prevErr) / dt;
+pid->prevErr = pErr;
+
+// Anti-windup: clamp the contribution, then back-calculate accumulator
+float iTerm = pid->kI * pid->iErr;
+if (pid->kI > 0.0f) {
+    if (iTerm > pid->iMax) { iTerm = pid->iMax; pid->iErr = pid->iMax / pid->kI; }
+    else if (iTerm < -pid->iMax) { iTerm = -pid->iMax; pid->iErr = -pid->iMax / pid->kI; }
+}
+
+float cmd = pid->kP * pErr + iTerm + pid->kD * dErr;
+cmd = clamp(cmd, -pid->outMax, pid->outMax);
+```
+
+**Why dt-explicit matters:** if the BEMF watchdog skips a cycle, `dt` automatically grows to reflect the gap. The integral accumulates `error × actual_seconds` and the derivative uses the actual rate, so the controller remains physically consistent regardless of timing jitter.
+
+### Default gains (`pid.c`)
+
+```c
+#define PID_DEFAULT_P  1.22f
+#define PID_DEFAULT_I  9.0f    // rescaled from old implicit 0.045 × 200 Hz = 9.0
+#define PID_DEFAULT_D  0.000f
+```
+
+These are loaded by `pid_init()` at startup:
+
+| Gain | `pid_init()` (velocity) | `pid_init_position()` (unused outer) |
+|---|---|---|
+| `kP` | **1.22** | 1.0 |
+| `kI` | **9.0** (dt-explicit) | 0.0 |
+| `kD` | **0.0** | 0.0 |
+| `iMax` | 399 (full duty) | 399 |
+| `outMax` | 399 | 399 |
+
+**When tuning `kI`, always use per-second units.** A `kI = 9.0` means the integral term grows by 9.0 counts per (error × 1 second). The old convention (where `kI` was implicitly divided by the loop rate) no longer applies.
+
+### Runtime PID update (via SPI)
+
+The Pi can push new gains at any time by writing `rxBuffer.motorPidSettings` and setting `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (0x01) in `rxBuffer.updates`. The firmware calls `update_motor_pidSettings()`, which copies `pids[port].Kp/Ki/Kd` into `pidControllers[]` and applies `limMaxInt` / `limMax` as the new `iMax` / `outMax` if non-zero.
+
+**LCM command:** `vector3f_t` (x=kp, y=ki, z=kd) on `Channels::motorPidCommand(port)`. Use `reliable=True`.
+
+---
+
+## MTP: Move-To-Position Mode (Level 3)
+
+MTP is the most complex motor mode. It does not use a position PID outer loop; instead, it uses a **sqrt-deceleration profile** to generate a velocity setpoint, then runs the velocity PID as the inner loop.
+
+```mermaid
+flowchart TD
+    A[MTP invoked for channel ch] --> B{Goal changed?}
+    B -- yes --> C[Clear done flag\nReset profileVel to 0\nReset PID integral\nStore new prevGoalPos]
+    B -- no --> D{Done flag set?}
+    C --> D
+    D -- yes --> E[SHORT_BREAK active\nreturn]
+    D -- no --> F[Compute posError = goalPos − currentPos]
+    F --> G{absError ≤ 40?}
+    G -- yes --> H[Set done flag\nSHORT_BRAKE\nreturn]
+    G -- no --> I[Compute sqrt-decel velocity\nvDecel = sqrt(2 × 10 × absError)]
+    I --> J[Clamp: vDecel ≥ MTP_MIN_VEL=15\nvDecel ≤ speedLimit (default 300)]
+    J --> K[Apply direction sign]
+    K --> L{Accelerating?\nabs(desired) ≥ abs(profileVel)?}
+    L -- yes --> M[Rate-limit:\nΔvel ≤ ±150 per update]
+    L -- no --> N[Follow curve directly\nClear PID iErr]
+    M --> O[profileVel updated]
+    N --> O
+    O --> P[pid_update(profileVel, bemf_filtered, dt)]
+    P --> Q[applyMotorOutput]
+```
+
+### Sqrt-deceleration curve
+
+The desired velocity at distance `d` from the goal is:
 
 ```
-profile velocity → velocity PID → PWM duty
+vDecel = sqrt(2 × MTP_DECEL_FACTOR × d)
+       = sqrt(2 × 10 × d)
+       = sqrt(20d)
 ```
 
-The profile works as follows:
+This matches the kinematics of constant-deceleration: if the motor decelerates at constant rate `a`, the velocity at distance `d` is `sqrt(2ad)`. A smaller `MTP_DECEL_FACTOR` means earlier, gentler deceleration; a larger factor means later, more aggressive braking.
 
-1. **Deceleration curve**: desired velocity = `sqrt(2 × MTP_DECEL_FACTOR × distance_to_goal)`, clamped to a minimum crawl velocity (`MTP_MIN_VEL = 15`) so static friction is overcome near the goal.
-2. **Speed limit**: `motorTarget[ch]` is the maximum profile velocity (the speed limit). If ≤ 0, defaults to 300.
-3. **Trapezoidal acceleration**: the profile velocity ramps up at most `MTP_ACCEL_PER_TICK = 150` per update cycle. Deceleration is allowed to happen instantly (follows the sqrt curve immediately without rate-limiting), and the velocity PID integral is flushed during deceleration to prevent windup fighting the brake.
-4. **Done detection**: when `|goalPos − currentPos| ≤ MTP_DONE_THRESHOLD` (40 ticks), the motor actively brakes (SHORT_BREAK), bit N of `motor_data.done` is set, and the done state is sticky until the goal position changes or the mode changes.
+The firmware computes integer square root without FPU via a 16-bit binary search loop:
 
-**Note:** `posPidControllers` is declared and initialized, but is **not used** in MTP mode in the current implementation. The position loop is handled by the sqrt profile, not a PD outer controller. The `posPidControllers` array is kept for API compatibility (the `PI_BUFFER_UPDATE_MOTOR_PID_POS` update flag writes to it).
+```c
+// motor.c — inside motor_mode_mtp()
+uint32_t val = 2u * MTP_DECEL_FACTOR * (uint32_t)absError;
+uint32_t r = 0;
+for (int b = 15; b >= 0; b--) {
+    uint32_t test = r | (1u << b);
+    if (test * test <= val) r = test;
+}
+vDecel = r;
+```
 
-**Key MTP constants:**
+### Trapezoidal acceleration / instant deceleration
+
+When the profile velocity is **increasing** (moving away from target or picking up speed), acceleration is rate-limited to `MTP_ACCEL_PER_TICK = 150` counts per BEMF update. When the profile velocity is **decreasing** (braking toward target), the profile follows the sqrt curve immediately without rate-limiting, and the PID integral is cleared to prevent the accumulation from the acceleration phase from fighting the brake:
+
+```c
+// Decelerating — follow curve directly
+profileVel[ch] = desiredVel;
+pidControllers[ch].iErr = 0.0f;  // flush windup
+```
+
+### Done detection and sticky flag
+
+When `|goalPos − currentPos| ≤ MTP_DONE_THRESHOLD (40 ticks)`:
+
+1. `profileVel[ch] = 0`
+2. `motor_data.done |= (1u << ch)` — bit N in the 8-bit `done` bitmask is set
+3. The motor is actively braked: `SHORT_BREAK` direction, duty = 0
+4. The done state is **sticky**: subsequent calls return immediately until either the goal changes or the mode changes
+
+The Pi reads `motor_data.done` via `TxBuffer.motor.done`. In Python:
+
+```python
+# Subscribe to Channels.motor_done(port); decode as scalar_i32_t
+# .value is non-zero when done
+```
+
+**Key MTP constants (all in `motor.c`):**
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `MTP_DONE_THRESHOLD` | 40 | position error deadband for "done" (BEMF ticks) |
-| `MTP_MIN_VEL` | 15 | minimum crawl velocity near goal |
-| `MTP_ACCEL_PER_TICK` | 150 | max velocity increase per update cycle |
-| `MTP_DECEL_FACTOR` | 10 | deceleration factor in sqrt curve |
+| `MTP_DONE_THRESHOLD` | 40 ticks | Position error deadband for "done" |
+| `MTP_MIN_VEL` | 15 counts/s | Minimum crawl velocity to overcome static friction |
+| `MTP_ACCEL_PER_TICK` | 150 counts/update | Maximum acceleration step per BEMF update |
+| `MTP_DECEL_FACTOR` | 10 | Deceleration shape factor in sqrt curve |
 
-### Mode Change Handling
+### `posPidControllers` — present but unused
 
-When the control mode changes between BEMF cycles, both PID controllers for that motor are reset (`prevErr = 0, iErr = 0`), the trapezoidal profile velocity is reset to 0, and the done flag for that motor is cleared. The firmware also logs the transition via UART3 (`[stp] mot{N} mode {prev}->{new} pos={pos}`).
+`posPidControllers[4]` is declared and initialized in `motor.c`. In the current implementation, MTP does **not** call `pid_update(&posPidControllers[ch], ...)`. The sqrt profile directly generates the velocity setpoint. The array is kept so the `PI_BUFFER_UPDATE_MOTOR_PID_POS` (0x02) update flag and `update_motor_posPidSettings()` have a valid destination and remain API-compatible.
+
+---
+
+## Position Reset
+
+Motor position counters are reset on the STM32 directly, not by a Pi-side software offset. The reset path:
+
+```mermaid
+sequenceDiagram
+    participant Py as Python (raccoon-lib)
+    participant LCM as LCM multicast
+    participant CS as CommandSubscriber (Pi)
+    participant DC as DeviceController (Pi)
+    participant SPI as SpiReal → Spi.cpp
+    participant STM as STM32 main.c
+
+    Py->>LCM: publish scalar_i32_t(value=1)<br/>Channels::motorPositionResetCommand(port)<br/>reliable=True
+    LCM->>CS: onMotorPositionResetCommand(port, cmd)
+    CS->>DC: resetMotorPosition(port)
+    DC->>SPI: spi_->resetMotorPosition(port)
+    SPI->>SPI: set motorPositionReset bit N\nset PI_BUFFER_UPDATE_MOTOR_POS_RESET flag
+    SPI->>STM: next SPI transfer delivers RxBuffer
+    STM->>STM: if (updates & PI_BUFFER_UPDATE_MOTOR_POS_RESET)<br/>for each bit N: motor_data.position[N] = 0<br/>rxBuffer.motorPositionReset = 0
+    STM-->>SPI: TxBuffer.motor.position[N] = 0
+```
+
+The `value` field of the `scalar_i32_t` message must be non-zero; a zero value is silently ignored by `CommandSubscriber::onMotorPositionResetCommand()`. After sending the reset, allow 300–500 ms before reading the position counter or issuing a new move command, to ensure the SPI exchange has completed.
+
+Also note: the `positionAccum[]` float remainder in `bemf.c` is **not** cleared by the reset. In practice this is negligible (< 1 tick), but be aware that the first tick after a reset may include a small fractional carry-over.
+
+---
+
+## MotorWatchdog (Pi-side safety layer)
+
+The `MotorWatchdog` class in `MotorWatchdog.cpp` provides a Pi-side heartbeat watchdog that enforces hardware shutdown when the user program becomes unresponsive.
+
+```mermaid
+stateDiagram-v2
+    [*] --> DORMANT : constructed (armed=false)
+
+    DORMANT : Dormant\nfirst heartbeat not yet seen\nno timeout checks
+
+    MONITORING : Monitoring\narmed=true, fired=false
+
+    FIRED : Shutdown active\narmed=true, fired=true\nSTM32 SHUTDOWN_MOTOR set
+
+    RECOVERING : Recovery hysteresis\nrecoveryCount counting up
+
+    DORMANT --> MONITORING : first heartbeat received\nwatchdog.feed()
+    MONITORING --> MONITORING : heartbeat within 500 ms\nwatchdog.feed()
+    MONITORING --> FIRED : 500 ms timeout\nsetShutdown(true)
+    FIRED --> RECOVERING : heartbeat received
+    RECOVERING --> RECOVERING : heartbeat received\nrecoveryCount < 3
+    RECOVERING --> MONITORING : 3 consecutive heartbeats\nall within 500 ms of each other\nsetShutdown(false)
+    RECOVERING --> FIRED : gap > 500 ms\nrecoveryCount reset to 0
+    FIRED --> DORMANT : user clears shutdown manually\nresetAfterManualClear()
+```
+
+**Parameters (from `MotorWatchdog.h`):**
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `timeout_` | 500 ms | Heartbeat deadline. Python sends heartbeats every ~100 ms. |
+| `recoverFeeds_` | 3 | Consecutive heartbeats required to clear shutdown after firing |
+
+The watchdog is **dormant** until the first heartbeat arrives via `Channels::HEARTBEAT_CMD`, so the robot can boot and wait for the start light without being killed. Once armed, it fires `DeviceController::setShutdown(true)` (which sets `SHUTDOWN_MOTOR | SHUTDOWN_SERVO` in `rxBuffer.systemShutdown`) and publishes `kShutdownByWatchdog = 0x07` on the shutdown status channel.
+
+**Interaction with firmware:** the STM32 checks `rxBuffer.systemShutdown & SHUTDOWN_MOTOR` at the top of `update_motor()` before any mode logic. If set, it forces all H-bridge direction pins to OFF and returns immediately — this happens every 1250 µs regardless of what the Pi is doing.
+
+---
 
 ## Servo Control
 
-Four servo outputs are generated by TIM3 and TIM9. These timers run at 1 MHz (prescaler value = N−1 per HAL convention: TIM3 uses `Prescaler = 89`, TIM9 uses `Prescaler = 179`) with period 20 000, giving a 50 Hz PWM with 1 µs resolution — exactly the standard RC servo signal.
+Four servo outputs are generated by TIM3 and TIM9. Both timers run at 1 MHz (1 µs resolution) with a 20 000-tick period, producing a **50 Hz RC servo signal**.
 
-| Timer | Servos | GPIO pins |
+### Timer assignment
+
+| Software servo port | Timer | TIM Channel | GPIO |
+|---|---|---|---|
+| 0 | TIM3 | CH3 | S0_PWM_Pin (PC8) |
+| 1 | TIM3 | CH2 | S1_PWM_Pin (PC7) |
+| 2 | TIM9 | CH2 | S2_PWM_Pin (PE6) |
+| 3 | TIM9 | CH1 | S3_PWM_Pin (PE5) |
+
+### Timer frequency calculation
+
+TIM3 is an APB1 timer; TIM9 is an APB2 timer. Both are configured to run at 1 MHz:
+
+- TIM3: APB1 clock = 45 MHz → input = 90 MHz → prescaler = 89 (N−1) → tick = 1 MHz
+- TIM9: APB2 clock = 90 MHz → input = 180 MHz → prescaler = 179 (N−1) → tick = 1 MHz
+- Period = 20 000 → PWM frequency = 1 MHz / 20 000 = **50 Hz**
+- Resolution: 1 µs per timer tick (standard RC servo)
+
+### Pulse width → angle mapping
+
+The Pi-side `SpiReal::setServoState()` converts user-facing degrees to timer compare values:
+
+```c
+// SpiReal.cpp
+const float computedPulse = 600.0f + st.position * 10.0f;
+const auto microseconds = static_cast<uint16_t>(
+    std::clamp(std::isfinite(computedPulse) ? std::round(computedPulse) : 0.0f,
+               0.0f, 20000.0f));
+set_servo_pos(port, microseconds);
+```
+
+| Degrees | Compare value (µs) |
+|---|---|
+| 0° | 600 |
+| 90° | 1500 |
+| 180° | 2600 |
+| N° | 600 + N × 10 |
+
+The firmware's `servo_set_compare()` clamps the compare value to the timer auto-reload register (20 000) as a safety guard against out-of-range values received over SPI.
+
+### Servo mode bitmask
+
+`rxBuffer.servoMode` is an 8-bit field packed with 2 bits per servo (bits `2*port` and `2*port+1`):
+
+```c
+// servo.c — update_servo_cmd()
+const uint8_t mode = (rxBuffer.servoMode >> (2 * servoPort)) & 0x03;
+```
+
+| Value | `ServoMode` enum | Effect |
 |---|---|---|
-| TIM3 CH2 | Servo 1 | PC7 |
-| TIM3 CH3 | Servo 0 | PC8 |
-| TIM9 CH1 | Servo 3 | PE5 |
-| TIM9 CH2 | Servo 2 | PE6 |
+| 0 | `SERVO_FULLY_DISABLED` | PWM channel stopped; rail may be cut |
+| 1 | `SERVO_DISABLED` | PWM channel stopped; rail may be cut |
+| 2 | `SERVO_ENABLED` | PWM running; compare register updated from `servoPos[]` |
 
-A dedicated 6 V regulator powers the servo rail. The firmware controls the regulator's enable pin (`SERVO_6V0_ENABLE_Pin`, PE10). When all servos are fully disabled, the 6 V supply is cut. When any servo transitions to enabled state, the supply is first raised, then the PWM channel is started.
+### 6 V rail management
 
-The `update_servo_cmd()` function runs at 10 Hz from the main loop. Servo position is specified in timer ticks (600 = 0°, 2600 = 180°, 600 + degrees × 10 = position). The `stm32-data-reader` converts user-facing degrees to this scale before writing to `rxBuffer.servoPos[port]`.
+A dedicated 6 V regulator powers the servo rail. `update_servo_cmd()` checks whether any servo is in `SERVO_ENABLED` mode before writing `servo_set_rail()`:
 
-The 10 Hz update rate is deliberately slow. Updating servos every millisecond can cause jitter when the SPI bus is transferring large buffers and the timer compare register is written mid-cycle.
+```c
+uint8_t anyEnabled = 0;
+for (int servoPort = 0; servoPort < NUM_SERVOS; servoPort++) {
+    if (mode == SERVO_ENABLED) anyEnabled = 1;
+}
+servo_set_rail(anyEnabled);
+```
+
+`servo_set_rail()` writes `SERVO_6V0_ENABLE_Pin` (PE10) and adds a `delayus(10)` settling time. When the last servo is disabled, the 6 V supply is cut automatically. The rail change is logged: `[servo] rail on/off`.
+
+### Shutdown handling
+
+If `rxBuffer.systemShutdown & SHUTDOWN_SERVO` is set, `update_servo_cmd()` calls `servo_fullyDisable()` (all PWM channels stopped + rail off) and sets all port modes to `SERVO_FULLY_DISABLED`. A log message is printed only on the first cycle: `[servo] shutdown active, disabling all PWM channels`.
+
+### Smooth servo (Pi-side trajectory)
+
+The Pi bridge provides a Pi-side smooth trajectory interpolator (`DeviceController::startSmoothServo()`). It accepts a target angle, a speed in degrees/second, and an easing type, then calls `spi_->setServoState()` on each `processUpdate()` tick:
+
+```c
+const float elapsed = std::chrono::duration<float>(now - s.startTime).count();
+const float t = std::min(elapsed / s.durationSec, 1.0f);
+const float eased = applyEasing(t, s.easingType);
+const float pos = s.startAngle + (s.targetAngle - s.startAngle) * eased;
+spi_->setServoState(port, {ServoMode::Enabled, pos});
+```
+
+**LCM command:** `vector3f_t` (x=target_angle_deg, y=speed_deg_per_sec, z=easing_type) on `Channels::servoSmoothPositionCommand(port)`. Use `reliable=True`. The trajectory runs on the Pi; each intermediate position update is written to the STM32 via SPI.
+
+**Update rate:** `update_servo_cmd()` is called from the STM32 main loop (effectively when BEMF is idle), which runs at ~200 Hz for the motor path. The servo command is processed at the rate the main loop delivers it — there is no dedicated servo timer interrupt. The smooth interpolation rate is limited by `DeviceController::processUpdate()`, which runs at the Pi's main loop rate.
+
+### Servo LCM commands summary
+
+| Command | LCM type | Channel | `reliable` | Field meaning |
+|---|---|---|---|---|
+| Set position | `scalar_f_t` | `servoPositionCommand(port)` | Yes | `value` = degrees |
+| Set mode | `scalar_i8_t` | `servoModeCommand(port)` | Yes | `dir` = ServoMode enum |
+| Smooth move | `vector3f_t` | `servoSmoothPositionCommand(port)` | Yes | x=target°, y=speed°/s, z=easing |
+
+---
 
 ## Related pages
 
+- [Firmware Runtime and Scheduling](../firmware-runtime/) — TIM6 ISR orchestration, ADC2 callback context, interrupt priorities, and the `update_motor()` call chain
 - [SPI Communication Protocol](../spi-protocol/) — how motor modes and targets are carried over the wire
 - [Data Pipeline](../data-pipeline/) — the full command path from Python `motor.set_speed()` to H-bridge output
+- [Pi Bridge Internals](../pi-bridge-internals/) — `CommandSubscriber` motor power/velocity routing and `DeviceController` idempotent writes
 - [Build and Flash](../build-flash/) — how to change PID defaults and reflash the firmware

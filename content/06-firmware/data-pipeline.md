@@ -3,7 +3,7 @@ title: "Data Pipeline"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 5
+weight: 4
 ---
 
 ## Concept
@@ -14,33 +14,34 @@ Understanding this pipeline helps you reason about **latency** (why sensor reads
 
 ```mermaid
 graph LR
-    subgraph STM32["STM32F427"]
+    subgraph STM32["STM32F427 — Hard Real-Time"]
         HW["Physical sensor\nor motor"]
-        ISR["ADC / GPIO / IMU ISR\n(µs latency)"]
-        TX["txBuffer\n(volatile struct in RAM)"]
+        ISR["ADC1 DMA (250 Hz)\nBEMF ADC2 (800 Hz)\nIMU DMP (50 Hz)\nDigital GPIO"]
+        TX["TxBuffer\n(volatile packed struct,\nTRANSFER_VERSION 21)"]
     end
 
-    subgraph SPI["SPI2 Full-Duplex\n~5 ms cycle"]
-        WIRE["DMA transfer\nTxBuffer ⇄ RxBuffer"]
+    subgraph SPIBus["SPI2 — Full-Duplex\n20 MHz, ~5 ms poll cycle"]
+        WIRE["ioctl(SPI_IOC_MESSAGE)\nTxBuffer ⇄ RxBuffer\nBUFFER_LENGTH_DUPLEX_COMMUNICATION bytes"]
     end
 
-    subgraph Reader["stm32-data-reader (C++)"]
-        UNPACK["SpiReal::readSensorData()\nunpack + unit convert"]
-        PUB["DataPublisher\nserialise to LCM"]
+    subgraph Reader["stm32-data-reader (C++, wombat ns)"]
+        UNPACK["SpiReal::readSensorData()\nunpack + unit-convert\n(ADC counts → V, EMA filter)"]
+        GATE["DataPublisher\nPublishGate 50 Hz cap\n+ L∞ noise epsilon"]
+        PUB["LcmBroker\nserialise + dedup\nraccoon::Transport"]
     end
 
-    subgraph Transport["raccoon_ring SHM\n(/dev/shm/raccoon_ring_*)"]
-        RING["One ring file\nper channel"]
+    subgraph SHM["raccoon_ring SHM\n(/dev/shm/raccoon_ring_*)"]
+        RING["64-slot × 2 KiB ring\nper channel\nSeqLock, futex wake"]
     end
 
     subgraph Lib["raccoon-lib (Python)"]
-        LCMR["LcmReader\nbackground thread"]
-        CACHE["mutex-protected cache"]
+        LCMR["LcmReader\nspinOnce() thread\nfutex_waitv"]
+        CACHE["mutex-protected\nper-channel cache"]
         API["motor.get_position()\nanalog.read()\nimu.heading()"]
     end
 
     HW --> ISR --> TX
-    TX --> WIRE --> UNPACK --> PUB --> RING
+    TX --> WIRE --> UNPACK --> GATE --> PUB --> RING
     RING --> LCMR --> CACHE --> API
 ```
 
@@ -96,11 +97,35 @@ Python binding call (e.g., motor.get_position(),
 
 ### Step 2: SPI Transfer
 
-The Pi initiates SPI transactions by calling `spi_update()` in the C SPI layer (`stm32-data-reader/src/wombat/hardware/Spi.cpp`). This performs a synchronous `ioctl(SPI_IOC_MESSAGE)` on `/dev/spidev`. The Pi sends the current `RxBuffer` (commands) while simultaneously receiving the STM32's `TxBuffer` (sensor data) in a single full-duplex transfer.
+The Pi initiates SPI transactions by calling `spi_update()` in the C SPI layer. This performs a synchronous `ioctl(SPI_IOC_MESSAGE)` on `/dev/spidev0.0` — a single system call that transfers `BUFFER_LENGTH_DUPLEX_COMMUNICATION` bytes (the `max(sizeof(TxBuffer), sizeof(RxBuffer))` at compile time) in both directions simultaneously.
 
-The transfer length is always `BUFFER_LENGTH_DUPLEX_COMMUNICATION` — the larger of the two struct sizes. Both ends pad with whatever was last in the struct if the other side's struct is smaller.
+```mermaid
+sequenceDiagram
+    participant App as Application main loop
+    participant DC as DeviceController
+    participant SR as SpiReal
+    participant C as C SPI layer (Spi.c)
+    participant STM as STM32F427
 
-The Pi's `stm32-data-reader` calls `spi_update()` on every main-loop iteration. The default `mainLoopDelay` is 5 ms.
+    Note over App: every 5 ms (mainLoopDelay)
+    App->>DC: processUpdate()
+    DC->>SR: readSensorData()
+    SR->>C: spi_update()
+    C->>STM: ioctl(SPI_IOC_MESSAGE)\nPi sends RxBuffer\nSTM32 sends TxBuffer\n(full-duplex, 20 MHz)
+    STM-->>C: TxBuffer (sensor data,\nupdateTime, TRANSFER_VERSION 21)
+    C-->>SR: return true, rx_buffer populated
+    SR->>SR: unpack TxBuffer fields\nbattery: ADC × 3.3 × 11 / 4096\nEMA alpha=0.05
+    SR-->>DC: SensorData struct
+    DC->>DC: lastSensorData_ = result
+    DC-->>App: Result::success()
+    App->>App: publishCurrentData()\nif lastUpdate changed
+```
+
+The Pi sends the current `RxBuffer` (commands: motor modes, targets, servo positions, PID gains, feature flags) while simultaneously receiving the STM32's `TxBuffer` (sensor data, motor telemetry, IMU, odometry). **Both directions happen in one system call with no gaps.**
+
+The protocol version field (`TxBuffer.transferVersion = 21`, `TRANSFER_VERSION 21` in `pi_buffer.h`) is checked once at startup via `spi_probe_version()`. A mismatch triggers an automatic firmware reflash on the next update call.
+
+The Pi's `stm32-data-reader` calls `spi_update()` on every main-loop iteration. The default `mainLoopDelay` is **5 ms** (`Configuration::mainLoopDelay`).
 
 ### Step 3: stm32-data-reader → LCM
 
@@ -170,15 +195,35 @@ All topics below are on `raccoon::Transport` (raccoon_ring SHM primary, LCM UDP 
 
 IMU accuracy channels (`gyro/accuracy`, `accel/accuracy`, `mag/accuracy`, `imu/quaternion_accuracy`) are published only when the accuracy value changes, not on every loop.
 
-### Step 4: raccoon-transport (IPC layer)
+### Step 4: raccoon-transport — raccoon_ring SHM
 
-The raccoon-transport is a C++ wrapper around LCM with two transport backends:
+The raccoon-transport library provides the IPC layer between the bridge and all subscribers (raccoon-lib, BotUI, and any diagnostic tool). The primary transport backend is `raccoon_ring`, a lock-minimal single-producer multi-consumer shared memory ring buffer.
 
-**Primary: `raccoon_ring` shared memory.** Each channel has a single `/dev/shm/raccoon_ring_<channel>` file. The writer initialises or re-initialises the header on startup; subscribers detect a `producer_seq` reset and resync automatically. This means `stm32-data-reader` restarts are transparent to running subscribers — no re-connection or file unlink required.
+**File naming:** each LCM channel maps to one file under `/dev/shm/`. Forward slashes are URL-encoded to `_2F`, so `raccoon/motor/0/power` becomes `/dev/shm/raccoon_ring_raccoon_2Fmotor_2F0_2Fpower`. You can inspect all ring files with `ls /dev/shm/raccoon_ring_*` and remove them with `rm -f /dev/shm/raccoon_ring_*` (they are recreated on reader restart).
 
-The `stm32_data_reader.service` unit file explicitly sets `PrivateTmp=false` to ensure `/dev/shm` files are visible to all processes on the host. Mount namespaces (from `ProtectSystem=`, `ProtectHome=`, or `PrivateTmp=true`) would isolate `/dev/shm` to the service and make all ring files invisible to raccoon-lib and BotUI.
+**Ring layout:** each file contains a `ring_hdr_t` (magic `0x52435242`, version 3) followed by `slot_count` slot records of `sizeof(slot_t) + max_payload` bytes each. Defaults are **64 slots × 2 KiB payload** (~130 KiB per channel). The header carries `producer_seq` (monotonic write counter), `wake_seq` (futex word), and `waiter_count` (optimization: producer skips `FUTEX_WAKE` when 0).
 
-**Secondary: LCM UDP multicast.** The `lcm-loopback-multicast.service` remains required. It configures the loopback interface for multicast so LCM can function; some transport paths still use UDP. However, the primary data path for sensor readings and commands uses raccoon_ring SHM, not UDP.
+```mermaid
+sequenceDiagram
+    participant PUB as DataPublisher (bridge)
+    participant RING as raccoon_ring file\n(/dev/shm/raccoon_ring_*)
+    participant SUB as raccoon-lib spinOnce()
+
+    PUB->>RING: rrb_writer_publish(encoded_lcm, len)\nslot = producer_seq % 64\nslot.seq_lock = 0 (writing flag)\ncopy payload\nslot.seq_lock = producer_seq\nbump producer_seq\nbump wake_seq + FUTEX_WAKE if waiter_count > 0
+
+    SUB->>RING: rrb_reader_recv_wait_many()\nfutex_waitv on wake_seq of all channels
+    RING-->>SUB: frame available\ncopy payload out\nverify seq_lock unchanged\ndecode LCM + dispatch callback
+```
+
+**SeqLock safety:** the producer marks a slot `seq = 0` (writing-in-progress), copies the payload, then stamps it with the sequence number. A subscriber that reads `seq = 0` after copying knows the producer raced it and skips the frame. Slow subscribers lose frames but never block the producer.
+
+**Retained channels:** `publishRetained()` sets a `retained=true` flag on the publish options. The transport calls `rrb_reader_seek_to_latest()` when a new subscriber attaches, positioning its read cursor at the most recently published slot so the first `rrb_reader_recv()` immediately returns the last value — no waiting for the next publish cycle. Battery voltage, motor position, motor done, servo state, odometry, heading, and BEMF are all retained for this reason.
+
+**Producer restart transparency:** when `stm32-data-reader` restarts, `rrb_writer_create()` reinitialises the ring header in place (new `producer_seq` epoch). Existing subscribers detect the sequence reset and resync. No subscriber restart or file deletion is required.
+
+**Namespace isolation:** `stm32_data_reader.service` sets `PrivateTmp=false` explicitly so the `/dev/shm/` files sit in the host-global tmpfs namespace. Any service option that creates a mount namespace (`ProtectSystem=strict`, `PrivateTmp=true`) would isolate `/dev/shm` to the service and make all ring files invisible to raccoon-lib and BotUI.
+
+The `lcm-loopback-multicast.service` remains required for reliable command delivery (the reliable delivery protocol uses a control channel that currently routes over UDP loopback), but the primary sensor data path uses raccoon_ring SHM exclusively.
 
 ### Step 5: raccoon-lib HAL
 
@@ -227,6 +272,36 @@ TIM1/TIM8 compare register updated
       │
       ▼
 Motor PWM changes
+```
+
+The following sequence diagram shows the timing of a motor power command in detail, including where the main loop interleaves with the command subscriber:
+
+```mermaid
+sequenceDiagram
+    participant PY as Python (raccoon-lib)
+    participant RING as raccoon_ring SHM
+    participant CS as CommandSubscriber
+    participant DC as DeviceController
+    participant SPI as SpiReal / C SPI layer
+    participant STM as STM32F427
+
+    PY->>RING: publish raccoon/motor/0/power_cmd\n(scalar_i32_t, value=50)
+    Note over RING: slot written, wake_seq bumped
+
+    Note over CS: main loop: processMessages() → spinOnce(1ms)
+    RING-->>CS: frame delivered, callback fires
+    CS->>CS: isTimestampNewer()? yes
+    CS->>CS: duty = 50 × 4 = 200
+    CS->>DC: setMotorPwm(0, 200)
+    DC->>DC: hasSameCommand()? no
+    DC->>SPI: setMotorState(0, {Pwm, 200})
+    SPI->>SPI: set_motor_pwm(0, 200)\nupdates RxBuffer.motorTarget[0]=200\nRxBuffer.motorControlMode |= MOT_MODE_PWM
+
+    Note over STM: ~5 ms: next spi_update()
+    SPI->>STM: ioctl(SPI_IOC_MESSAGE)\nsends RxBuffer with new target
+    STM-->>SPI: TxBuffer (updated sensor data)
+    Note over STM: HAL_SPI_TxRxCpltCallback\nvalidates TRANSFER_VERSION 21
+    Note over STM: next BEMF cycle (≤1250 µs)\nupdate_motor() → motor_setDutycycle(200)\nTIM1/TIM8 CCR updated
 ```
 
 ### LCM command channels
@@ -281,6 +356,9 @@ Command latency follows the same path in reverse; the dominant factor is the BEM
 
 ## Related pages
 
+- [Firmware Runtime and Scheduling](../firmware-runtime/) — ISR context, ADC interrupt rates, and super-loop scheduling that produce the data entering the pipeline
+- [Pi Bridge Internals](../pi-bridge-internals/) — deep dive into `Application` lifecycle, `SpiReal` vs `SpiMock`, `DataPublisher` gate logic, `CommandSubscriber`, `MotorWatchdog`, `LcmBroker`, and `raccoon_ring` internals
 - [SPI Communication Protocol](../spi-protocol/) — the wire format and all LCM channel names
 - [Motor Control](../motor-control/) — what happens inside each BEMF cycle
+- [IMU Stack](../imu/) — how `txBuffer.imu` fields are produced by the MPL fusion pipeline
 - [Robot Services And systemd](../robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology

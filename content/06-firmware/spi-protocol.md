@@ -3,354 +3,418 @@ title: "SPI Communication Protocol"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 2
+weight: 3
 ---
 
 # SPI Communication Protocol
 
-## Concept
+## Mental model: why this design
 
-The SPI link is the only shared boundary between the Raspberry Pi and the STM32. Everything the Pi knows about motors, sensors, and the IMU comes from this link. Every command the Pi sends to the STM32 goes through it.
+The Raspberry Pi runs Linux with a real-time process (`stm32-data-reader`) and an LCM message bus. The STM32F427 runs bare-metal firmware that controls motors, reads sensors, and computes odometry at deterministic rates. There is no Linux scheduler, no TCP/IP, no protobuf negotiation — just two microprocessors sharing a four-wire SPI bus.
 
-The protocol is a single full-duplex packed struct exchange. There is no framing, no handshake, no length negotiation — just two fixed-size structs, one going in each direction simultaneously, every ~5 ms. The Pi is always the master; the STM32 is always the slave.
+The protocol makes one deliberate trade-off: **all communication happens in a single fixed-size, full-duplex packed-struct exchange** with no framing overhead. The Pi always drives the clock (master); the STM32 listens and responds simultaneously (slave). Every exchange is exactly 277 bytes in each direction. The Pi sends a `RxBuffer` (commands) while simultaneously receiving a `TxBuffer` (sensor data). Both structs are packed with `__attribute__ ((packed))` and both sides include the same `shared/spi/pi_buffer.h` header — there is no separate copy on either side.
 
-The naming convention is from the STM32's perspective:
-- **`TxBuffer`** — what the STM32 *transmits* to the Pi (sensor data, motor telemetry, IMU, odometry)
-- **`RxBuffer`** — what the STM32 *receives* from the Pi (motor commands, servo positions, PID gains, kinematics config)
+This gives three properties that matter for robotics:
+
+1. **Deterministic latency.** A motor command written to `RxBuffer` on the Pi is on the wire in less than one main-loop iteration (5 ms). The STM32's DMA interrupt fires on completion and applies the command within the next BEMF cycle (1 250 µs per motor).
+2. **No serialisation cost.** The raw struct bytes are the wire bytes. `memcpy` is the only serialisation step.
+3. **Single point of truth.** `pi_buffer.h` is included by both the STM32 firmware and the Pi reader. A version field (`TRANSFER_VERSION 21`) detects any drift between the two. A mismatch is treated as a repairable deployment fault, not a silent error.
 
 ```mermaid
 sequenceDiagram
-    participant Pi as Raspberry Pi (SPI master)
-    participant STM as STM32F427 (SPI slave)
+    participant App as raccoon-lib / Python
+    participant Pi as Pi reader (stm32-data-reader)
+    participant Kernel as Linux SPI driver
+    participant STM as STM32F427
 
-    Note over Pi,STM: Every ~5 ms (stm32-data-reader main loop)
-
-    Pi->>STM: spi_update() ioctl(SPI_IOC_MESSAGE)
-    Note over Pi,STM: Full-duplex: Pi sends RxBuffer while receiving TxBuffer
-
-    STM-->>Pi: TxBuffer (sensor data, motor pos, IMU, odometry)
-    Pi-->>STM: RxBuffer (motor commands, servo angles, PID gains)
-
-    STM->>STM: HAL_SPI_TxRxCpltCallback fires
+    Note over Pi: mainLoopDelay = 5 ms
+    App->>Pi: LCM motor/chassis/servo command
+    Pi->>Pi: CommandSubscriber writes to staged RxBuffer (ctx.tx)
+    Pi->>Kernel: ioctl(SPI_IOC_MESSAGE) — SPI_MODE_0, 20 MHz
+    Note over Kernel,STM: Full-duplex DMA transfer, 277 bytes each way
+    Kernel-->>STM: RxBuffer (commands)
+    STM-->>Kernel: TxBuffer (sensor data + odometry)
+    Note over STM: HAL_SPI_TxRxCpltCallback fires (DMA1_Stream3/4 IRQ, priority 0)
     STM->>STM: Validate transferVersion == 21
-    STM->>STM: Apply update flags (PID, kinematics, position reset...)
-    STM->>STM: Next BEMF cycle applies new motor commands (≤1250 µs)
-
+    STM->>STM: Stamp txBuffer.updateTime = microSeconds
+    STM->>STM: updateFlags |= rxBuffer.updates
+    Note over STM: Main loop polls updateFlags each iteration
+    STM->>STM: Apply PID / kinematics / position-reset / feature-flags
+    STM->>STM: Next BEMF cycle drives motors (≤1 250 µs)
+    Kernel-->>Pi: TxBuffer returned via ctx.rx_frame
+    Pi->>Pi: spi_do_transfer() clears ctx.tx.updates after success
     Pi->>Pi: SpiReal::readSensorData() unpacks TxBuffer
-    Pi->>Pi: DataPublisher publishes to raccoon/* LCM channels
+    Pi->>App: LCM publishes raccoon/* channels (IMU, BEMF, odometry, …)
 ```
 
-A version mismatch (`TRANSFER_VERSION` in the received `TxBuffer` does not equal 21) triggers an automatic firmware reflash and retry on the Pi side — it is treated as a repairable deployment problem, not a silent ignore.
+---
 
-The canonical SPI protocol definition lives in:
+## Hardware mapping
 
-```text
-stm32-data-reader/shared/spi/pi_buffer.h
-```
+SPI2 is the Pi–STM32 link. SPI3 is the internal IMU link. Both use DMA.
 
-That header is the real source of truth for the wire contract between the Pi-side `stm32-data-reader` process and the STM32 firmware. Both sides of the link include the same file — there is no separate `communication_with_pi.h` copy of the version constant.
+| Signal | Pin | Direction | Notes |
+|--------|-----|-----------|-------|
+| SPI2_NSS | PB12 | Pi → STM | Hard-NSS (hardware CS, not GPIO-toggled) |
+| SPI2_SCK | PB13 | Pi → STM | Clock, CPOL=0, CPHA=0 (Mode 0) |
+| SPI2_MISO | PB14 | STM → Pi | TxBuffer bytes |
+| SPI2_MOSI | PB15 | Pi → STM | RxBuffer bytes |
 
-## Core model
+SPI configuration (`spi.c`, `MX_SPI2_Init`):
+- Mode: **slave**, direction: 2-lines full-duplex, 8-bit data
+- NSS: hard input (asserted by Pi's Linux SPI driver)
+- Clock: polarity low, phase 1st edge (SPI Mode 0)
+- No CRC, no TI-mode
+- Pi-side speed: **20 MHz** (`ctx.speed_hz = 20'000'000` in `Spi.cpp`)
 
-Every SPI exchange is full duplex:
+DMA channels for SPI2 (`spi.c`, `HAL_SPI_MspInit`):
 
-- the Pi sends an `RxBuffer` to the STM32
-- the Pi simultaneously receives a `TxBuffer` from the STM32
+| Stream | Channel | Direction | Mode | Priority |
+|--------|---------|-----------|------|----------|
+| DMA1_Stream3 | CH0 | PERIPH → MEM (RX) | **Circular** | Very High |
+| DMA1_Stream4 | CH0 | MEM → PERIPH (TX) | **Circular** | Very High |
 
-The naming is from the STM32's perspective:
+Both streams are configured as `DMA_CIRCULAR`, meaning the DMA controller automatically re-arms itself after each transfer completes. The STM32 never calls `HAL_SPI_TransmitReceive_DMA` again after `initPiCommunication()` — a single call at startup is sufficient. The circular DMA re-uses the same `txBuffer` and `rxBuffer` memory regions on every subsequent NSS assertion by the Pi.
 
-- `RxBuffer`: what the STM32 receives from the Pi
-- `TxBuffer`: what the STM32 transmits back
+**IRQ priorities** (`interupt_prioryty.h`):
+- SPI2 IRQ: preempt 0, sub 0 (highest in the system)
+- DMA1_Stream3 (SPI2 RX): preempt 0, sub 1
+- DMA1_Stream4 (SPI2 TX): preempt 0, sub 2
 
-The buffers are packed structs with no framing or length prefix. The protocol relies on struct agreement and a shared transfer version.
+SPI2 and its DMA interrupts sit above every other interrupt in the system, guaranteeing that the completion callback fires as soon as the last byte is clocked in.
 
-## Current transfer version
+---
 
-The current shared header defines:
+## DMA circular transfer: how it works
+
+Most embedded SPI slave drivers re-arm the DMA on every transfer. RaccoonOS uses a different approach: one `HAL_SPI_TransmitReceive_DMA` call with circular DMA, and then the peripheral self-restarts every time the Pi asserts NSS and clocks bytes. This is why `initPiCommunication()` in `communication_with_pi.c` is a one-liner:
 
 ```c
-#define TRANSFER_VERSION 21
+HAL_SPI_TransmitReceive_DMA(&hspi2,
+    (uint8_t*)&txBuffer,
+    (uint8_t*)&rxBuffer,
+    BUFFER_LENGTH_DUPLEX_COMMUNICATION);   // 277 bytes
 ```
 
-If you see docs or code comments talking about `19` or `15`, they are stale.
+The workflow on every Pi-initiated transfer:
 
-On startup, `stm32-data-reader` probes the firmware version with `spi_probe_version()` before sending any command. The result is logged as either `SPI version OK` or `SPI version MISMATCH`. A mismatch triggers automatic firmware reflash and a retry (see Version mismatch behavior below).
+1. Pi calls `ioctl(SPI_IOC_MESSAGE(1), &tr)` with `tr.len = 277`.
+2. Pi Linux SPI driver asserts NSS (PB12 low) and starts clocking at 20 MHz.
+3. DMA1_Stream4 pushes `txBuffer` bytes from STM32 memory → SPI2 DR.
+4. DMA1_Stream3 pulls bytes from SPI2 DR → `rxBuffer` memory.
+5. After 277 bytes, DMA transfer-complete fires on both streams.
+6. HAL calls `HAL_SPI_TxRxCpltCallback` (SPI2_IRQHandler path, priority 0).
+7. Callback stamps `txBuffer.updateTime`, reads digital sensors, merges update flags.
+8. Circular DMA re-arms automatically — no software re-arm needed.
+9. Pi de-asserts NSS; `ioctl` returns with `rx_frame` populated.
 
-## Version mismatch behavior
+```mermaid
+sequenceDiagram
+    participant Pi as Pi (SPI master)
+    participant NSS as NSS / SPI2 peripheral
+    participant DMA_TX as DMA1_Stream4 (TxBuffer → MISO)
+    participant DMA_RX as DMA1_Stream3 (MOSI → RxBuffer)
+    participant CB as HAL_SPI_TxRxCpltCallback
 
-This is not just a passive compatibility check.
+    Pi->>NSS: Assert NSS (PB12 low) + start clock (20 MHz)
+    activate NSS
+    Note over DMA_TX,DMA_RX: Both DMA streams drain 277 bytes simultaneously
+    DMA_TX-->>Pi: Byte 0..276 (TxBuffer: sensor data)
+    Pi-->>DMA_RX: Byte 0..276 (RxBuffer: commands)
+    deactivate NSS
+    DMA_TX->>CB: Transfer-complete IRQ (priority 0/2)
+    DMA_RX->>CB: Transfer-complete IRQ (priority 0/1)
+    CB->>CB: txBuffer.updateTime = microSeconds
+    CB->>CB: txBuffer.digitalSensors = readDigitalInputs()
+    CB->>CB: if rxBuffer.transferVersion == 21: updateFlags |= rxBuffer.updates
+    CB->>CB: sanitizeMotorCommandsForShutdown() if SHUTDOWN_MOTOR set
+    Note over CB: Circular DMA re-arms automatically — no relaunch needed
+```
 
-Current Pi-side behavior in `Spi.cpp`:
+**Key consequence for firmware authors**: `rxBuffer` and `txBuffer` are `volatile` globals that are written by DMA while the main loop reads them. The main loop must always treat these as potentially-changing at any moment. The update-flag dispatch in `main.c` copies the flag and clears it atomically before acting, so each flag is processed exactly once per set.
 
-- if a transfer returns the wrong `transferVersion`
-- the Pi logs the mismatch
-- then automatically runs the firmware reflash script
-- reopens SPI
-- retries the transfer
-- exits fatally only if mismatch persists after reflash
+---
 
-That means protocol mismatch is treated as a repairable deployment problem first, not just as a silent ignore case.
+## Transfer version and mismatch recovery
 
-## Frame sizing
+Both ends of the link include the same constant:
 
-The wire transfer length is:
+```c
+#define TRANSFER_VERSION 21   // pi_buffer.h
+```
+
+The STM32 sets `txBuffer.transferVersion = TRANSFER_VERSION` at initialisation (`communication_with_pi.c`). The Pi sets `ctx.tx.transferVersion = TRANSFER_VERSION` when the SPI fd is opened (`Spi.cpp`, `spi_reopen`).
+
+On every transfer, `spi_do_transfer` checks:
+
+```c
+return ctx.rx.transferVersion == TRANSFER_VERSION;
+```
+
+If `false`, `spi_update` treats it as a firmware mismatch and triggers the recovery sequence:
+
+1. Print `"version mismatch – reflashing firmware"` to stderr.
+2. Run `bash ~/flashFiles/flash_wombat.sh` (blocks 2 s after success).
+3. Call `spi_reopen()` to re-open `/dev/spidev0.0`.
+4. Retry `spi_do_transfer()`.
+5. If still mismatched: print fatal error and `exit(EXIT_FAILURE)`.
+
+This makes firmware-version mismatch a self-healing deployment fault rather than a silent bad-data condition. The `spi_probe_version()` function performs this check at startup (polling up to 30 × 100 ms = 3 s for the STM32 to boot) and logs the result before any motor command is accepted.
+
+---
+
+## Wire frame sizing
 
 ```c
 #define BUFFER_LENGTH_DUPLEX_COMMUNICATION \
   ((sizeof(TxBuffer) < sizeof(RxBuffer)) ? sizeof(RxBuffer) : sizeof(TxBuffer))
 ```
 
-So each transaction always transfers the size of the larger buffer, regardless of which direction owns more data.
+Actual sizes (computed from `pi_buffer.h` with `__attribute__ ((packed))`):
 
-## `TxBuffer` (STM32 → Pi)
+| Struct | Bytes |
+|--------|-------|
+| `TxBuffer` | 168 |
+| `RxBuffer` | 277 |
+| Wire frame | **277** |
 
-Current layout:
+Every SPI transaction is 277 bytes in each direction regardless of how many fields are actively used. The trailing 109 bytes of the STM32's TX frame are always zero-padded.
 
-```c
-typedef struct __attribute__ ((packed)) TxBuffer_tag
-{
-    uint8_t transferVersion;
-    uint32_t updateTime;
-    MotorData motor;
-    int16_t analogSensor[6];
-    int16_t batteryVoltage;
-    uint16_t digitalSensors;
-    ImuData imu;
-    OdometryData odometry;
-} TxBuffer;
+---
+
+## `TxBuffer` — STM32 → Pi (168 bytes)
+
+The naming is from the STM32's perspective: this is what it *transmits*. The Pi calls its local copy `ctx.rx`.
+
+```mermaid
+classDiagram
+    class TxBuffer {
+        +uint8 transferVersion       [0]   = 21
+        +uint32 updateTime           [1-4] µs timestamp
+        +MotorData motor             [5-37]
+        +int16 analogSensor[6]       [38-49]
+        +int16 batteryVoltage        [50-51]
+        +uint16 digitalSensors       [52-53]
+        +ImuData imu                 [54-143]
+        +OdometryData odometry       [144-167]
+    }
+    class MotorData {
+        +int32 bemf[4]               [5-20]  filtered BEMF ticks
+        +int32 position[4]           [21-36] integrated position
+        +uint8 done                  [37]    bitmask
+    }
+    class ImuData {
+        +SensorData gyro             [54-66]  rad/s, accuracy
+        +SensorData accel            [67-79]  m/s², accuracy
+        +SensorData compass          [80-92]  µT, accuracy
+        +SensorData linearAccel      [93-105] m/s², accuracy
+        +SensorData accelVelocity    [106-118]
+        +QuaternionData dmpQuat      [119-135] w,x,y,z + accuracy
+        +float heading               [136-139] rad, mag-corrected
+        +float temperature           [140-143] °C
+    }
+    class OdometryData {
+        +float pos_x                 [144-147] m, world frame
+        +float pos_y                 [148-151] m, world frame
+        +float heading               [152-155] rad, CCW-positive
+        +float vx                    [156-159] m/s, body frame
+        +float vy                    [160-163] m/s, body frame
+        +float wz                    [164-167] rad/s, body frame
+    }
+    TxBuffer *-- MotorData
+    TxBuffer *-- ImuData
+    TxBuffer *-- OdometryData
 ```
 
-High-level meaning:
+### Complete TxBuffer byte map
 
-- transfer version and timing
-- motor telemetry
-- analog and digital sensor state
-- IMU data
-- STM32-computed odometry
+| Offset | Bytes | Field | Type | Notes |
+|--------|-------|-------|------|-------|
+| 0 | 1 | `transferVersion` | `uint8_t` | Always 21 |
+| 1 | 4 | `updateTime` | `uint32_t` | µs since boot (`microSeconds` timer), stamped in `HAL_SPI_TxRxCpltCallback` |
+| 5 | 16 | `motor.bemf[4]` | `int32_t[4]` | Offset-corrected, dead-zone-applied, IIR-filtered BEMF ticks per motor |
+| 21 | 16 | `motor.position[4]` | `int32_t[4]` | dt-weighted integrated position in BEMF ticks |
+| 37 | 1 | `motor.done` | `uint8_t` | Bit N = motor N reached goal (MTP done threshold = 40 ticks) |
+| 38 | 12 | `analogSensor[6]` | `int16_t[6]` | 12-bit ADC counts on sensor ports 0–5 |
+| 50 | 2 | `batteryVoltage` | `int16_t` | Raw 12-bit ADC; Pi converts: `V = adc × 3.3 × 11 / 4096` (11× divider) |
+| 52 | 2 | `digitalSensors` | `uint16_t` | Bits 0–9 = digital ports, bit 10 = built-in button; read in callback |
+| 54 | 13 | `imu.gyro` | `SensorData` | `{float[3] data, int8 accuracy}` — rad/s, BNO080 accuracy 0–3 |
+| 67 | 13 | `imu.accel` | `SensorData` | m/s² |
+| 80 | 13 | `imu.compass` | `SensorData` | µT |
+| 93 | 13 | `imu.linearAccel` | `SensorData` | m/s², gravity-compensated |
+| 106 | 13 | `imu.accelVelocity` | `SensorData` | integrated accel velocity |
+| 119 | 17 | `imu.dmpQuat` | `QuaternionData` | `{float[4] {w,x,y,z}, int8 accuracy}` — DMP 6-axis (gyro+accel) |
+| 136 | 4 | `imu.heading` | `float` | Mag-corrected heading when calibrated, otherwise gyro-only |
+| 140 | 4 | `imu.temperature` | `float` | °C |
+| 144 | 4 | `odometry.pos_x` | `float` | Metres, world frame, STM32-computed from BEMF + kinematics |
+| 148 | 4 | `odometry.pos_y` | `float` | Metres, world frame |
+| 152 | 4 | `odometry.heading` | `float` | Radians, CCW-positive (ENU) |
+| 156 | 4 | `odometry.vx` | `float` | m/s, body frame |
+| 160 | 4 | `odometry.vy` | `float` | m/s, body frame |
+| 164 | 4 | `odometry.wz` | `float` | rad/s, body frame |
 
-## `MotorData`
+### MotorData detail
 
-```c
-typedef struct __attribute__ ((packed))
-{
-    int32_t bemf[4];     // Instantaneous filtered BEMF reading per motor
-    int32_t position[4]; // Motor position (accumulated BEMF ticks)
-    uint8_t done;        // Bit N set when motor N reached position goal
-} MotorData;
+`motor.bemf[N]` is the instantaneous reading after the full signal chain: median-of-3 oversampling, IIR low-pass, `bemf_offset[N]` subtraction, dead-zone gating. The value is zero when the wheel is stationary (or nearly so, within dead-zone limits). See the Motor Control page for the complete pipeline.
+
+`motor.position[N]` is the time-weighted integral: each BEMF cycle adds `corrected_bemf × dt_s` rather than a fixed-weight tick. This keeps position units physically consistent across variable BEMF cycle rates.
+
+`motor.done` is a sticky bitmask. Bit N is set when `|position[N] - goalPosition[N]| < 40` ticks (MTP_DONE_THRESHOLD). It stays set until the motor's goal position or mode changes.
+
+### `updateTime` as liveness signal
+
+The Pi health monitor in `Application.cpp` (`checkStm32Health`) watches `updateTime`. If it does not change for 10 seconds, the Pi reader exits fatally. Since `updateTime` is stamped in the DMA completion callback on every transfer, a frozen value is a reliable sign the STM32 has crashed or the SPI link is broken. The UART heartbeat (logged every 5 s by the STM32 main loop) is explicitly _not_ the liveness signal — the STM32 silences UART during flash writes but SPI continues.
+
+---
+
+## `RxBuffer` — Pi → STM32 (277 bytes)
+
+This is what the Pi *transmits* to the STM32. The Pi's local copy is `ctx.tx`; the STM32's is `rxBuffer`.
+
+### Complete RxBuffer byte map
+
+| Offset | Bytes | Field | Type | Notes |
+|--------|-------|-------|------|-------|
+| 0 | 1 | `transferVersion` | `uint8_t` | Must equal 21; STM32 ignores the buffer if mismatched |
+| 1 | 4 | `updates` | `uint32_t` | Bitmask of which fields are new (see Update flags table) |
+| 5 | 1 | `systemShutdown` | `uint8_t` | Bitmask: `0x01`=servo off, `0x02`=motor off |
+| 6 | 2 | `motorControlMode` | `uint16_t` | 3 bits per motor: motors 0–3 packed at bits [2:0],[5:3],[8:6],[11:9] |
+| 8 | 16 | `motorTarget[4]` | `int32_t[4]` | PWM: duty 0–400; MAV: velocity setpoint; MTP: speed limit |
+| 24 | 12 | `chassisVelocity[3]` | `float[3]` | Body-frame setpoint `[vx m/s, vy m/s, wz rad/s]` for MOT_MODE_CHASSIS |
+| 36 | 16 | `motorGoalPosition[4]` | `int32_t[4]` | Target position in BEMF ticks for MTP mode |
+| 52 | 1 | `motorPositionReset` | `uint8_t` | Bitmask: bit N = reset motor N counter to 0 on STM32 |
+| 53 | 1 | `servoMode` | `uint8_t` | 2 bits per servo: servos 0–3 packed at bits [1:0],[3:2],[5:4],[7:6] |
+| 54 | 8 | `servoPos[4]` | `uint16_t[4]` | Servo PWM pulse width in µs (600 µs + degrees × 10) |
+| 62 | 68 | `motorPidSettings` | `MotorPidSettings` | Global clamps + per-motor Kp/Ki/Kd (see PID section) |
+| 130 | 9 | `imuGyroOrientation[9]` | `int8_t[9]` | 3×3 row-major chip-to-board mapping, values −1/0/+1 |
+| 139 | 9 | `imuCompassOrientation[9]` | `int8_t[9]` | Same format for compass chip |
+| 148 | 128 | `kinematics` | `KinematicsConfig` | inv_matrix[3][4] + ticks_to_rad[4] + bemf_offset[4] + fwd_matrix[4][3] |
+| 276 | 1 | `featureFlags` | `uint8_t` | Bit 0: `FEATURE_BEMF_DISABLE` = speed mode |
+
+### Update flags (`updates` bitmask)
+
+The `updates` field tells the STM32 which fields in the `RxBuffer` contain new data that should be acted on. Fields without their bit set are silently ignored by the STM32 main loop, even if their bytes changed. The Pi clears `ctx.tx.updates = 0` after each successful transfer so subsequent sensor-only polls do not re-trigger actuator updates.
+
+| Bit | Hex | Constant | What the STM32 does when set |
+|-----|-----|----------|------------------------------|
+| 0 | `0x01` | `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` | Calls `update_motor_pidSettings()`, applies `motorPidSettings` to velocity PID |
+| 1 | `0x02` | `PI_BUFFER_UPDATE_MOTOR_PID_POS` | Calls `update_motor_posPidSettings()`, applies `motorPidSettings` to position PID |
+| 2 | `0x04` | `PI_BUFFER_UPDATE_IMU_ORIENTATION` | Calls `updateImuOrientation()` with both orientation matrices |
+| 3 | `0x08` | `PI_BUFFER_UPDATE_SAVE_IMU_CAL` | Calls `cal_save_to_flash()` — writes calibration to flash sector 12 |
+| 4 | `0x10` | `PI_BUFFER_UPDATE_KINEMATICS` | Calls `odometry_configure()` and `bemf_set_offset()` |
+| 5 | `0x20` | `PI_BUFFER_UPDATE_ODOM_RESET` | Calls `odometry_reset()` — zeroes pos_x, pos_y, heading |
+| 6 | `0x40` | `PI_BUFFER_UPDATE_MOTOR_POS_RESET` | For each bit in `motorPositionReset`, sets `motor_data.position[N] = 0` |
+| 7 | `0x80` | `PI_BUFFER_UPDATE_FEATURE_FLAGS` | Prints feature flag state to UART; STM32 reads `featureFlags` live on each transfer |
+
+**Important**: `motorControlMode`, `motorTarget`, `chassisVelocity`, `motorGoalPosition`, `servoMode`, and `servoPos` do **not** use update flags — they are consumed on every transfer. The STM32 applies them immediately (motor commands via `updatingMotorsInSpiBuffer()` each main loop iteration, servo commands via `update_servo_cmd()`). The update-flag mechanism is reserved for heavier, one-shot operations (PID config, kinematics, calibration save).
+
+### Motor control mode packing
+
+`motorControlMode` packs four 3-bit modes into one `uint16_t`:
+
+```
+bit: 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+      –  –  –  –  [M3   ]  [M2   ]  [M1   ]  [M0   ]
 ```
 
-Meaning:
-
-- `bemf[4]`: offset-corrected, dead-zone-applied BEMF reading after the two-stage filter (median-of-3 + IIR). See `motor-control.md` for the full signal chain.
-- `position[4]`: dt-aware integrated position in BEMF ticks. Unit rescaling: position increments by `corrected × dt_s` each BEMF cycle, not by raw ticks, so `ticks_to_rad` must be calibrated against this convention.
-- `done`: bit `N` set when motor `N` has reached its position target (within `MTP_DONE_THRESHOLD = 40` ticks). Sticky until goal position changes or mode changes.
-
-## `ImuData`
-
-Current layout includes:
-
-- `gyro`
-- `accel`
-- `compass`
-- `linearAccel`
-- `accelVelocity`
-- `dmpQuat`
-- `heading`
-- `temperature`
-
-The shared header is the authoritative field order and should be consulted directly when changing bindings or decoders.
-
-## `OdometryData`
-
-```c
-typedef struct __attribute__ ((packed))
-{
-    float pos_x;    // meters, world frame
-    float pos_y;    // meters, world frame
-    float heading;  // radians, CCW-positive
-    float vx;       // m/s, body frame
-    float vy;       // m/s, body frame
-    float wz;       // rad/s, body frame
-} OdometryData;
-```
-
-Conventions in the shared header:
-
-- `pos_x`, `pos_y`: meters in world frame
-- `heading`: radians, CCW-positive
-- `vx`, `vy`, `wz`: body-frame velocity (also published as individual `raccoon/odometry/vx`, `raccoon/odometry/vy`, `raccoon/odometry/wz` channels)
-
-## `RxBuffer` (Pi → STM32)
-
-Current layout:
-
-```c
-typedef struct __attribute__ ((packed))
-{
-    uint8_t transferVersion;
-    uint32_t updates;
-    uint8_t systemShutdown;
-    uint16_t motorControlMode;
-    int32_t motorTarget[4];
-    float chassisVelocity[3];   // for MOT_MODE_CHASSIS: [vx (m/s), vy (m/s), wz (rad/s)]
-    int32_t motorGoalPosition[4];
-    uint8_t motorPositionReset;
-    uint8_t servoMode;
-    uint16_t servoPos[4];
-    MotorPidSettings motorPidSettings;
-    int8_t imuGyroOrientation[9];
-    int8_t imuCompassOrientation[9];
-    KinematicsConfig kinematics;
-    uint8_t featureFlags;
-} RxBuffer;
-```
-
-Notable fields that older docs often omit:
-
-- `chassisVelocity[3]`: carries the body-frame setpoint `[vx, vy, wz]` for `MOT_MODE_CHASSIS`. The STM32 maps this to per-wheel velocity via `kinematics.fwd_matrix` and runs the per-motor MAV PID entirely on-chip. `motorTarget` is **ignored** when all motors are in `MOT_MODE_CHASSIS`.
-- `motorPositionReset`: bitmask — bit N = reset motor N position counter to zero on the STM32. The Pi calls `reset_motor_position_on_stm32()` which sets this bitmask and sets the `PI_BUFFER_UPDATE_MOTOR_POS_RESET` update flag. There are no Pi-side software position offsets; the reset is hardware-side.
-- `featureFlags`: runtime opt-in toggles (see Feature flags section).
-
-## Update flags
-
-Current `updates` bitmask constants:
-
-| Bit | Constant | Purpose |
-|---|---|---|
-| `0x01` | `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` | Update motor velocity PID settings |
-| `0x02` | `PI_BUFFER_UPDATE_MOTOR_PID_POS` | Update motor position PID settings |
-| `0x04` | `PI_BUFFER_UPDATE_IMU_ORIENTATION` | Apply IMU orientation matrices |
-| `0x08` | `PI_BUFFER_UPDATE_SAVE_IMU_CAL` | Save IMU calibration to flash |
-| `0x10` | `PI_BUFFER_UPDATE_KINEMATICS` | Apply kinematics config (including `bemf_offset`) |
-| `0x20` | `PI_BUFFER_UPDATE_ODOM_RESET` | Reset odometry |
-| `0x40` | `PI_BUFFER_UPDATE_MOTOR_POS_RESET` | Reset motor position counters (via `motorPositionReset` bitmask) |
-| `0x80` | `PI_BUFFER_UPDATE_FEATURE_FLAGS` | Apply runtime feature flags |
-
-## Shutdown flags
-
-Current shutdown bits:
-
-| Bit | Constant | Meaning |
-|---|---|---|
-| `0x01` | `SHUTDOWN_SERVO` | shutdown servo subsystem |
-| `0x02` | `SHUTDOWN_MOTOR` | shutdown motor subsystem |
-
-## Feature flags
-
-Current runtime opt-in feature flags:
-
-| Bit | Constant | Meaning |
-|---|---|---|
-| `0x01` | `FEATURE_BEMF_DISABLE` | disable BEMF-based feedback, used for Speed Mode |
-
-This is operationally important because it changes what motor command modes are valid. When `FEATURE_BEMF_DISABLE` is set:
-
-- the STM32 surfaces zeros for all BEMF readings instead of stale values
-- `MOT_MODE_MAV` and `MOT_MODE_CHASSIS` are blocked firmware-side (defense in depth; the Pi reader is the primary guard)
-- only `MOT_MODE_PWM`, `MOT_MODE_OFF`, and `MOT_MODE_PASSIV_BRAKE` are valid
-
-### `disableBemfOnStartup` configuration key
-
-The `stm32-data-reader` configuration struct exposes:
-
-```cpp
-// wombat::Configuration (include/wombat/core/Configuration.h)
-bool disableBemfOnStartup{false};
-```
-
-When `true`, the reader pushes `FEATURE_BEMF_DISABLE` on the **first SPI transfer** after initialization, before accepting any motor command from LCM. The `raccoon/feature/bemf_enabled` channel is published as `0` to notify all subscribers (raccoon-lib, BotUI) that the robot is in speed mode.
-
-Set this flag in the reader's configuration file when running open-loop (PWM-only) profiles where encoder feedback is not needed and the performance cost of stopping each motor briefly per BEMF cycle is unacceptable.
-
-## Motor control mode packing
-
-The shared header defines:
-
-```c
-#define MOTOR_CONTR_MOD_LENGTH 3
-```
-
-So `motorControlMode` packs four 3-bit motor modes into one 16-bit word. Motor N's mode is at bits `[3N+2 : 3N]`.
-
-Current modes:
+Motor N's mode = `(motorControlMode >> (N × 3)) & 0x07`.
 
 | Value | Constant | Meaning |
-|---|---|---|
-| `0b000` | `MOT_MODE_OFF` | motor off (coasts) |
-| `0b001` | `MOT_MODE_PASSIV_BRAKE` | passive brake (motor terminals shorted) |
-| `0b010` | `MOT_MODE_PWM` | explicit open-loop PWM duty |
-| `0b011` | `MOT_MODE_MAV` | move at velocity (closed-loop velocity PID) |
-| `0b100` | `MOT_MODE_MTP` | move to position (sqrt decel + velocity PID) |
-| `0b101` | `MOT_MODE_CHASSIS` | on-MCU chassis velocity loop (see below) |
+|-------|----------|---------|
+| `0b000` | `MOT_MODE_OFF` | Coast — all switches open |
+| `0b001` | `MOT_MODE_PASSIV_BRAKE` | Passive brake — motor terminals shorted |
+| `0b010` | `MOT_MODE_PWM` | Open-loop duty cycle (`motorTarget` = 0–400) |
+| `0b011` | `MOT_MODE_MAV` | Velocity PID — `motorTarget` = ticks/s setpoint |
+| `0b100` | `MOT_MODE_MTP` | Position — `motorTarget` = speed limit, `motorGoalPosition` = target ticks |
+| `0b101` | `MOT_MODE_CHASSIS` | On-MCU chassis loop — `chassisVelocity` used, `motorTarget` ignored |
 
-### `MOT_MODE_CHASSIS` — on-MCU chassis velocity loop
-
-`MOT_MODE_CHASSIS` (value `0b101`) enables a fully on-chip closed-loop chassis velocity controller. The workflow is:
-
-1. Set all four motors to `MOT_MODE_CHASSIS` in `motorControlMode`.
-2. Write the body-frame setpoint to `chassisVelocity[3]`:
-   - `chassisVelocity[0]` = vx (m/s, forward)
-   - `chassisVelocity[1]` = vy (m/s, lateral — zero for differential-drive robots)
-   - `chassisVelocity[2]` = wz (rad/s, CCW-positive)
-3. Set the `PI_BUFFER_UPDATE_KINEMATICS` flag (once at startup) so the STM32 has the forward kinematics matrix.
-
-The STM32 derives the per-wheel velocity setpoint as `w_i = fwd_matrix[i] · [vx, vy, wz]`, converts to BEMF units via `ticks_to_rad`, then runs the per-motor velocity PID against the BEMF reading. `motorTarget` is ignored in this mode.
-
-This closes the chassis velocity loop entirely on the MCU, which eliminates the SPI round-trip from the control path and makes the loop latency deterministic (one BEMF cycle = 1250 µs per motor).
-
-The `raccoon/chassis/velocity_cmd` LCM channel carries the body-frame setpoint (`vector3f_t`). The Pi-side `CommandSubscriber` routes this to `setChassisVelocity()` which writes `chassisVelocity` and sets all four motor modes to `MOT_MODE_CHASSIS` in one SPI update.
-
-## `MotorPidSettings` struct
-
-The velocity and position PID gains for all four motors are carried in the `RxBuffer` as a single struct:
+The Pi-side helper `set_motor_control_mode(port, mode)` in `Spi.cpp` masks and shifts correctly:
 
 ```c
-typedef struct __attribute__ ((packed))
-{
-    float Kp;
-    float Ki;
-    float Kd;
-} BasicPidSettings;
-
-typedef struct __attribute__ ((packed))
-{
-    // Global output clamps (applied to all four motors)
-    float limMin;
-    float limMax;
-    float limMinInt;   // integral contribution clamp (lower)
-    float limMaxInt;   // integral contribution clamp (upper)
-    float tau;         // reserved / derivative filter time constant
-
-    // Per-motor gains (capitalized field names)
-    BasicPidSettings pids[4];
-} MotorPidSettings;
+uint16_t mask = (uint16_t)((1u << MOTOR_CONTR_MOD_LENGTH) - 1) << (port * MOTOR_CONTR_MOD_LENGTH);
+ctx.tx.motorControlMode = (ctx.tx.motorControlMode & ~mask) | ((uint16_t)mode << (port * MOTOR_CONTR_MOD_LENGTH));
 ```
 
-The gains in `pids[N]` are **dt-explicit per-second units**. The firmware `pid_update()` function takes a `float dt` argument and multiplies `Ki` by `dt` in the integral accumulator, so the gains are physically consistent regardless of the BEMF cadence. The default boot value is `kI = 9.0`, which is equivalent to the old `kI = 0.045` at 200 Hz (9.0 = 0.045 × 200).
+### `chassisVelocity[3]` — on-MCU chassis velocity loop
 
-To override PID gains at runtime, write the new gains into `motorPidSettings` and set `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (velocity PID) or `PI_BUFFER_UPDATE_MOTOR_PID_POS` (position PID) in the `updates` field. From LCM, send a `vector3f_t` (`x=kp, y=ki, z=kd`) to `raccoon/motor/N/pid_cmd`.
+`chassisVelocity` sits at byte offset 24 of RxBuffer, between `motorTarget` and `motorGoalPosition`. It is easy to miscount, and older decoders that only handle up to `motorTarget` will misalign every subsequent field.
 
-## Kinematics payload
+When all four motors are in `MOT_MODE_CHASSIS` (value `0b101`):
 
-`KinematicsConfig` contains:
+1. The Pi writes `[vx m/s, vy m/s, wz rad/s]` to `chassisVelocity`.
+2. The STM32 computes per-wheel setpoints: `w_i = fwd_matrix[i][0]×vx + fwd_matrix[i][1]×vy + fwd_matrix[i][2]×wz`.
+3. Each per-wheel setpoint is converted from rad/s to BEMF ticks via `ticks_to_rad[i]`.
+4. The per-motor MAV (velocity) PID runs against the BEMF reading.
+
+`motorTarget` is ignored in this mode. This closes the full chassis velocity loop on the MCU, removing the SPI round-trip from the control path. Loop latency is one BEMF cycle (1 250 µs), not 5 ms.
+
+The Pi-side call path: `raccoon/chassis/velocity_cmd` LCM channel → `CommandSubscriber` → `DeviceController::setChassisVelocity` → `SpiReal::setChassisVelocity` → `set_chassis_velocity(vx, vy, wz)` → writes `ctx.tx.chassisVelocity` and calls `spi_force_update()`.
+
+No `PI_BUFFER_UPDATE_*` flag is needed for `chassisVelocity` — the STM32 reads it on every transfer while any motor is in `MOT_MODE_CHASSIS`.
+
+### `motorPositionReset` — hardware-side position reset
+
+`motorPositionReset` at byte 52 is a bitmask. Bit N, when set, causes the STM32 main loop to zero `motor_data.position[N]` directly:
 
 ```c
-typedef struct __attribute__ ((packed))
-{
-    float inv_matrix[3][4];   // inverse kinematics: wheel speeds → [vx, vy, wz]
-    float ticks_to_rad[4];    // per-motor: radians per BEMF tick (encoder calibration)
-    float bemf_offset[4];     // per-motor: ADC-count offset subtracted before integration
-    float fwd_matrix[4][3];   // forward kinematics: [vx, vy, wz] → per-wheel rad/s
-} KinematicsConfig;
+// main.c — PI_BUFFER_UPDATE_MOTOR_POS_RESET handler
+for (int ch = 0; ch < MOTOR_COUNT; ch++) {
+    if (rxBuffer.motorPositionReset & (1u << ch))
+        motor_data.position[ch] = 0;
+}
+rxBuffer.motorPositionReset = 0;
 ```
 
-The full struct is transmitted as one SPI payload when `PI_BUFFER_UPDATE_KINEMATICS` is set.
+The Pi side (`reset_motor_position_on_stm32` in `Spi.cpp`):
 
-### `bemf_offset[4]` — per-motor BEMF zero-offset
+```c
+ctx.tx.motorPositionReset |= (1u << port);
+ctx.tx.updates |= PI_BUFFER_UPDATE_MOTOR_POS_RESET;
+spi_force_update();
+```
 
-The differential BEMF reading is not perfectly proportional to wheel speed through the origin. At standstill or low speed, the ADC measures a non-zero "coast offset" (~20–40 counts, motor-specific) caused by H-bridge settling and amplifier artifacts. If this offset is integrated each BEMF cycle without correction it adds phantom position ticks, causing odometry to drift even when the robot is stationary.
+There are no Pi-side software position offsets. The zero happens in STM32 firmware, and the Pi will see `motor.position[N] = 0` in the next `TxBuffer`.
 
-The Pi calibrates this offset using the calibration board (`auto_tune_bemf_velocity`) and stores it in `KinematicsConfig.bemf_offset[4]`. When the kinematics config is applied (via `PI_BUFFER_UPDATE_KINEMATICS`), the STM32 calls `bemf_set_offset()` which stores the values in `bemf_offset_cfg[4]`. Each BEMF cycle, the offset is subtracted from the filtered reading before it is compared to the dead zone and accumulated into position:
+### `MotorPidSettings` — PID gain payload
+
+`motorPidSettings` occupies bytes 62–129 of RxBuffer (68 bytes total):
+
+```
+[62] limMin     (4)
+[66] limMax     (4)
+[70] limMinInt  (4)   integral clamp lower
+[74] limMaxInt  (4)   integral clamp upper
+[78] tau        (4)   reserved
+[82] pids[0].Kp (4)
+[86] pids[0].Ki (4)
+[90] pids[0].Kd (4)
+[94] pids[1].Kp (4)
+...
+[118] pids[3].Kd (4) — ends at byte 129
+```
+
+Gains are in **dt-explicit per-second units**. The firmware `pid_update(float dt)` multiplies `Ki` by `dt`, so gains are physically consistent regardless of BEMF cadence. Triggered by `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (velocity PID) or `PI_BUFFER_UPDATE_MOTOR_PID_POS` (position PID).
+
+To update gains at runtime: write `motorPidSettings`, set the appropriate update flag, and call `spi_force_update()`. From LCM, publish a `vector3f_t` (`x=Kp, y=Ki, z=Kd`) to `raccoon/motor/N/pid_cmd`.
+
+### `KinematicsConfig` — geometry and calibration (128 bytes at offset 148)
+
+```
+[148]  inv_matrix[3][4]   48 bytes   wheel-speeds → [vx, vy, wz]
+[196]  ticks_to_rad[4]    16 bytes   rad per BEMF tick, per motor
+[212]  bemf_offset[4]     16 bytes   ADC-count zero-offset, per motor
+[228]  fwd_matrix[4][3]   48 bytes   [vx, vy, wz] → per-wheel rad/s
+```
+
+Triggered by `PI_BUFFER_UPDATE_KINEMATICS`. The STM32 handler:
+
+```c
+// main.c
+odometry_configure(&rxBuffer.kinematics);  // stores inv_matrix + ticks_to_rad
+bemf_set_offset(rxBuffer.kinematics.bemf_offset);  // stores per-motor offsets
+```
+
+**`bemf_offset[4]` in detail.** At standstill the BEMF ADC measures a non-zero coast offset (~20–40 ADC counts, motor-specific) due to H-bridge settling and amplifier artifacts. Without correction, this offset is integrated into `motor.position` each cycle and causes odometry to drift when stationary. The Pi calibrates these offsets via `auto_tune_bemf_velocity` and stores them in the kinematics config. Each BEMF cycle the firmware subtracts the offset before the dead-zone check and position integration:
 
 ```c
 float corrected = bemfLastReadings[ch] - bemf_offset_cfg[ch];
@@ -360,35 +424,148 @@ motor_data.bemf[ch] = (int32_t)corrected;
 // … then dt-aware integration into motor_data.position[ch]
 ```
 
-Until `bemf_offset` is configured (or on a fresh flash), the values default to 0.0f (no correction — original behavior).
+Until `PI_BUFFER_UPDATE_KINEMATICS` is received, all offsets default to `0.0f` (no correction).
 
-## Speed Mode interaction
+---
 
-`Spi.cpp` contains a safety guard:
+## Update flags state machine
 
-- if `FEATURE_BEMF_DISABLE` is active
-- and a motor is commanded in `MOT_MODE_MAV` or `MOT_MODE_CHASSIS`
-- the Pi side rejects that command and throws
+The `updateFlags` byte in the STM32 is a software latch between the DMA callback (ISR context, priority 0) and the main loop (thread context). The callback ORs new flags in; the main loop clears each flag before acting on it. Because the Cortex-M4 does not have lock-free atomics for 8-bit variables, the strict priority model (main loop has no priority; IRQ priority 0 preempts everything) makes this safe without a mutex.
 
-Reason: with BEMF disabled, the firmware has no encoder-tick feedback, so velocity PID and chassis loop cannot safely close in that mode.
+```mermaid
+stateDiagram-v2
+    [*] --> Idle : initPiCommunication() — circular DMA armed
 
-Speed Mode is not just a higher-level library flag. It changes which SPI command combinations are legal.
+    Idle --> DMATransfer : Pi asserts NSS + clocks 277 bytes
 
-## Practical implications
+    DMATransfer --> Callback : DMA transfer-complete IRQ (priority 0)
+    Callback --> Idle : stamp updateTime, merge updateFlags, re-arm is automatic
 
-- protocol docs must be derived from `pi_buffer.h`, not from memory
-- transfer-version mismatch now triggers auto-reflash behavior; current version is **21**
-- `chassisVelocity[3]` is a live wire-protocol field — any SPI decoder must account for its position between `motorTarget[4]` and `motorGoalPosition[4]`
-- `KinematicsConfig.bemf_offset[4]` must be calibrated per robot; defaults to zero (no correction)
-- `updates` is a true feature/update bitmask in the current shared header
-- runtime feature flags are part of the live wire contract
-- speed mode changes valid motor-command semantics at the SPI boundary
-- motor position reset is on-STM32 via the `motorPositionReset` bitmask; there are no Pi-side software position offsets
+    Idle --> ProcessFlags : main loop iteration
+    ProcessFlags --> ApplyPID : PI_BUFFER_UPDATE_MOTOR_PID_SPEED set
+    ProcessFlags --> ApplyKinematics : PI_BUFFER_UPDATE_KINEMATICS set
+    ProcessFlags --> ApplyPosReset : PI_BUFFER_UPDATE_MOTOR_POS_RESET set
+    ProcessFlags --> ApplyOdomReset : PI_BUFFER_UPDATE_ODOM_RESET set
+    ProcessFlags --> ApplyImuOrientation : PI_BUFFER_UPDATE_IMU_ORIENTATION set
+    ProcessFlags --> SaveFlash : PI_BUFFER_UPDATE_SAVE_IMU_CAL set
+    ProcessFlags --> ApplyFeatureFlags : PI_BUFFER_UPDATE_FEATURE_FLAGS set
+    ApplyPID --> Idle
+    ApplyKinematics --> Idle
+    ApplyPosReset --> Idle
+    ApplyOdomReset --> Idle
+    ApplyImuOrientation --> Idle
+    SaveFlash --> Idle
+    ApplyFeatureFlags --> Idle
+```
 
-## Related files and pages
+---
 
-- Shared header: `stm32-data-reader/shared/spi/pi_buffer.h` — the authoritative source of truth for all struct layouts
-- Pi SPI implementation: `stm32-data-reader/src/wombat/hardware/Spi.cpp`
-- BEMF offset calibration: `stm32-data-reader/firmware/Firmware/src/Sensors/bemf.c`
-- [Motor Control](../motor-control/) — how motor modes and PID are applied once commands arrive
-- [Data Pipeline](../data-pipeline/) — how sensor data flows from SPI through LCM to Python
+## Feature flags and speed mode
+
+`featureFlags` at byte 276 of RxBuffer is a runtime opt-in bitmask applied when `PI_BUFFER_UPDATE_FEATURE_FLAGS` is set:
+
+| Bit | Constant | Effect |
+|-----|----------|--------|
+| 0 | `FEATURE_BEMF_DISABLE` | STM32 outputs zeros for all BEMF readings; Pi-side guard rejects MAV/CHASSIS commands |
+
+**Speed mode** (`FEATURE_BEMF_DISABLE` active):
+
+- The Pi reader's `spi_do_transfer()` checks `ctx.tx.featureFlags & FEATURE_BEMF_DISABLE` before every transfer. If any motor is in `MOT_MODE_MAV`, it throws `std::runtime_error` and `Application::processMainLoop` forces all motors to `MOT_MODE_OFF`.
+- Only `MOT_MODE_PWM`, `MOT_MODE_OFF`, and `MOT_MODE_PASSIV_BRAKE` are valid.
+- The `raccoon/feature/bemf_enabled` channel is published as `0`.
+
+Enable at startup via `disableBemfOnStartup: true` in the reader configuration (default: `false`). Use for open-loop PWM profiles where the brief per-motor BEMF measurement window introduces unacceptable jitter.
+
+---
+
+## Pi-side startup sequence
+
+```mermaid
+sequenceDiagram
+    participant App as Application::initialize()
+    participant UART as UartMonitor
+    participant SPI as spi_*/SpiReal
+    participant STM as STM32F427
+
+    App->>UART: initialize() — open /dev/ttyAMA0 (115200 baud)
+    App->>SPI: spi_reset_stm32() — runs reset_coprocessor.sh, sleeps 1 s
+    STM-->>UART: "[stp] Booted, firmware ready" (boot log via UART)
+    App->>UART: drainFor(2000 ms) — capture boot output
+    App->>SPI: spi_init(20 MHz) — open /dev/spidev0.0, set Mode 0, 8-bit
+    App->>SPI: spi_probe_version() — up to 30 × 100 ms polls
+    SPI-->>STM: 277-byte dummy transfer (transferVersion=21, updates=0)
+    STM-->>SPI: TxBuffer with transferVersion field
+    alt transferVersion == 21
+        App->>App: log "Version check: OK"
+    else mismatch
+        App->>App: log "MISMATCH — reflash on first update"
+    end
+    App->>SPI: set_spi_mode(true) — enables spi_update()
+    opt disableBemfOnStartup == true
+        App->>SPI: set_feature_flags(FEATURE_BEMF_DISABLE)
+        App->>App: publishBemfEnabled(false) to LCM
+    end
+    Note over App: Main loop starts (5 ms tick)
+```
+
+---
+
+## Shutdown sequence
+
+`systemShutdown` at byte 5 of RxBuffer carries bitmask shutdown signals:
+
+| Bit | Constant | STM32 action |
+|-----|----------|-------------|
+| 0 | `SHUTDOWN_SERVO` (`0x01`) | Servo subsystem disabled |
+| 1 | `SHUTDOWN_MOTOR` (`0x02`) | Motor commands zeroed in `sanitizeMotorCommandsForShutdown()` |
+
+When `SHUTDOWN_MOTOR` is set, the `HAL_SPI_TxRxCpltCallback` calls `sanitizeMotorCommandsForShutdown()`, which:
+
+1. Zeros `rxBuffer.motorControlMode` (all motors to `MOT_MODE_OFF`).
+2. Zeros all `motorTarget` and `motorGoalPosition` entries.
+3. Clears PID update flags so no new gains are applied.
+4. Calls `motors_forceOff()`.
+
+This ensures motors are stopped even if the Pi crashes mid-command without re-sending an explicit OFF command.
+
+---
+
+## Timing summary
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| Pi main loop period | 5 ms | `config_.mainLoopDelay = 5ms` (`Configuration.h`) |
+| SPI clock | 20 MHz | `ctx.speed_hz = 20'000'000` (`Spi.cpp`) |
+| Wire transfer size | 277 bytes | `BUFFER_LENGTH_DUPLEX_COMMUNICATION` |
+| Wire transfer time | ~111 µs | 277 × 8 bits ÷ 20 MHz |
+| DMA completion IRQ priority | 0 (highest) | `interupt_prioryty.h` |
+| STM32 BEMF cycle (per motor) | 1 250 µs | Motor control page |
+| STM32 heartbeat interval | 5 000 ms | `HEARTBEAT_INTERVAL` in `main.c` |
+| Pi health watchdog | 10 s | `kTimeout` in `Application.cpp` |
+| spi_probe_version timeout | 3 s (30 × 100 ms) | `spi_probe_version()` in `Spi.cpp` |
+| Post-reflash delay | 2 s | `reflash_stm()` in `Spi.cpp` |
+| Transfer version | 21 | `TRANSFER_VERSION` in `pi_buffer.h` |
+
+---
+
+## Related files
+
+| File | Role |
+|------|------|
+| `shared/spi/pi_buffer.h` | **Authoritative** struct definitions, version constant, update-flag constants |
+| `firmware/Firmware/src/Communication/spi.c` | DMA init, `HAL_SPI_TxRxCpltCallback`, `sanitizeMotorCommandsForShutdown` |
+| `firmware/Firmware/src/Communication/communication_with_pi.c` | Buffer globals, `initPiCommunication()` |
+| `firmware/Firmware/src/main.c` | Main loop, all `updateFlags` dispatch handlers |
+| `firmware/Firmware/include/Hardware/interupt_prioryty.h` | IRQ priority table |
+| `src/wombat/hardware/Spi.cpp` | Pi C API: `spi_update`, `spi_do_transfer`, all setters, recovery |
+| `src/wombat/hardware/SpiReal.cpp` | C++ wrapper: `readSensorData`, `setMotorState`, `setChassisVelocity` |
+| `src/wombat/Application.cpp` | Startup probe sequence, STM32 health watchdog, main loop |
+| `include/wombat/core/Configuration.h` | `mainLoopDelay`, `speedHz`, `disableBemfOnStartup` |
+| `raccoon-transport/cpp/include/raccoon/Channels.h` | All LCM channel name constants |
+
+## Related pages
+
+- [Firmware Runtime and Scheduling](../firmware-runtime/) — TIM6 ISR, interrupt priorities, SPI2 DMA circular mode, `spi2_wait_idle()` guard
+- [Motor Control](../motor-control/) — BEMF signal chain, PID implementation, MTP/MAV/Chassis mode
+- [Data Pipeline](../data-pipeline/) — from SPI TxBuffer through LCM to Python consumer
+- [Pi Bridge Internals](../pi-bridge-internals/) — `SpiReal` unpack logic, `DeviceController`, `CommandSubscriber` timestamp deduplication
