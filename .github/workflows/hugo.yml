@@ -27,25 +27,56 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Fetch library API docs
+      # The DSL step catalog is the most important part of this site. We pull it
+      # straight from the latest raccoon-lib release and FAIL HARD if it is
+      # missing or empty — the site must never deploy without the step index.
+      # No local fallback / regeneration: the library release is the single
+      # source of truth, so a broken release surfaces here instead of silently
+      # shipping an empty catalog.
+      - name: Fetch DSL step catalog (required)
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Download the latest docs zip from raccoon-lib releases
-          mkdir -p static/api
-          gh release download --repo htl-stp-ecer/raccoon-lib \
-            --pattern 'raccoon-docs-*.zip' \
-            --dir /tmp/api-docs || { echo "No docs release found, skipping"; exit 0; }
-
-          ZIP=$(ls /tmp/api-docs/raccoon-docs-*.zip | head -1)
-          echo "Extracting $ZIP into static/api/"
-          unzip -o "$ZIP" -d static/api/
-
-          # Place DSL catalog where Hugo can use it as data
+          set -euo pipefail
           mkdir -p data
-          if [ -f static/api/dsl-steps.json ]; then
-            cp static/api/dsl-steps.json data/dsl_steps.json
-            echo "DSL catalog: $(jq length data/dsl_steps.json) steps"
+          rm -f data/dsl_steps.json
+
+          # Preferred: the standalone catalog asset attached to the release.
+          gh release download --repo htl-stp-ecer/raccoon-lib \
+            --pattern 'dsl-steps.json' \
+            --dir /tmp/catalog || true
+
+          if [ -f /tmp/catalog/dsl-steps.json ]; then
+            cp /tmp/catalog/dsl-steps.json data/dsl_steps.json
+          else
+            echo "::error::Latest raccoon-lib release has no dsl-steps.json asset — cannot build docs without the step catalog."
+            exit 1
+          fi
+
+          STEP_COUNT=$(jq 'length' data/dsl_steps.json)
+          if [ "${STEP_COUNT}" -lt 1 ]; then
+            echo "::error::DSL step catalog is empty (${STEP_COUNT} steps) — refusing to build the docs site."
+            exit 1
+          fi
+          echo "DSL catalog: ${STEP_COUNT} steps"
+
+      # API reference (Sphinx autoapi + Doxygen) the catalog cards link to.
+      # Best-effort: a missing /api bundle degrades deep links but must not block
+      # the build, since the step catalog above is the critical artifact.
+      - name: Fetch library API reference
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          mkdir -p static/api
+          if gh release download --repo htl-stp-ecer/raccoon-lib \
+               --pattern 'raccoon-docs-*.zip' \
+               --dir /tmp/api-docs; then
+            ZIP=$(ls /tmp/api-docs/raccoon-docs-*.zip | head -1)
+            echo "Extracting $ZIP into static/api/"
+            unzip -o "$ZIP" -d static/api/
+          else
+            echo "::warning::No raccoon-docs-*.zip asset on the latest release — /api reference will be missing."
           fi
 
       - name: Setup Hugo
