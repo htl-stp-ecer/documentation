@@ -1,8 +1,6 @@
 {{ $steps := hugo.Data.dsl_steps }}
 {{ if not $steps }}
-<div class="dsl-widget dsl-widget-empty">
-  <p>The step index is unavailable in this build because <code>data/dsl_steps.json</code> was not provided.</p>
-</div>
+  {{ errorf "dsl-steps: data/dsl_steps.json is missing or empty — the step catalog is required and the build must not proceed without it. CI must populate it from the latest raccoon-lib release." }}
 {{ else }}
 
 <div class="dsl-widget">
