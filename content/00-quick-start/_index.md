@@ -1,7 +1,7 @@
 ---
 title: "Quick Start"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-10-30
 draft: false
 weight: 1
 ---
@@ -44,15 +44,11 @@ The loop at the end is your normal development cycle: write code, run it on the 
 
 ## What You Need
 
-**Hardware:**
 - Wombat controller with RaccoonOS flashed to the SD card
 - Battery pack
-- At least 2 DC motors wired to motor ports
+- DC motors wired to motor ports (2 for a differential drivetrain, 4 for mecanum)
+- A computer with an internet connection (Windows, macOS or Linux)
 - **USB keyboard** — needed once to enter WiFi password on the Wombat
-
-**On your laptop:**
-- Python 3.13 or newer
-- A terminal
 
 ---
 
@@ -75,7 +71,7 @@ Then unscrew the lid on the **back** of the Wombat, insert the SD card, and clos
 
 > If your SD card was pre-flashed (e.g. at a workshop), skip to Step 2.
 
-> **Important:** After flashing a new SD card, the Wombat's STM32 co-processor firmware also needs to be updated. Once you've completed setup and can reach the robot, run `raccoon update` (see [Step 6](#step-6--update)) to flash the latest STM32 firmware.
+> **Important:** After flashing a new SD card, the Wombat's STM32 co-processor firmware also needs to be updated. Once you've completed setup and can reach the robot, run `raccoon update` (see [Step 5](#step-5--update)) to flash the latest STM32 firmware.
 
 ---
 
@@ -105,72 +101,87 @@ For **WiFi Client** mode:
 
 ---
 
-## Step 3 — Install raccoon-cli
+## Step 3 — Create Your Project
 
-raccoon-cli is the tool you use to manage projects, generate code, and run programs on the robot.
+One command sets up everything: it installs the tools you need, asks you a few questions, downloads the example project, and prepares it for you.
 
-**Requires Python 3.13+.**
+Open a terminal in the folder you'd like to create the project in, then run the command for your system:
 
-Install from PyPI:
+- **Linux / macOS:**
+  ```bash
+  curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
+  ```
+- **Windows (PowerShell):**
+  ```powershell
+  irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+  ```
 
-```bash
-pip install raccoon-cli
-```
+The script will:
+1. Install **Git** and **uv** if they are missing (uv also downloads the right Python version for you — no separate Python install needed)
+2. Ask for a **project name** (letters, digits, `-` and `_`; must start with a letter)
+3. Ask for your **drivetrain type**: `differential` (two-wheeled) or `mecanum` ("omniwheeled"). Other bot types are currently not supported by the template.
+4. Download the matching branch of the [example project](https://github.com/htl-stp-ecer/raccoon-example) into a new folder named after your project, and rename the project inside its config files
+5. Give the project its own fresh git repository and a unique project ID (`uuid`)
+6. Run `uv sync` to download `raccoon-cli` and `raccoon-library` and create the virtual environment
+7. Create the first commit, titled *Initial Commit (created by raccoon-setup)*
 
-> **Ubuntu/Debian:** pip may refuse with `externally-managed-environment`. Add `--break-system-packages`:
-> ```bash
-> pip install --break-system-packages raccoon-cli
-> ```
+If the current folder is not writable, or a folder with your project name already exists, the script stops without changing anything.
 
-If you explicitly need release artifacts instead of PyPI, use the wheels from:
-
-> **[github.com/htl-stp-ecer/raccoon-cli/releases](https://github.com/htl-stp-ecer/raccoon-cli/releases)**
-
-> **"raccoon: command not found"** after installing? Make sure Python's script directory is in your `$PATH`.
-
-Verify it worked:
-
-```bash
-raccoon -h
-```
-
-You should see a list of available commands.
-
----
-
-## Step 4 — Create a Project
-
-raccoon only works inside a project folder. Create one first:
+Once it finishes, go into your project and activate the Python virtual environment, which makes the `raccoon` command available:
 
 ```bash
-raccoon create project MyRobot
 cd MyRobot
 ```
 
-The `raccoon create project` wizard asks for your drivetrain type, motor ports, and other basics. This generates the complete project skeleton:
+- **Windows (PowerShell):** `.venv\Scripts\Activate.ps1`
+- **Windows (cmd.exe):** `.venv\Scripts\activate.bat`
+- **Linux / macOS:** `source .venv/bin/activate`
+
+You know it worked when the command line is prefixed with `(MyRobot)` or `(.venv)`. Remember to activate the venv again whenever you open a new terminal.
+
+> **Prefer to do it by hand?** Clone the branch yourself with
+> `git clone -b <differential|mecanum> --single-branch https://github.com/htl-stp-ecer/raccoon-example MyRobot`,
+> then run `uv sync` inside it. You'll also want to change the `name` in `pyproject.toml` and `raccoon.project.yml`
+> and replace the `uuid` in `raccoon.project.yml` with a new one. It is also recommended to delete the cloned `.git`
+> and initialize a fresh repository in the project folder.
+
+The project you get looks like this:
 
 ```
 MyRobot/
-├── raccoon.project.yml       # top-level config — includes all sub-configs
+├── raccoon.project.yml         # top-level config — includes all sub-configs
 ├── config/
-│   ├── hardware.yml          # sensors, motors, servos
-│   ├── motors.yml            # motor port assignments and calibration
-│   ├── missions.yml          # ordered list of missions to run
-│   └── robot.yml             # kinematics, PID, physical dimensions
+│   ├── connection.yml          # saved robot IP address (automatically managed)
+│   ├── hardware.yml            # sensors, motors, servos
+│   ├── missions.yml            # ordered list of missions to run
+│   ├── motors.yml              # motor port assignments and calibration
+│   ├── robot.yml               # kinematics, PID, physical dimensions
+│   ├── run-configurations.yml  # named run profiles for `raccoon run` (default, dev, dev-nc, profile)
+│   └── servos.yml              # servo ports and named positions
 └── src/
-    ├── main.py               # entry point: Robot().start()
+    ├── main.py                 # entry point: Robot().start()
+    ├── mission_params.py       # Mission parameter which you can adjust before a run on the screen
     ├── hardware/
-    │   ├── defs.py           # auto-generated hardware definitions
-    │   └── robot.py          # auto-generated robot class
-    └── missions/
-        └── m000_setup_mission.py
+    │   ├── defs.py             # auto-generated on `raccoon run` (not in git)
+    │   ├── defs.pyi            # auto-generated on `raccoon run` (not in git)
+    │   └── robot.py            # auto-generated on `raccoon run` (not in git)
+    ├── missions/
+    │   ├── m000_setup_mission.py
+    │   ├── m010_navigate_to_object_mission.py
+    │   ├── m020_collect_object_mission.py
+    │   ├── m030_deliver_object_mission.py
+    │   └── m999_shutdown_mission.py
+    ├── service/                # shared, stateful logic (RobotService subclasses)
+    └── steps/                  # reusable custom steps used by the missions
 ```
 
-→ See [Project Structure]({{< ref "/02-programming/01-project-structure" >}}) for a full explanation of every generated file.
+The example comes with a small set of demo missions you can read, change, or delete. The `hardware/` files are generated from your YAML config, so edit the YAML, not the Python.
+
+→ See [Project Structure]({{< ref "/02-programming/01-project-structure" >}}) for a full explanation of every file.
 
 ---
 
-## Step 5 — Connect to the Robot
+## Step 4 — Connect to the Robot
 
 ```bash
 raccoon connect 192.168.178.124
@@ -193,7 +204,10 @@ If the robot's IP ever changes, just re-run `raccoon connect <new-IP>`.
 
 ---
 
-## Step 6 — Update
+## Step 5 — Update
+
+> **Notice:** `raccoon update` is not yet working as intended and should currently not be used.
+> For now, just skip this step until this documentation says otherwise.
 
 If raccoon warns about a version mismatch between your laptop and the robot, run:
 
@@ -205,17 +219,76 @@ This checks both sides against the current bundle target and updates anything th
 
 ---
 
-## Step 7 — Configure Your Hardware
+## Step 6 — Configure Your Hardware
 
-`raccoon create project` already asked you for basic hardware settings (drivetrain type, motor ports, etc.) during project creation. If you need to change anything later, run the interactive wizard:
+The example project ships with a default hardware setup for the drivetrain type you picked. Adjust it to match your robot by editing the YAML files — they are the source of truth for your hardware:
 
-```bash
-raccoon wizard
+| What to change | File |
+|----------------|------|
+| Motor ports, `inverted` flags, encoder scaling | `config/motors.yml` |
+| Servo ports and named positions | `config/servos.yml` |
+| Sensors | `config/hardware.yml` |
+| Kinematics, PID gains, physical dimensions (wheel size, track width, ...) | `config/robot.yml` |
+
+Each file is commented, so open it and work through the values from top to bottom. The generated `src/hardware/` files are rebuilt from the YAML on every `raccoon run`, so never edit those by hand.
+
+### Measure your robot's dimensions
+
+The drivetrain dimensions live in `config/robot.yml` under `drive.kinematics`. They are what lets the robot turn by exactly 90° and drive exactly 30 cm, so measure them carefully (calipers or a ruler is fine).
+
+> ### ⚠️ UNITS: THE KINEMATICS VALUES ARE IN **METERS**, NOT CM OR INCHES!
+>
+> `wheel_radius`, `wheelbase` and `track_width` must be entered in **meters**. If you enter centimeters or inches the robot will drive and turn completely wrong (a `wheelbase` of `16` is a 16-meter-wide robot, not a 16 cm one) and it can look like a broken motor or a bad calibration.
+>
+> | You measured | Convert to meters | Example |
+> |--------------|-------------------|---------|
+> | millimeters (mm) | divide by 1000 | 34.5 mm → `0.0345` |
+> | centimeters (cm) | divide by 100 | 16 cm → `0.16` |
+> | inches (in) | multiply by 0.0254 | 6.3 in → `0.16002` |
+>
+> Note that the `physical:` section further down the same file is the opposite: its keys end in `_cm` (`width_cm`, `x_cm`, ...) and are in **centimeters**. Always go by the unit in the key name or the comment next to it.
+
+**Both drivetrains**
+
+| Key | What to measure |
+|-----|-----------------|
+| `wheel_radius` | Radius of one wheel: measure the **diameter** with calipers and halve it. Convert to meters. |
+
+**Differential (two-wheeled)** — one value:
+
+| Key | What to measure |
+|-----|-----------------|
+| `wheelbase` | Distance between the **left and right wheels**, measured between the points where each wheel touches the ground (contact points), not between the motors or the outside of the robot. In other words, this is the track width. |
+
+```yaml
+kinematics:
+  type: differential
+  wheel_radius: 0.0345   # 6.9 cm wheel diameter -> 3.45 cm radius -> 0.0345 m
+  wheelbase: 0.16        # 16 cm between left and right contact points -> 0.16 m
 ```
 
-It walks you through drivetrain type, motor ports, inversion, and robot dimensions. Answers are saved to `raccoon.project.yml` and the `config/` files.
+**Mecanum (four-wheeled)** — two values. Be careful: the name `wheelbase` means something different than on a differential robot.
+
+| Key | What to measure |
+|-----|-----------------|
+| `track_width` | **Left-to-right** distance between the wheel contact points (same measurement as `wheelbase` on a differential robot). |
+| `wheelbase` | **Front-to-back** distance between the front and rear axles. |
+
+```yaml
+kinematics:
+  type: mecanum
+  wheel_radius: 0.0345   # 6.9 cm wheel diameter -> 3.45 cm radius -> 0.0345 m
+  track_width: 0.16      # 16 cm left to right -> 0.16 m
+  wheelbase: 0.12        # 12 cm front axle to rear axle -> 0.12 m
+```
+
+If the robot turns too much or too little, the width value (`wheelbase` on differential, `track_width` and `wheelbase` on mecanum) is usually the culprit. If it drives too far or too short, check `wheel_radius`. `raccoon calibrate` can fine-tune the rest later.
+
+### Motor direction
 
 **The most critical setting:** all motors must spin **forward** when given a positive power command. Decide which direction is "forward" for your robot, then set `inverted: true` in `config/motors.yml` for any motor that spins the wrong way.
+We recommend you plug in all motors with the **red cable facing up** to keep it simple when you for example quickly need to plug in a cable that fell out under stress.
+For that, you need to configure the `inverted` property of each motor correctly.
 
 > The Wombat can be mounted in any orientation — the software accounts for it.
 
@@ -223,7 +296,7 @@ It walks you through drivetrain type, motor ports, inversion, and robot dimensio
 
 ---
 
-## Step 8 — Run It
+## Step 7 — Run It
 
 ```bash
 raccoon run
@@ -236,19 +309,15 @@ This does everything in one command:
 4. Executes `src/main.py` on the robot, streaming output to your terminal
 5. Pulls any files updated on the robot back to your laptop
 
-You should see the robot boot, run the setup mission, and wait. Press **Ctrl+C** to stop.
+You should see the robot boot and run the setup mission. Press **Ctrl+C** to stop.
 
-A fresh project has no missions yet — you'll see:
-```
-warning  | [Robot]: Robot does not have any missions attached
-```
-That's expected. The robot is running correctly.
+The example project already ships with a few demo missions (`M010NavigateToObject`, `M020CollectObject`, `M030DeliverObject`), so the robot will move on after setup. If you'd rather start from a clean slate, remove them from `config/missions.yml`; the robot will then warn `Robot does not have any missions attached` and just wait — that's expected.
 
 ---
 
-## Step 9 — Test Basic Motion
+## Step 8 — Test Basic Motion
 
-Create a smoke test mission:
+To check that your motors and wiring are right, create a small smoke test mission:
 
 ```bash
 raccoon create mission M010SmokeMission
@@ -270,11 +339,12 @@ class M010SmokeMission(Mission):
         ])
 ```
 
-Then register it in `config/missions.yml`:
+Then register it in `config/missions.yml` (keep the setup and shutdown entries; comment out or remove the demo missions while testing):
 
 ```yaml
 - M000SetupMission: setup
 - M010SmokeMission
+- M999ShutdownMission: shutdown
 ```
 
 Run it:
