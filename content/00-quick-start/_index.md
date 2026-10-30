@@ -107,14 +107,17 @@ One command sets up everything: it installs the tools you need, asks you a few q
 
 Open a terminal in the folder you'd like to create the project in, then run the command for your system:
 
-- **Linux / macOS:**
-  ```bash
-  curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
-  ```
-- **Windows (PowerShell):**
-  ```powershell
-  irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
-  ```
+**Linux / macOS:**
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+```
 
 The script will:
 1. Install **Git** and **uv** if they are missing (uv also downloads the right Python version for you — no separate Python install needed)
