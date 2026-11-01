@@ -362,7 +362,7 @@ body {
 .content-wrapper {
     flex: 1;
     width: 100%;
-    max-width: 900px;
+    max-width: 1100px;
     padding: 40px;
     min-width: 0;
 }
@@ -535,7 +535,14 @@ pre {
     margin: 1.4rem 0;
     font-size: 0.88rem;
     line-height: 1.6;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg-warm) var(--bg-deeper);
 }
+
+pre::-webkit-scrollbar { height: 8px; }
+pre::-webkit-scrollbar-track { background: var(--bg-deeper); }
+pre::-webkit-scrollbar-thumb { background: var(--bg-warm); border-radius: 4px; }
+pre::-webkit-scrollbar-thumb:hover { background: var(--dim); }
 
 code {
     font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
