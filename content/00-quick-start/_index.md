@@ -33,9 +33,9 @@ flowchart TD
     click G "/02-programming/02-robot-definition" "Robot definition"
     click I "/02-programming/03-missions" "Missions"
 
-    style A fill:#f5f5f5,stroke:#555
-    style H fill:#d4edda,stroke:#27ae60
-    style I fill:#d4edda,stroke:#27ae60
+    style A stroke:#853585
+    style H stroke:#27ae60
+    style I stroke:#27ae60
 ```
 
 The loop at the end is your normal development cycle: write code, run it on the robot, observe, refine. Everything else (flash, connect, update) is one-time setup.
@@ -69,9 +69,7 @@ Alternatively, [Balena Etcher](https://etcher.balena.io/) works just as well: **
 
 Then unscrew the lid on the **back** of the Wombat, insert the SD card, and close it up again.
 
-> If your SD card was pre-flashed (e.g. at a workshop), skip to Step 2.
-
-> **Important:** After flashing a new SD card, the Wombat's STM32 co-processor firmware also needs to be updated. Once you've completed setup and can reach the robot, run `raccoon update` (see [Step 5](#step-5--update)) to flash the latest STM32 firmware.
+> If your SD card was pre-flashed with raccoon (e.g. at a workshop), skip to Step 2.
 
 ---
 
@@ -115,7 +113,7 @@ curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/r
 
 **Windows (PowerShell):**
 
-```powershell
+```
 irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
 ```
 
