@@ -544,6 +544,31 @@ pre::-webkit-scrollbar-track { background: var(--bg-deeper); }
 pre::-webkit-scrollbar-thumb { background: var(--bg-warm); border-radius: 4px; }
 pre::-webkit-scrollbar-thumb:hover { background: var(--dim); }
 
+/* Copy button, added to every code block by /js/copy-code.js */
+.code-block {
+    position: relative;
+    margin: 1.4rem 0;
+}
+
+.code-block pre { margin: 0; }
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 10px;
+    font: 500 0.75rem 'Space Grotesk', sans-serif;
+    color: var(--dim);
+    background: var(--bg-med);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.copy-btn:hover { color: var(--cream); opacity: 1; }
+.copy-btn.copied { color: var(--green); border-color: var(--green); opacity: 1; }
+
 code {
     font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.9em;
