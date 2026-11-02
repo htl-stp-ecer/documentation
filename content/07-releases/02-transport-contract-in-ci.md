@@ -42,6 +42,10 @@ Every binary that links the C++ transport contains the string `RACCOON_CONTRACT_
 
 `contract/CHECK_SPEC.md` in `raccoon-transport` is the one description of the startup check: inputs, the decision table, the exact messages, the status file and the aggregation. `contract/check_vectors.json` holds the test cases. C++ (`ContractCheck.h`), Python (`contract_check.py`) and Dart (`contract_check.dart`) all pass the same vectors. **Change the spec and the vectors first, then all three implementations.** The C++ side parses the bundle file with nlohmann/json, vendored unmodified in `cpp/third_party/nlohmann` (MIT; the license text and `THIRD_PARTY_NOTICES.md` stay with it, and the STM reader's release tarball carries the notice too).
 
+### Checks that belong to a component
+
+The transport only checks the **contract hash**. Some checks belong to the component itself, and the first is the **component version check** (the component's own version against its entry in the bundle's `components`). Each component implements it itself — raccoon-lib and the Pi server in Python, the STM reader in C++, the Bot UI in Dart — following `contract/COMPONENT_VERSION_CHECK.md` in raccoon-transport (the rules and a table of cases), and hands the result to the transport's startup check as a **component check** (`name`, `result`, `reason`, `message`, `expected`). The transport knows nothing about what it checks. It merges the result after its own checks (a transport failure always wins; any result other than `ok`, `dev-warnung` and `skipped` refuses) and records it as `component_check` in the status file, so the Pi server, `raccoon doctor` and the run gate treat all components the same way. A new component-level check therefore needs no transport release.
+
 The release publishes `contract-hash.txt` and `contract.json` next to the wheel; Create Bundle and the image build use `contract-hash.txt` to learn the expected hash of a transport version.
 
 > Merging to `main` in `raccoon-transport` **is a release** (CI numbers and publishes it) and sends `transport-released` to the three components that compile it.

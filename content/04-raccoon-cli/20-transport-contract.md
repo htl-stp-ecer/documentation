@@ -131,7 +131,8 @@ You can also write `dev` into a **single component's entry** in `components` (fo
 |-------|---------|
 | `component`, `component_version` | who, and which version |
 | `own_hash`, `own_transport_version` | what the component was built with |
-| `expected_hash`, `expected_transport_version`, `expected_component_version`, `bundle` | what the bundle file says (`null` if it could not be read) |
+| `expected_hash`, `expected_transport_version`, `bundle` | what the bundle file says (`null` if it could not be read) |
+| `component_check` | the component's own check (the version check): `name`, `result`, `reason`, `message`, `expected`; `null` if the component has none or the bundle could not be read |
 | `result`, `reason`, `message` | the result from the table, a machine-readable reason (`file-missing`, `file-unreadable`, `field-missing`, `field-empty`, `version-field-missing`, `version-field-empty`, `version-omitted`) and the full text |
 | `timestamp`, `pid`, `pid_starttime` | when, and which process (a reused PID does not count as the same process) |
 | `persistent` | `true` for services that keep running |
