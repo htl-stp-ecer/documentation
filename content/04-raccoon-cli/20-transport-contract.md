@@ -63,7 +63,7 @@ The check only applies on a Raccoon device, recognised by the directory `/etc/ra
 | `stm32-data-reader` | at start | logs the reason to the journal, writes its status file, **exits with code 78**; systemd does not restart it (`RestartPreventExitStatus=78`) |
 | `raccoon-lib` | at `import raccoon` | raises a `RuntimeError` with the message; it shows up in your run log |
 | Pi server (`raccoon-server`) | at start and before every run | stays up and reports; **refuses runs** with HTTP 409 naming the components |
-| Bot UI | at start | popup "System mismatch" (acknowledge to continue); the status file is written |
+| Bot UI | at start | popup "System mismatch" (acknowledge to continue); the status file is written. The Versions page shows the bundle file |
 | CLI | `doctor`, `connect`, `run` | shows what the server reports; no check on the laptop |
 
 Messages always name **both sides**: the component's own hash and version and the bundle's. The check says that they differ, not who is right.
@@ -117,11 +117,11 @@ To test your own transport build on the robot, set `contract_hash` in `/etc/racc
 
 - The components still start, run their check and write status files, but a difference is only a **warning**.
 - There is no hash to compare against, so `raccoon doctor` instead warns when the *running* components report different hashes.
-- It is visible everywhere: a line in `raccoon doctor`, a yellow warning line at every `raccoon run`, a **DEV TRANSPORT** badge in the Bot UI.
+- It is visible everywhere: a line in `raccoon doctor`, a yellow warning line at every `raccoon run`, the bundle's values, including `dev`, on the Bot UI's Versions page.
 - You are responsible that every component was rebuilt against your transport (C++ links it statically).
 - No workflow ever writes `dev`, and **no image is ever built from a bundle with `dev`**. The next normal `raccoon update` replaces it with the release bundle's hash.
 
-You can also write `dev` into a **single component's entry** in `components` (for example `"stm32-data-reader": "dev"`). That omits only the version comparison for that component; the contract is still checked. `raccoon doctor`, `raccoon connect` and every `raccoon run` warn which components skip their version check (*Version check omitted for stm32-data-reader*), the component logs the same, and the Bot UI shows the DEV TRANSPORT badge. A `dev` contract does not excuse a wrong version either — the two are independent. The dev bundle `bundles/dev.json` (`raccoon update --dev`) is unrelated: it has no transport field and is not checked.
+You can also write `dev` into a **single component's entry** in `components` (for example `"stm32-data-reader": "dev"`). That omits only the version comparison for that component; the contract is still checked. `raccoon doctor`, `raccoon connect` and every `raccoon run` warn which components skip their version check (*Version check omitted for stm32-data-reader*), and the component logs the same. The Bot UI's Versions page shows the entry as `dev`. A `dev` contract does not excuse a wrong version either — the two are independent. The dev bundle `bundles/dev.json` (`raccoon update --dev`) is unrelated: it has no transport field and is not checked.
 
 ## Status file reference
 
