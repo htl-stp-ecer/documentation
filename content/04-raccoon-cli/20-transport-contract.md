@@ -121,7 +121,7 @@ To test your own transport build on the robot, set `contract_hash` in `/etc/racc
 - You are responsible that every component was rebuilt against your transport (C++ links it statically).
 - No workflow ever writes `dev`, and **no image is ever built from a bundle with `dev`**. The next normal `raccoon update` replaces it with the release bundle's hash.
 
-You can also write `dev` into a **single component's entry** in `components` (for example `"stm32-data-reader": "dev"`). That omits only the version comparison for that component; the contract is still checked. A `dev` contract does not excuse a wrong version either — the two are independent. The dev bundle `bundles/dev.json` (`raccoon update --dev`) is unrelated: it has no transport field and is not checked.
+You can also write `dev` into a **single component's entry** in `components` (for example `"stm32-data-reader": "dev"`). That omits only the version comparison for that component; the contract is still checked. `raccoon doctor`, `raccoon connect` and every `raccoon run` warn which components skip their version check (*Version check omitted for stm32-data-reader*), the component logs the same, and the Bot UI shows the DEV TRANSPORT badge. A `dev` contract does not excuse a wrong version either — the two are independent. The dev bundle `bundles/dev.json` (`raccoon update --dev`) is unrelated: it has no transport field and is not checked.
 
 ## Status file reference
 
