@@ -321,7 +321,7 @@ The example project already ships with a few demo missions (`M010NavigateToObjec
 To check that your motors and wiring are right, create a small smoke test mission:
 
 ```bash
-raccoon create mission M010SmokeMission
+raccoon missions create M010SmokeMission
 ```
 
 Mission names use a **three-digit** zero-padded prefix. `M000` is reserved for the setup mission, `M999` for shutdown, and regular missions start at `M010` and increment by 10 (`M010`, `M020`, `M030`, …).
