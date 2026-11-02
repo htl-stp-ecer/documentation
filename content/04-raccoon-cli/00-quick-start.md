@@ -43,13 +43,19 @@ pip install raccoon-cli
 
 ## Create a project
 
+A project is a git repository made by the setup script of [raccoon-example](https://github.com/htl-stp-ecer/raccoon-example). The CLI itself does not create projects.
+
 ```bash
-raccoon create project MyRobot
+# Linux / macOS
+curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
 ```
 
-This clones the example project from GitHub (`htl-stp-ecer/raccoon-example`), assigns it a unique UUID, initialises a git repository, and immediately launches the setup wizard.
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+```
 
-> Requires internet access and `git`. If you want to skip the wizard and configure manually later, add `--no-wizard`.
+The script installs `git` and `uv` if they are missing, asks for a project name and a drivetrain, clones the matching template into a new folder, gives it a fresh UUID and git history, and runs `uv sync`. Then edit `raccoon.project.yml` for your hardware; `raccoon` is installed in the project's own environment and is used from inside the project folder.
 
 ## Connect to the robot
 

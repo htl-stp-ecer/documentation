@@ -34,7 +34,7 @@ graph TD
 
 Raccoon project configuration is not just split across files for convenience. The loader is explicitly include-aware, recursive, and write-aware.
 
-This matters because tools like `raccoon wizard`, calibration steps, IDE routes, and programmatic config updates all rely on the same ownership rules.
+This matters because tools like calibration steps, IDE routes, and programmatic config updates all rely on the same ownership rules.
 
 Source of truth:
 
@@ -183,7 +183,7 @@ For tooling, ownership is what matters:
 - `config/hardware.yml` owns the parent mapping for `definitions`
 - `motors.yml` and `servos.yml` own the keys merged into `definitions`
 
-If you move keys across files arbitrarily, the loader can still resolve them, but you lose the predictable “one concern per file” structure that the wizard, codegen, and docs assume.
+If you move keys across files arbitrarily, the loader can still resolve them, but you lose the predictable “one concern per file” structure that codegen and the docs assume.
 
 ## Practical rules
 

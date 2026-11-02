@@ -17,7 +17,7 @@ Every raccoon session follows the same lifecycle. Understanding the shape of thi
 ```mermaid
 flowchart LR
     A([create project]) --> B([connect to Pi])
-    B --> C([wizard / configure YAML])
+    B --> C([configure raccoon.project.yml])
     C --> D([write Python mission code])
     D --> E([raccoon run])
     E --> F([codegen local])
@@ -38,7 +38,6 @@ The key insight: **code generation and all validation happen on your laptop**. T
 |-------|---------|--------------|
 | Setup | the `raccoon-setup` script (`raccoon-example`) | Clone the example, assign a UUID, init git, `uv sync` |
 | Setup | `raccoon connect <IP>` | SSH key auth, save connection config |
-| Setup | `raccoon wizard` | Write YAML hardware config interactively |
 | Iterate | `raccoon run` | Codegen → push → execute → pull (all-in-one) |
 | Inspect | `raccoon logs` | Browse run logs from Pi |
 | Recover | `raccoon checkpoint restore` | Roll back to a pre-run snapshot |
@@ -55,7 +54,6 @@ The key insight: **code generation and all validation happen on your laptop**. T
 | `raccoon run` | Sync, generate code locally, and execute the project on the robot |
 | `raccoon sync` | Push/pull files between laptop and robot |
 | `raccoon codegen` | Generate `defs.py`, `defs.pyi`, and `robot.py` from YAML config |
-| `raccoon wizard` | Interactive hardware configuration wizard |
 | `raccoon update` | Update raccoon packages on both laptop and robot |
 | `raccoon doctor` | Show system health: connection, tools, and package versions |
 | `raccoon calibrate` | Run motor calibration routine |
@@ -108,7 +106,6 @@ For troubleshooting and maintenance, jump directly to:
 - [doctor]({{< ref "11-doctor" >}})
 - [checkpoint]({{< ref "12-checkpoint" >}})
 - [Run Configurations]({{< ref "13-run-configurations" >}})
-- [wizard]({{< ref "14-wizard" >}})
 - [validate]({{< ref "15-validate" >}})
 - [raccoon-server]({{< ref "16-raccoon-server" >}})
 - [lcm]({{< ref "17-lcm" >}})
