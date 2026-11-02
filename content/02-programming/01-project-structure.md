@@ -47,7 +47,7 @@ curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/r
 irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
 ```
 
-The script installs git and uv if they are missing, asks for a project name and a drivetrain (`d` differential, `m` mecanum), clones the matching template branch into a new folder, renames the project in `pyproject.toml` and `raccoon.project.yml`, starts a fresh git history with a new project UUID, runs `uv sync` and makes the first commit. That gives you a fully working reference project as a starting point rather than an empty skeleton. Then run `raccoon wizard` inside the project to configure your hardware.
+The script installs git and uv if they are missing, asks for a project name and a drivetrain (`d` differential, `m` mecanum), clones the matching template branch into a new folder, renames the project in `pyproject.toml` and `raccoon.project.yml`, starts a fresh git history with a new project UUID, runs `uv sync` and makes the first commit. That gives you a fully working reference project as a starting point rather than an empty skeleton. Then edit `raccoon.project.yml` in the project to describe your hardware.
 
 The `raccoon-cli` and `raccoon-library` versions pinned in the new project are the ones of the newest bundle; `raccoon update` moves them later.
 
