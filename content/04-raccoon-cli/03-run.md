@@ -155,6 +155,19 @@ The runtime reads three environment variables set automatically by `raccoon run`
 | `LIBSTP_RECORDING_PATH` | Relative path to the `.jsonl` output file |
 | `LIBSTP_RECORDING_HZ` | Optional downsample rate |
 
+## Transport contract: refusal and dev warning
+
+Before the Pi starts your program, its server checks that every component on the robot matches the bundle ([Transport contract]({{< ref "20-transport-contract" >}})). If one does not, the run is **refused** and the server's message is printed, naming the component and both sides:
+
+```
+Failed to start run on Pi: Transport contract check failed; refusing to start.
+stm32-data-reader: transport contract mismatch: ...
+```
+
+Fix it with `raccoon doctor` and `raccoon update` (or flash the latest image). In **dev mode** the run starts, and raccoon prints a yellow warning line first: *Transport contract check is in DEV mode: mismatches between components are not enforced.* A local run (`--local`, simulator) is never checked.
+
+Inside your program the same check runs when `raccoon` is imported: on a mismatch the import fails with the message, and it appears at the top of your run log.
+
 ## Version mismatch warning
 
 If the client and server versions differ, raccoon prints a warning before running:

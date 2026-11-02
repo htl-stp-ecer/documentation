@@ -90,6 +90,7 @@ This is the Pi-side bridge process. It owns the SPI connection to the STM32 and 
 | `ExecStart` | `/home/pi/stm32_data_reader/stm32_data_reader` |
 | `Restart` | `always` |
 | `RestartSec` | `5` (seconds) |
+| `RestartPreventExitStatus` | `78` (the reader refused to start because of the [transport contract check]({{< ref "/04-raccoon-cli/20-transport-contract" >}}); restarting cannot fix that) |
 | `Requires` + `After` | `lcm-loopback-multicast.service` |
 | `NoNewPrivileges` | `true` |
 | `PrivateTmp` | `false` (explicit — see below) |
@@ -117,6 +118,17 @@ STM32 health check failed: updateTime has not changed for >10s — shutting down
 ```
 
 This is the primary liveness signal. The UART heartbeat is secondary and warn-only (see UartMonitor section).
+
+### Transport contract check (before everything else)
+
+`main()` runs the transport contract check **before** the startup sequence below. It compares the reader's compiled-in contract hash and its own version with `/etc/raccoon-bundle.json` and writes the result to `/run/raccoon/stm32-data-reader.json` (persistent). On `mismatch`, `version-mismatch` or `bundle-fehler` it logs the reason to the journal and exits with code **78**; `RestartPreventExitStatus=78` keeps systemd from restarting it in a loop. `raccoon doctor` then shows the reader as `not active` with its result, and the Pi server refuses runs. Off a Raccoon device (no `/etc/raccoon-image`) the check is skipped, and in dev mode it only warns. `--version` is not affected.
+
+```bash
+journalctl -u stm32_data_reader -n 20      # the reason, with both sides' hashes and versions
+cat /run/raccoon/stm32-data-reader.json    # the recorded result
+```
+
+Because the reader is the single publisher of all hardware state, a refused reader means no sensor data at all. That is intended: a reader built against another transport would publish messages nobody decodes. Fix with `raccoon update` or by flashing the latest image, then `sudo systemctl restart stm32_data_reader`.
 
 ### Startup sequence
 

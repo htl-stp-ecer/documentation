@@ -16,7 +16,8 @@ raccoon doctor
 
 1. **Connection state** — whether raccoon can reach the Pi, and the current project state on both sides
 2. **Package versions** — compares installed raccoon package versions against the bundle manifest to flag anything outdated
-3. **External tools** — verifies that every binary and Python library raccoon depends on is present
+3. **Transport contract** — what the Pi server reports about whether every component on the robot matches the bundle (see [Transport contract]({{< ref "20-transport-contract" >}}))
+4. **External tools** — verifies that every binary and Python library raccoon depends on is present
 
 Run this command whenever something is not working before reaching for deeper debugging.
 
@@ -29,6 +30,7 @@ graph LR
     A[something broken] --> B{doctor output}
     B -->|Not connected| C[fix: raccoon connect IP]
     B -->|Package outdated| D[fix: raccoon update]
+    B -->|Contract mismatch| G[fix: raccoon update, or flash the latest image]
     B -->|Tool missing| E[fix: install the tool]
     B -->|All green| F[check format_version: raccoon migrate --dry-run]
 ```
@@ -70,6 +72,10 @@ If any package is outdated, doctor prints:
 ```
 Run raccoon update to install updates.
 ```
+
+### Transport contract
+
+When connected, doctor asks the Pi server for `GET /api/v1/contract` and prints the bundle's expected hash, a line for dev mode if it is on, and a table with one row per component: its result (`ok`, `mismatch`, `version-mismatch`, `bundle-fehler`, `dev-warnung`), whether the process is still `running`, and the hash it was built with. A broken contract makes doctor exit with code 1, and the red text names the affected components. A Pi server that is too old to know the endpoint is reported as "did not answer" and does not fail doctor. Details and fixes: [Transport contract]({{< ref "20-transport-contract" >}}).
 
 ### External tools
 
