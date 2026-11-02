@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.setAttribute('aria-label', 'Copy code to clipboard');
 
     btn.addEventListener('click', async () => {
-      const text = (pre.querySelector('code') || pre).innerText;
+      // Strip trailing line breaks so no extra empty line is copied.
+      const text = (pre.querySelector('code') || pre).innerText.replace(/(\r?\n)+$/, '');
       try {
         await navigator.clipboard.writeText(text);
       } catch (err) {
