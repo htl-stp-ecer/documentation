@@ -67,7 +67,7 @@ Missions can be reordered interactively in the panel. Setup missions are pinned 
 You can also reorder from the CLI:
 
 ```bash
-raccoon reorder missions
+raccoon missions reorder
 ```
 
 ### Back to Projects

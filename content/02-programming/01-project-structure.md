@@ -35,19 +35,25 @@ Open it alongside this page. The file layout, naming conventions, and patterns d
 
 ## Creating a Project
 
-Use the Raccoon CLI to scaffold a new project:
+A project is a git repository made by the setup script of [raccoon-example](https://github.com/htl-stp-ecer/raccoon-example). The CLI itself no longer creates projects; it is installed **in the project's own environment** (`uv sync`) and used from inside the project folder.
 
 ```bash
-raccoon create project MyRobot
+# Linux / macOS
+curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
 ```
 
-This command **clones the [raccoon-example](https://github.com/htl-stp-ecer/raccoon-example) repository** at the tag matching your installed CLI version (falling back to the default branch if no matching tag exists), then patches the project name and a fresh UUID into `raccoon.project.yml` and `pyproject.toml`. This gives you a fully working reference project as a starting point rather than an empty skeleton.
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+```
 
-After cloning, the CLI optionally launches `raccoon wizard` to walk you through hardware configuration interactively. Pass `--no-wizard` to skip that step.
+The script installs git and uv if they are missing, asks for a project name and a drivetrain (`d` differential, `m` mecanum), clones the matching template branch into a new folder, renames the project in `pyproject.toml` and `raccoon.project.yml`, starts a fresh git history with a new project UUID, runs `uv sync` and makes the first commit. That gives you a fully working reference project as a starting point rather than an empty skeleton. Then run `raccoon wizard` inside the project to configure your hardware.
+
+The `raccoon-cli` and `raccoon-library` versions pinned in the new project are the ones of the newest bundle; `raccoon update` moves them later.
 
 See [Raccoon CLI]({{< ref "04-raccoon-cli" >}}) for details on all CLI commands.
 
-> **Note:** You can also clone the example repo manually and rename it, but `raccoon create project` handles the UUID patching and git history initialization automatically.
+> **Note:** Do not clone the example repo by hand and rename it: the script also creates the new UUID and git history.
 
 ## Directory Layout
 
@@ -380,7 +386,7 @@ All Python files use lowercase with underscores. No hyphens, no spaces:
 
 ### Mission Numbering
 
-Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`, `M010`, `M999`). `raccoon create mission` always generates three-digit prefixes. Tooling and documentation assume this format — using two-digit prefixes like `M00` or `M01` can cause unexpected ordering behavior and should be avoided in new projects.
+Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`, `M010`, `M999`). `raccoon missions create` requires a three-digit prefix. Tooling and documentation assume this format — using two-digit prefixes like `M00` or `M01` can cause unexpected ordering behavior and should be avoided in new projects.
 
 | Range | Purpose |
 |-------|---------|
@@ -388,7 +394,7 @@ Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`
 | `m010`–`m998` | Main missions |
 | `m999` | Reserved — shutdown mission |
 
-`raccoon create mission MyMission` assigns the next available number (starting at `M010`, then `M020`, `M030`, etc.) and creates the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
+`raccoon missions create M010MyMission` creates (you always give the number; `M000` and `M999` are reserved and a used number is refused) the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
 
 **Inserting missions between existing ones** — you are not limited to decade steps. Non-decade numbers like `M001`, `M025`, or `M027` are valid. The CLI only requires three digits; the gap between `M020` and `M030` is yours to use:
 

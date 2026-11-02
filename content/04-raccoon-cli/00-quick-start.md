@@ -17,8 +17,7 @@ sequenceDiagram
     participant L as Laptop
     participant Pi as Wombat Pi
 
-    L->>L: pip install raccoon-cli
-    L->>L: raccoon create project MyRobot
+    L->>L: raccoon-setup script (new project, uv sync)
     L->>Pi: raccoon connect 192.168.4.1 (SSH key setup)
     Pi-->>L: API token saved
     L->>L: raccoon run (codegen locally)
@@ -86,6 +85,6 @@ This checks that all required tools (`ssh`, `git`, `paramiko`, `black`) are pres
 
 ## Next steps
 
-- [raccoon create]({{< ref "01-create" >}}) — full reference for project and mission creation
+- [raccoon missions]({{< ref "21-missions" >}}) — create, list, rename, remove and reorder missions
 - [raccoon connect]({{< ref "02-connect" >}}) — SSH key setup and connection options
 - [raccoon doctor]({{< ref "11-doctor" >}}) — full system health check reference

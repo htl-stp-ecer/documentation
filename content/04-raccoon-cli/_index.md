@@ -36,7 +36,7 @@ The key insight: **code generation and all validation happen on your laptop**. T
 
 | Phase | Command | What happens |
 |-------|---------|--------------|
-| Setup | `raccoon create project` | Clone example repo, assign UUID, init git |
+| Setup | the `raccoon-setup` script (`raccoon-example`) | Clone the example, assign a UUID, init git, `uv sync` |
 | Setup | `raccoon connect <IP>` | SSH key auth, save connection config |
 | Setup | `raccoon wizard` | Write YAML hardware config interactively |
 | Iterate | `raccoon run` | Codegen → push → execute → pull (all-in-one) |
@@ -49,8 +49,6 @@ The key insight: **code generation and all validation happen on your laptop**. T
 
 | Command | What it does |
 |---------|-------------|
-| `raccoon create project <name>` | Scaffold a new project (clones the example repo from GitHub) |
-| `raccoon create mission <name>` | Add a new mission to the current project |
 | `raccoon connect <ip>` | Connect to a robot (sets up SSH auth, saves config) |
 | `raccoon disconnect` | Remove the saved connection |
 | `raccoon shell` | Open an interactive SSH shell on the connected Pi |
@@ -62,12 +60,8 @@ The key insight: **code generation and all validation happen on your laptop**. T
 | `raccoon doctor` | Show system health: connection, tools, and package versions |
 | `raccoon calibrate` | Run motor calibration routine |
 | `raccoon web` | Start the Web IDE |
-| `raccoon list projects` | List all raccoon projects |
-| `raccoon list missions` | List missions in the current project |
-| `raccoon remove project <name>` | Delete a project |
-| `raccoon remove mission <name>` | Remove a mission from config |
+| `raccoon missions create/list/rename/remove/reorder` | Manage the missions of the current project |
 | `raccoon checkpoint` | Manage invisible git snapshots (list, show, restore, delete, clean) |
-| `raccoon reorder missions` | Reorder and renumber missions interactively |
 | `raccoon lcm` | LCM traffic inspection (spy, record, playback, list, delete, status) |
 | `raccoon migrate` | Apply project schema migrations to update the project format |
 | `raccoon validate` | Run project validation checks (config, missions, imports) |

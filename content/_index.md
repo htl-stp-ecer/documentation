@@ -20,8 +20,8 @@ RaccoonOS is a five-layer robotics stack that runs on the [KIPR Wombat](https://
 You write missions in Python. The platform handles kinematics, PID control, odometry, sensor fusion, and hardware communication underneath. You don't need to touch C++ to build a competitive robot.
 
 ```bash
-pip install raccoon-cli
-raccoon create project MyRobot
+# create the project with the setup script (see the quick start), then, inside it:
+raccoon missions list
 raccoon connect 192.168.1.100
 raccoon run
 ```
