@@ -43,7 +43,6 @@ Examples:
 - `raccoon-cli`
 - `raccoon-transport`
 - `raccoon-lib`
-- `raccoon-stubs`
 - `botui`
 - `stm32-data-reader`
 - `raccoon-cam`
@@ -60,7 +59,9 @@ Its primary model is a **bundle manifest** fetched from `raccoon-image`, such as
 - `bundles/dev.json`
 - a specific bundle file like `2026.4.25.1.json`
 
-That bundle defines which component versions belong together.
+That bundle defines which component versions belong together, and — since the transport contract check — which exact `raccoon-transport` they were built against. A bundle without a transport version cannot be installed (the `dev` bundle is the exception). The bundle is also copied to the robot as `/etc/raccoon-bundle.json`, where every component compares itself with it at start: see [Transport contract]({{< ref "20-transport-contract" >}}).
+
+Bundle names are `YYYY.MM.DD`, then `YYYY.MM.DD-2`, `-3` ... for further bundles of the same day. Older bundles like `2026.5.25.1` keep their name.
 
 ### Project `format_version`
 

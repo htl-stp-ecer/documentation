@@ -108,6 +108,20 @@ Why this matters:
 
 If both normal connection and direct SSH fail, you are no longer in a CLI-level recovery path. At that point it is a network, credentials, or robot-OS problem.
 
+## `raccoon run` is refused: "Transport contract check failed"
+
+The Pi server refuses runs while a component does not match the bundle. Read the message: it names the component and both sides (its own hash and version, and what the bundle expects).
+
+1. `raccoon doctor` — the *Transport contract* table shows every component, whether it is still running, and its hash.
+2. `raccoon update` — brings every component and `/etc/raccoon-bundle.json` to one bundle and restarts the services.
+3. Still wrong, or the server is down: flash the latest raccoon image.
+
+Typical cases: `stm32-data-reader` shows `mismatch` and *not active* (it refused and exited with code 78; it does not restart by itself — fix the cause, then `sudo systemctl restart stm32_data_reader`); `bundle file is missing` (the Pi was not set up from an image or the file was deleted — run `raccoon update` or flash); you are testing your own transport (write `dev` into the bundle's `contract_hash` by hand, see [Transport contract]({{< ref "20-transport-contract#dev-mode" >}})). Full explanation: [Transport contract]({{< ref "20-transport-contract" >}}).
+
+## `raccoon update` says the bundle has no transport version
+
+Older bundles (for example `2026.5.25.1`) do not name a `raccoon-transport` and its contract hash, so they cannot be installed consistently. Nothing was changed. Use the newest bundle (`raccoon update`), or `raccoon update --dev` for the unchecked newest components.
+
 ## `raccoon update` shows packages "ahead of bundle"
 
 This is not automatically an error.

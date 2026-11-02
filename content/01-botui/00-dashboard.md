@@ -37,3 +37,9 @@ The screensaver is **enabled by default**. You can toggle it on or off under **S
 When the screensaver is active, any tap on the screen dismisses it and returns to the normal Dashboard view.
 
 > **Cross-link:** The screensaver toggle and its persistence are described in detail under [Settings → Display]({{< ref "/01-botui/03-settings#display" >}}).
+
+## Transport mismatch popup
+
+When BotUI starts it checks that it was built for the same transport and the same version as the bundle installed on the robot ([Transport contract]({{< ref "/04-raccoon-cli/20-transport-contract" >}})). If not, a **System mismatch** popup covers the screen with both sides' hashes and versions and the advice to **flash the latest raccoon image**. Tap **Acknowledge** to continue; BotUI does not quit (it is the only screen on the robot), but the Pi server refuses program runs until the mismatch is fixed.
+
+Nothing is shown when everything matches, and nothing in dev mode either: look at **Settings → App Status** ([Versions]({{< ref "/01-botui/03-settings#app-status" >}})) to see the bundle's values, including `dev`. The result is also written to `/run/raccoon/botui.json`, which `raccoon doctor` shows.

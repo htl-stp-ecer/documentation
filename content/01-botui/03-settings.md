@@ -228,6 +228,8 @@ Versions are fetched from the raccoon-server version endpoint at `http://localho
 | `stm32-data-reader` | C++ service that reads STM32 sensor data over SPI |
 | `raccoon-cam` | Camera service |
 
+The first row, **Bundle Version**, is the `bundle` name from `/etc/raccoon-bundle.json`, the file that says which versions belong together ([Transport contract]({{< ref "/04-raccoon-cli/20-transport-contract" >}})). Below the component rows a **Bundle file** section lists the file's `contract_hash` and every entry of `components` **exactly as written there**, in file order: `v173`, an empty value stays empty, and `dev` shows as `dev`. This is where you see that the bundle is in dev mode or that a single component's version check is switched off. A missing or unreadable file is shown as "bundle file missing" / "bundle file unreadable"; this part works even if the server is not reachable.
+
 Each row shows the component name with its icon and either a green version badge (e.g. `1.4.2`) or the text "not installed" in grey.
 
 A **refresh button** in the top bar re-fetches versions from the server. If the server is unreachable an orange warning banner is shown at the top of the list, but the UI version is still displayed from local state.

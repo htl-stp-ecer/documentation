@@ -96,6 +96,10 @@ raccoon connect 192.168.4.1 --port 8222 --user robot
 raccoon connect 192.168.4.1 --no-save
 ```
 
+## Transport contract notice
+
+After connecting, raccoon asks the Pi whether all components match the bundle. If not, it prints one red line (`Runs will be refused; see raccoon doctor`); in dev mode a yellow line. Nothing is checked on your laptop. See [Transport contract]({{< ref "20-transport-contract" >}}).
+
 ## Troubleshooting
 
 **"Failed to connect" / API unreachable**
