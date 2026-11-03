@@ -47,11 +47,25 @@ Two things differ from the raccoon-cli deploy:
 
 > Not run against a real Pi yet. The build, the package contents and the bundle-marking script were tested locally.
 
+## Try the UI on the PC: test-locally.py
+
+```bash
+python3 test-locally.py
+```
+
+Opens the UI in a window (`flutter run -d linux` in Docker, 800x480 like the Pi display) for trying out styling, margins and layout. Hot reload works in the terminal (`r`, `R`, `q`). It uses its own image, `Dockerfile.desktop` (Flutter's Linux toolchain, GTK, Mesa), so the Pi build image stays small. The ring bridge is built natively for the PC. The window needs an X11 display; a Wayland session works through XWayland. X access is passed in with `DISPLAY`, the X11 socket and your `XAUTHORITY` file, the GPU with `/dev/dri`.
+
+There is no robot behind it: the raccoon server, sensors and hardware are missing, so those screens stay empty or show errors. That is intended.
+
+**Nothing may change your PC.** The app is started with `--dart-define=LOCAL_TEST=true` (`lib/core/utils/local_test.dart`). In that mode `SudoProcess` runs no command: it prints `[local-test] not running: sudo -n <command>` and returns a successful, empty result, so screens (for example the shutdown and reboot dialogs) behave as on the robot. This covers shutdown, reboot, service start and stop, Wi-Fi changes, hostname and screen rotation. The few direct `sudo` calls outside `SudoProcess` (dev menu: reset STM32, restart UI, reboot; service log following; disk usage) check the same flag. On top of that the container has no `sudo` and no systemd.
+
+Tested: the app starts in the window, the transport and the native bridge load, and a unit test (`test/core/utils/sudo_process_local_test_test.dart`, needs `--dart-define=LOCAL_TEST=true`) shows that `shutdown -h now` and `reboot` are only printed. Not clicked through by hand: the individual screens.
+
 ## What changed
 
 | | |
 |---|---|
-| new | `build.py`, `deploy.py`, `Dockerfile`, `.dockerignore`, `/builds/` in `.gitignore` |
+| new | `build.py`, `deploy.py`, `test-locally.py`, `Dockerfile`, `Dockerfile.desktop`, `.dockerignore`, `/builds/` in `.gitignore` |
 | removed | `build.sh`, `deploy.sh`, `install.py`, `packaging/build-deb.sh` (its logic is part of `build.py`) |
 | kept | `debug.sh` (runs a profile build on a connected device with `flutterpi_tool run`; needs Flutter on the host) |
 | changed | `.fvmrc` is `3.38.7` now, the version CI releases with (it was `3.32.7`); the CI job `build` runs `python3 build.py --version <n>` and uploads `builds/botui_<n>_arm64.deb` |
