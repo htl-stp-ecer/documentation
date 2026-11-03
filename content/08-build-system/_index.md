@@ -17,4 +17,5 @@ Goal: every repository builds and deploys the same way, so a local build and a C
 |---|---|
 | [Conventions](00-conventions) | The rules every repository follows: `build.py`, `deploy.py`, `builds/`, versions, Docker |
 | [raccoon-cli](01-raccoon-cli) | The first repository converted: what changed, how to build, deploy and test a local build |
-| [Status and open points](02-status-and-open) | What is done, what is planned per repository, what breaks when |
+| [botui](02-botui) | The second repository: the .deb is built in Docker |
+| [Status and open points](03-status-and-open) | What is done, what is planned per repository, what breaks when |
