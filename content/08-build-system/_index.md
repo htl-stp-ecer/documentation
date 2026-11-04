@@ -1,6 +1,6 @@
 ---
 title: "Build System"
-author: "HTL St. Pölten ECER"
+author: "marios271"
 date: 2026-11-04
 draft: false
 weight: 8
