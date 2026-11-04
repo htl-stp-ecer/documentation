@@ -3,7 +3,7 @@ title: "Status and open points"
 author: "marios271"
 date: 2026-11-04
 draft: false
-weight: 6
+weight: 7
 description: "What is done, what is planned per repository, and what must happen in which order."
 ---
 
@@ -19,15 +19,14 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 | raccoon-image | `refactor/build-system` | takes `raccoon_cli-*.whl` instead of `raccoon-server-*.tar.gz` (download, artifact scan, image root script, tests) |
 | raccoon-transport | `refactor/build-system` | `build.py` builds the wheel and contract assets in Docker, `deploy.py` installs the wheel; output matches release v70 |
 | stm32-data-reader | `refactor/build-system` | `build.py` cross compiles reader and firmware in Docker, tests run with qemu-user, the release is a `.deb`; raccoon-cli and raccoon-image follow |
+| raccoon-lib | `refactor/build-system` | `build.py` cross compiles the library in Docker and writes the stub wheel with qemu-user, `deploy.py` installs both wheels; PyPI wheels stay with cibuildwheel (see the raccoon-lib page) |
 | documentation | `refactor/build-system` | this section |
 | botui | `refactor/build-system` | `build.py` builds the `botui_<n>_arm64.deb` in Docker, `deploy.py` installs it; the deb is called `botui` and replaces and conflicts with `stp-velox` (see the botui page) |
 | local version `0.0` | `dev` or `fix/local-version-0.0` | in raccoon-cli, raccoon-lib, stm32-data-reader and botui |
 
 ## Planned per repository
 
-| Repository | Result in `builds/` | Install on the Pi | Notes |
-|---|---|---|---|
-| raccoon-lib | `raccoon_sim-0.0-*aarch64.whl` and `raccoon_library-0.0-py3-none-any.whl` (same version) | the sim wheel | wraps `build.sh` and `scripts/build-stubs.sh`; cross compilation to be discussed; the second Dockerfile in the root and the one in `.github/docker` move to the root |
+Nothing: all repositories except `raccoon-example` are converted. The tests of raccoon-lib are to be brought up to date as a separate step, and its CI test job and the two other Dockerfiles (`.github/docker`, `.devcontainer`) move with that.
 
 ## Order and what breaks
 
@@ -39,7 +38,7 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 
 ## Open points
 
-- Cross compilation for raccoon-lib and the reader inside Docker (QEMU or a real cross compiler, caches such as ccache).
+- raccoon-lib: eight C++ tests fail, on x86 as well; the optional `LIBSTP_RUN_MYPY` gate still uses `scripts/build-stubs.sh`.
 - Whether `deploy.py` should be able to pin the transport version instead of taking the newest from PyPI.
 - Whether the CI should keep a prebuilt image on `ghcr.io` for `build.py --image`.
 - The deployment into a project's uv environment is only a documented command so far.
