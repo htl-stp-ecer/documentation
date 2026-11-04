@@ -3,7 +3,7 @@ title: "Status and open points"
 author: "HTL St. Pölten ECER"
 date: 2026-11-04
 draft: false
-weight: 4
+weight: 5
 description: "What is done, what is planned per repository, and what must happen in which order."
 ---
 
@@ -17,6 +17,7 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 |---|---|---|
 | raccoon-cli | `refactor/build-system` | `build.py`, `deploy.py`, root `Dockerfile`, CI runs `build.py`, no tarball (see the raccoon-cli page) |
 | raccoon-image | `refactor/build-system` | takes `raccoon_cli-*.whl` instead of `raccoon-server-*.tar.gz` (download, artifact scan, image root script, tests) |
+| raccoon-transport | `refactor/build-system` | `build.py` builds the wheel and contract assets in Docker, `deploy.py` installs the wheel; output matches release v70 |
 | documentation | `refactor/build-system` | this section |
 | botui | `refactor/build-system` | `build.py` builds the `botui_<n>_arm64.deb` in Docker, `deploy.py` installs it; the deb is called `botui` and replaces and conflicts with `stp-velox` (see the botui page) |
 | local version `0.0` | `dev` or `fix/local-version-0.0` | in raccoon-cli, raccoon-lib, stm32-data-reader and botui |
@@ -27,7 +28,6 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 |---|---|---|---|
 | raccoon-lib | `raccoon_sim-0.0-*aarch64.whl` and `raccoon_library-0.0-py3-none-any.whl` (same version) | the sim wheel | wraps `build.sh` and `scripts/build-stubs.sh`; cross compilation to be discussed; the second Dockerfile in the root and the one in `.github/docker` move to the root |
 | stm32-data-reader | `stm32-data-reader_0.0_arm64.deb` | `apt install`; the work is in the package's `postinst` | the `dev` branch already builds a deb (`scripts/build_deb.sh`); CI there still builds the tarball; two feature branches (`feat/bus-servo`, `feat/onboard-fusion`) need to be coordinated |
-| raccoon-transport | Python wheel | `pip3 install` | the build and CI have not been read yet; C++ and Dart are used as source through the submodule |
 
 ## Order and what breaks
 
