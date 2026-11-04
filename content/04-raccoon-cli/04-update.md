@@ -52,9 +52,9 @@ Each component is installed the way it is shipped:
 |-----------|-----|
 | `raccoon-lib` (+ simulator) | `pip3 install --break-system-packages --upgrade "raccoon-library[sim]==<n>"` from PyPI over SSH, **together with** `raccoon-transport==<n>` in the same run |
 | `raccoon-transport` | pinned exactly as above (also installed alone when only the transport differs) |
-| `raccoon-cli` (server) | release tarball `raccoon-server-v<n>.tar.gz`, its `install.py` runs against `RPI_HOST` |
-| `botui` | `stp-velox_<n>_arm64.deb` copied to the Pi, `sudo apt install -y` |
-| `stm32-data-reader` | `stm32_data_reader-v<n>.tar.gz`, its `install.py` (this **flashes the firmware**) |
+| `raccoon-cli` (server) | `pip3 install raccoon-cli==<n>` over SSH (from PyPI) |
+| `botui` | `botui_<n>_arm64.deb` copied to the Pi, `sudo apt install -y` |
+| `stm32-data-reader` | `stm32-data-reader_<n>_arm64.deb` copied to the Pi, `sudo apt install -y` (the package **flashes the firmware**) |
 
 After the packages, in this order:
 
