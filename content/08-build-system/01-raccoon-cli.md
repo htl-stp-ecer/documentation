@@ -34,7 +34,7 @@ python3 deploy.py --host 192.168.4.1
 python3 deploy.py --host 192.168.4.1 --artifact path/to/raccoon_cli-0.0-py3-none-any.whl
 ```
 
-Steps on the Pi: stop `raccoon.service`; upload the wheel to `/tmp/raccoon-install`; remove a user-level install that would shadow the system one; `sudo pip3 install --force-reinstall --no-deps` the wheel; install it again with `--upgrade raccoon-transport` (the transport and missing dependencies come from PyPI, so the Pi needs internet); set `raccoon-cli` to `dev` in `/etc/raccoon-bundle.json`; `python3 -m raccoon_cli.server.cli post-install` (installs the systemd unit, runs migrations, restarts the service); print the service status.
+Steps on the Pi: stop `raccoon.service`; upload the wheel to `/tmp/raccoon-install`; remove a user-level install that would shadow the system one; `sudo pip3 install --force-reinstall --no-deps` the wheel; install it again with `--upgrade raccoon-transport` (the transport and missing dependencies come from PyPI, so the Pi needs internet). If `raccoon-transport` is `dev` in the bundle file (a local transport build from its own `deploy.py`) and installed, this step is skipped so the dev transport is not overwritten; set `raccoon-cli` to `dev` in `/etc/raccoon-bundle.json`; `python3 -m raccoon_cli.server.cli post-install` (installs the systemd unit, runs migrations, restarts the service); print the service status.
 
 The bundle file is written **before** the restart because the server checks its own version against it when it starts.
 
