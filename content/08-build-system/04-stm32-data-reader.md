@@ -56,7 +56,7 @@ Copies the `.deb` to the Pi, sets `stm32-data-reader` to `dev` in `/etc/raccoon-
 
 **The install flashes the STM32.** The `postinst` flashes the firmware when the hardware is there, so every deploy flashes it again and restarts the reader.
 
-> Not run against a real Pi yet. The build, the package contents and the bundle-marking script were tested locally.
+> Tested on a robot: build, `deploy.py`, reader and firmware run, the motors turn. The native build on an ARM runner and the CI are not tested yet.
 
 ## Changes to the package
 
