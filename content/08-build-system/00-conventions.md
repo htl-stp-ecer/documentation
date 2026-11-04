@@ -53,7 +53,7 @@ Standard library only, so it runs without installing anything.
 - All Dockerfiles live in the **repository root**: `Dockerfile`, variants as `Dockerfile.<name>`.
 - `.devcontainer/` stays as the VS Code convention asks.
 - The build runs in a copy of the sources inside the container, so the repository never gets build output or root-owned files.
-- CI runs the same `build.py`. Workflows only decide the version, create the release and publish.
+- CI runs the same `build.py` in raccoon-cli, raccoon-transport, botui and stm32-data-reader. Workflows only decide the version, create the release and publish. **raccoon-lib is the exception**: its CI keeps cibuildwheel, because PyPI needs manylinux wheels for Linux and macOS and Windows cannot run in Docker; there `build.py` is for local builds only. See [CI overview](07-ci).
 
 ## Cross and native (raccoon-lib, stm32-data-reader)
 
