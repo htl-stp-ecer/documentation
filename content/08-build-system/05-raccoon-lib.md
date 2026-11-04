@@ -16,7 +16,8 @@ Branch: `refactor/build-system` (based on `dev`; `main` is old). Not merged.
 ```bash
 python3 build.py                  # version 0.0
 python3 build.py --version 157    # release build
-python3 build.py --test           # also build the C++ tests and run them with qemu-user
+python3 build.py --test           # also build the C++ tests and run them
+python3 build.py --mode native    # force a mode (default: native on aarch64, cross otherwise)
 ```
 
 Result in `builds/`:
@@ -29,7 +30,7 @@ Result in `builds/`:
 
 Both wheels always get the **same version**: `raccoon-library[sim]` pins `raccoon-sim==<version>`. Parameters: `--version`, `--test`, `--image` (prebuilt image), `--cache-dir` (ccache, downloaded dependencies and build directories; default `~/.cache/raccoon-build/raccoon-lib`). On the host only Docker and Python 3 are needed.
 
-**Nothing is emulated while compiling.** The root `Dockerfile` (it was `Dockerfile.cross`) is a Debian 13 `amd64` image with the aarch64 cross compiler and the toolchain file `cmake/toolchains/aarch64-linux-gnu.cmake`. The Python 3.13 headers for aarch64 are taken from the Debian package without installing it (its `postinst` would run an ARM binary).
+**Nothing is emulated while compiling.** There are two modes (see the conventions). The root `Dockerfile` (it was `Dockerfile.cross`) has the stages `cross` and `native`; `build.py` picks the stage with `--target`. In `native` mode (an arm64 machine, the CI's ARM runner) the library is compiled with the normal compiler, the tests and the stub generation run natively, and no toolchain file or qemu is used. The rest of this section describes `cross`: a Debian 13 `amd64` image with the aarch64 cross compiler and the toolchain file `cmake/toolchains/aarch64-linux-gnu.cmake`. The Python 3.13 headers for aarch64 are taken from the Debian package without installing it (its `postinst` would run an ARM binary).
 
 - **No Rust.** An older transport (iceoryx2) needed `cargo`; the current one does not, and the image has no Rust toolchain.
 - **Wheel:** `python -m build` with scikit-build-core, `_PYTHON_HOST_PLATFORM=linux-aarch64` and `SETUPTOOLS_EXT_SUFFIX` so the wheel is tagged `linux_aarch64`. `tools/generate_step_builders.py` runs first.
@@ -68,7 +69,8 @@ Copies both wheels to the Pi, removes a user-level install that would shadow the
 
 `.github/workflows/ci.yml` still builds the **release wheels for PyPI** with cibuildwheel (Linux x86_64 and aarch64 in manylinux containers, macOS, Windows). Those cannot run in a Docker image on a PC, and PyPI needs manylinux tags, not `linux_aarch64`. What changed:
 
-- The step that wrote the stub wheel from the x86_64 wheel now runs `python3 build.py --version <n>` and uses `builds/raccoon_library-*.whl`. The compiled wheel from that run is not published; the Pi gets the manylinux aarch64 wheel from PyPI through `raccoon update`.
+- New job `pi-build` runs `python3 build.py --version <n>` twice in parallel: on a native ARM runner (`ubuntu-24.04-arm`) and on x86 (cross, so the path developers use on their PCs cannot break unnoticed). The stub wheel of the ARM build is uploaded as the artifact `wheel-library`; `publish-pypi` and `publish-library` take it from there (before: `publish-pypi` wrote it from the x86_64 wheel). The compiled `linux_aarch64` wheel is not published; the Pi gets the manylinux aarch64 wheel from PyPI through `raccoon update`. For a test run it is the artifact `pi-wheels`, which `deploy.py` can install. `--test` is not used there yet (eight tests are out of date).
+- The manual input `release` can be unticked to build everything without PyPI, GitHub release and documentation trigger.
 - The job `build` (ARM64 wheel under QEMU, tarball with `install.py`, documentation, release) was switched off with `if: false`. Everything it did is done by `publish-pypi`. It is removed.
 - No `install.py` is part of a release any more.
 

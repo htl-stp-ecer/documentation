@@ -55,6 +55,26 @@ Standard library only, so it runs without installing anything.
 - The build runs in a copy of the sources inside the container, so the repository never gets build output or root-owned files.
 - CI runs the same `build.py`. Workflows only decide the version, create the release and publish.
 
+## Cross and native (raccoon-lib, stm32-data-reader)
+
+These two repositories build C++ for the Pi (aarch64) and have two modes in `build.py`. `--mode auto` is the default and picks by the CPU of the machine; `--mode cross` or `--mode native` forces one.
+
+| Mode | Machine | How |
+|---|---|---|
+| `cross` | x86_64 PC | aarch64 cross compiler in an `amd64` image, nothing is emulated while compiling. Tests and the stub generation run under qemu-user. |
+| `native` | aarch64, e.g. the CI's ARM runner | normal compiler in an arm64 image, everything runs natively, no qemu |
+
+One `Dockerfile` has the stages `cross` and `native`; `build.py` builds the image with `--target <mode>`. The CI builds the release on an ARM runner (`native`) and builds `cross` on x86 in parallel, so the path developers use on their PCs cannot break unnoticed. `--mode native` on an x86 PC works (it makes x86_64 results) and is how the native path is tried without an ARM machine.
+
+## The "release" switch in CI
+
+Every release workflow (raccoon-transport, raccoon-cli, raccoon-lib, stm32-data-reader, botui) has a manual input **`release`** (default on). Run the workflow by hand (Actions, "Run workflow") and untick it to build and test only:
+
+- built: everything, with the next release number as version, and the results as workflow artifacts to download,
+- not done: tag, GitHub release, PyPI upload, the documentation trigger and the notifications to raccoon-image and the components.
+
+An unticked run also works on a branch, a ticked one (and every push) only releases from `main`. A push to `main` always releases.
+
 ## Artifact names must not change
 
 Other tools find artifacts by file name. Do not rename them without changing the consumers:

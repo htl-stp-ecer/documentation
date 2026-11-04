@@ -19,7 +19,7 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 | raccoon-image | `refactor/build-system` | takes `raccoon_cli-*.whl` instead of `raccoon-server-*.tar.gz` (download, artifact scan, image root script, tests) |
 | raccoon-transport | `refactor/build-system` | `build.py` builds the wheel and contract assets in Docker, `deploy.py` installs the wheel; output matches release v70 |
 | stm32-data-reader | `refactor/build-system` | `build.py` cross compiles reader and firmware in Docker, tests run with qemu-user, the release is a `.deb`; raccoon-cli and raccoon-image follow |
-| raccoon-lib | `refactor/build-system` | `build.py` cross compiles the library in Docker and writes the stub wheel with qemu-user, `deploy.py` installs both wheels; PyPI wheels stay with cibuildwheel (see the raccoon-lib page) |
+| raccoon-lib | `refactor/build-system` | `build.py` cross compiles the library in Docker (natively on an ARM machine) and writes the stub wheel, `deploy.py` installs both wheels; PyPI wheels stay with cibuildwheel (see the raccoon-lib page) |
 | documentation | `refactor/build-system` | this section |
 | botui | `refactor/build-system` | `build.py` builds the `botui_<n>_arm64.deb` in Docker, `deploy.py` installs it; the deb is called `botui` and replaces and conflicts with `stp-velox` (see the botui page) |
 | local version `0.0` | `dev` or `fix/local-version-0.0` | in raccoon-cli, raccoon-lib, stm32-data-reader and botui |
