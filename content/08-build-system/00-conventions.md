@@ -64,7 +64,7 @@ Other tools find artifacts by file name. Do not rename them without changing the
 | raccoon-cli | `raccoon_cli-<n>-py3-none-any.whl` | PyPI, raccoon-image |
 | raccoon-lib | `raccoon_library-<n>-py3-none-any.whl`, `raccoon_sim-<n>-*aarch64*.whl` | PyPI, raccoon-image |
 | botui | `botui_<n>_arm64.deb` (was `stp-velox_<n>_arm64.deb`) | `raccoon update`, raccoon-image |
-| stm32-data-reader | `stm32_data_reader-v<n>.tar.gz` today; a `.deb` on its `dev` branch | `raccoon update`, raccoon-image |
+| stm32-data-reader | `stm32-data-reader_<n>_arm64.deb` (was `stm32_data_reader-v<n>.tar.gz`) | `raccoon update`, raccoon-image |
 
 ## Installing a local build into a project's uv environment
 

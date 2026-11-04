@@ -19,4 +19,5 @@ Goal: every repository builds and deploys the same way, so a local build and a C
 | [raccoon-cli](01-raccoon-cli) | The first repository converted: what changed, how to build, deploy and test a local build |
 | [botui](02-botui) | The second repository: the .deb is built in Docker |
 | [raccoon-transport](03-raccoon-transport) | The wheel and contract assets in Docker, and where the contract is matched |
-| [Status and open points](04-status-and-open) | What is done, what is planned per repository, what breaks when |
+| [stm32-data-reader](04-stm32-data-reader) | Reader and firmware cross compiled in Docker, the release is a .deb |
+| [Status and open points](05-status-and-open) | What is done, what is planned per repository, what breaks when |
