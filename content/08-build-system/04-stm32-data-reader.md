@@ -82,7 +82,7 @@ Followed in the other repositories: raccoon-cli (`version_checker.py` asset and 
 | new | `build.py`, `deploy.py`, `Dockerfile` (now the cross compiler), `Dockerfile.firmware`, `.dockerignore`, `builds/` in `.gitignore` |
 | removed | `build.sh`, `deploy.sh`, `install.py`, `scripts/build_deb.sh`, `firmware/build.sh`, `firmware/deploy.sh`, `firmware/Dockerfile`, both `docker-compose.yml` |
 | kept | `packaging/debian/*`, `firmware/flashFiles/*.sh` (they run on the Pi), `scripts/pid_tune.py`, `.devcontainer/` |
-| CI | job `build` runs `python3 build.py --version <n> --test` twice in parallel: on a native ARM runner (`ubuntu-24.04-arm`, this `.deb` is released) and on x86 (cross, so the PC path is checked); job `release` creates the release with the ARM `.deb` and notifies raccoon-image. The manual input `release` can be unticked to only build (before: a firmware job, a reader job on an arm64 runner and a release job; the release carried a tarball) |
+| CI | job `build` runs `python3 build.py --version <n> --test` natively on an ARM runner (`ubuntu-24.04-arm`); job `release` creates the release with that `.deb` and notifies raccoon-image. The manual input `release` can be unticked to only build (before: a firmware job, a reader job on an arm64 runner and a release job; the release carried a tarball) |
 
 ## Found on the way (not changed)
 

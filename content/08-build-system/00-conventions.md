@@ -64,7 +64,7 @@ These two repositories build C++ for the Pi (aarch64) and have two modes in `bui
 | `cross` | x86_64 PC | aarch64 cross compiler in an `amd64` image, nothing is emulated while compiling. Tests and the stub generation run under qemu-user. |
 | `native` | aarch64, e.g. the CI's ARM runner | normal compiler in an arm64 image, everything runs natively, no qemu |
 
-One `Dockerfile` has the stages `cross` and `native`; `build.py` builds the image with `--target <mode>`. The CI builds the release on an ARM runner (`native`) and builds `cross` on x86 in parallel, so the path developers use on their PCs cannot break unnoticed. `--mode native` on an x86 PC works (it makes x86_64 results) and is how the native path is tried without an ARM machine.
+One `Dockerfile` has the stages `cross` and `native`; `build.py` builds the image with `--target <mode>`. The stm32-data-reader CI builds the release on an ARM runner (`native`); the raccoon-lib CI does not use `build.py` (see its page). `--mode native` on an x86 PC works (it makes x86_64 results) and is how the native path is tried without an ARM machine.
 
 ## The "release" switch in CI
 
