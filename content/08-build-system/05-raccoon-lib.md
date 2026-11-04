@@ -60,7 +60,7 @@ The cross build already had code that renames `_core.so` to the aarch64 name, bu
 |---|---|---|
 | `--test` | the C++ tests (`ctest`) | 524 of 524 pass (cross with qemu-user and native) |
 | `--python-tests` | the fast Python tests, `tests/python` without `sim/` | 1777 pass, 34 s under qemu-user |
-| `--sim-tests` | the simulator tests, `tests/python/sim` | **not green yet**: 38 failures and errors, plus 9 in `test_auto_tune.py`; about 7 minutes natively, far too slow under qemu-user |
+| `--sim-tests` | the simulator tests, `tests/python/sim` | **TODO, not green** ([issue #109](https://github.com/htl-stp-ecer/raccoon-lib/issues/109)): about 7 minutes natively, far too slow under qemu-user. Two causes are fixed (the fake robot had no `get_service`, the auto-tune runner passed a removed `csv_dir`), the rest was not re-run |
 
 What was out of date and is now updated: `DiagonalMotionCovTest` (the motion closes its heading loop on `getHeading()`, the test helper set only `getAbsoluteHeading()`), the simulated line sensor (1023 on black, 0 on white, like the real sensor), the effective optimizer pipeline (starts with `resolve_heading`), the default `distance_tolerance_m` (0.002), the removed `to_simulation_step()` of the line follow steps, `_ProfileEntryScreen` (no cancel path), and the custom velocity builder, which now checks its arguments when the step is built (`resolve()`), not when it is called.
 
@@ -99,5 +99,5 @@ The workflow only runs on `main` and is untested until the first merge.
 | new | `build.py`, `deploy.py`, `builds/` in `.gitignore` |
 | `Dockerfile.cross` → `Dockerfile` | now also has qemu-user and the aarch64 Python; `.dockerignore` excludes everything (the images need no files) |
 | removed | `build.sh`, `deploy.sh`, `install.py`, `dev.sh`, `scripts/setup-cross-toolchain.sh` (installed packages on the host with `sudo`) |
-| removed later | `.github/docker/Dockerfile` (the old CI test image; the CI test job now runs `build.py`) |
-| kept for now | `scripts/build-stubs.sh` (the optional `LIBSTP_RUN_MYPY` gate in `CMakeLists.txt` calls it), `.devcontainer/Dockerfile` (dev container), `dev_test.sh` (a test loop for an old worktree with its own `.venv`) |
+| removed later | `.github/docker/Dockerfile` (the old CI test image; the CI test job now runs `build.py`), `dev_test.sh` (a test loop for an old worktree with its own Python 3.12 `.venv`) |
+| kept | `scripts/build-stubs.sh` (the optional `LIBSTP_RUN_MYPY` gate in `CMakeLists.txt` calls it, off by default), `.devcontainer/` (CLion dev container; not part of the build) |
