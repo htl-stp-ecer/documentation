@@ -85,10 +85,11 @@ Copies both wheels to the Pi, removes a user-level install that would shadow the
 `build.py` is for **local builds only**. `.github/workflows/ci.yml` is as it was before: cibuildwheel builds the release wheels for PyPI (Linux x86_64 and aarch64 in manylinux containers, macOS, Windows), `publish-pypi` writes the stub wheel with `scripts/build-stubs.sh` and publishes, `publish-library` publishes `raccoon-library`. Those cannot run in a Docker image on a PC, and PyPI needs manylinux tags, not `linux_aarch64`. What changed:
 
 - The manual input `release` can be unticked to build everything without PyPI, GitHub release and documentation trigger.
-- The two jobs that were switched off with `if: false` (`test`, `build`) are removed: they used `build.sh`, `install.py` and `.github/docker/Dockerfile`, which no longer exist.
+- The job `build` (switched off with `if: false`) is removed: it built the tarball with `build.sh` and `install.py`, which no longer exist.
+- The job `test` (also switched off, it used an own Docker image) now runs `python3 build.py --test --python-tests` on `ubuntu-24.04-arm`. It does not gate the release; the simulator tests are not run (issue #109).
 - No `install.py` is part of a release any more.
 
-The tests run locally with `build.py --test --python-tests`; there is no CI test job. The workflow only runs on `main` and is untested until the first merge.
+The workflow only runs on `main` and is untested until the first merge.
 
 ## What changed
 
