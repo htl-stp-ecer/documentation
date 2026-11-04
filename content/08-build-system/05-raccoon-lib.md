@@ -82,15 +82,13 @@ Copies both wheels to the Pi, removes a user-level install that would shadow the
 
 ## CI
 
-`.github/workflows/ci.yml` still builds the **release wheels for PyPI** with cibuildwheel (Linux x86_64 and aarch64 in manylinux containers, macOS, Windows). Those cannot run in a Docker image on a PC, and PyPI needs manylinux tags, not `linux_aarch64`. What changed:
+`build.py` is for **local builds only**. `.github/workflows/ci.yml` is as it was before: cibuildwheel builds the release wheels for PyPI (Linux x86_64 and aarch64 in manylinux containers, macOS, Windows), `publish-pypi` writes the stub wheel with `scripts/build-stubs.sh` and publishes, `publish-library` publishes `raccoon-library`. Those cannot run in a Docker image on a PC, and PyPI needs manylinux tags, not `linux_aarch64`. What changed:
 
-- New job `pi-build` runs `python3 build.py --version <n>` twice in parallel: on a native ARM runner (`ubuntu-24.04-arm`) and on x86 (cross, so the path developers use on their PCs cannot break unnoticed). The stub wheel of the ARM build is uploaded as the artifact `wheel-library`; `publish-pypi` and `publish-library` take it from there (before: `publish-pypi` wrote it from the x86_64 wheel). The compiled `linux_aarch64` wheel is not published; the Pi gets the manylinux aarch64 wheel from PyPI through `raccoon update`. For a test run it is the artifact `pi-wheels`, which `deploy.py` can install. The tests run in the separate job `test` (below).
-- New job `test` (it was switched off with `if: false` and ran on a self-hosted x86 runner in an own Docker image): `python3 build.py --test --python-tests` natively on `ubuntu-24.04-arm`. The simulator tests are not run there yet.
 - The manual input `release` can be unticked to build everything without PyPI, GitHub release and documentation trigger.
-- The job `build` (ARM64 wheel under QEMU, tarball with `install.py`, documentation, release) was switched off with `if: false`. Everything it did is done by `publish-pypi`. It is removed.
+- The two jobs that were switched off with `if: false` (`test`, `build`) are removed: they used `build.sh`, `install.py` and `.github/docker/Dockerfile`, which no longer exist.
 - No `install.py` is part of a release any more.
 
-The workflow only runs on `main` and is untested until the first merge.
+The tests run locally with `build.py --test --python-tests`; there is no CI test job. The workflow only runs on `main` and is untested until the first merge.
 
 ## What changed
 
@@ -99,5 +97,5 @@ The workflow only runs on `main` and is untested until the first merge.
 | new | `build.py`, `deploy.py`, `builds/` in `.gitignore` |
 | `Dockerfile.cross` → `Dockerfile` | now also has qemu-user and the aarch64 Python; `.dockerignore` excludes everything (the images need no files) |
 | removed | `build.sh`, `deploy.sh`, `install.py`, `dev.sh`, `scripts/setup-cross-toolchain.sh` (installed packages on the host with `sudo`) |
-| removed later | `.github/docker/Dockerfile` (the old CI test image; the CI test job now runs `build.py`), `dev_test.sh` (a test loop for an old worktree with its own Python 3.12 `.venv`) |
+| removed later | `.github/docker/Dockerfile` (the image of the CI test job that was switched off), `dev_test.sh` (a test loop for an old worktree with its own Python 3.12 `.venv`) |
 | kept | `scripts/build-stubs.sh` (the optional `LIBSTP_RUN_MYPY` gate in `CMakeLists.txt` calls it, off by default), `.devcontainer/` (CLion dev container; not part of the build) |

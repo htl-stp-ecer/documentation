@@ -26,7 +26,7 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 
 ## Planned per repository
 
-Nothing: all repositories except `raccoon-example` are converted. The tests of raccoon-lib are to be brought up to date as a separate step, and its CI test job and the two other Dockerfiles (`.github/docker`, `.devcontainer`) move with that.
+Nothing: all repositories except `raccoon-example` are converted. The simulator tests of raccoon-lib are a TODO (issue #109).
 
 ## Order and what breaks
 
