@@ -80,10 +80,10 @@ Allows the robot to create its own wireless access point. Configurable options:
 
 | Setting | Default |
 |---------|---------|
-| Network name (SSID) | Auto-generated |
-| Password | Auto-generated |
+| Network name (SSID) | `RaccoonOS` |
+| Password | `raccoonos` |
 | Wi-Fi band | Auto (5 GHz / 2.4 GHz / Auto) |
-| Security type | WPA3 Personal (also: WPA2 Personal, WPA3 Enterprise, WPA2 Enterprise, Open) |
+| Security type | WPA2 Personal (also: WPA3 Personal, WPA3 Enterprise, WPA2 Enterprise, Open) |
 | Hidden network | Off |
 | Max clients | Configurable |
 
