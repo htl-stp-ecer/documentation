@@ -19,6 +19,9 @@ All of this runs in the test suite against an in-memory bus and a fake OpenCV.
 |---|---|
 | Interfaces and selection | `CamProcessor`, `CamBackend`, `set_backend`, `set_processor`, the required backend flags |
 | `UsbCameraBackend` | Delivery of numbered frames, open retries and giving up after the configured attempts, reopening after failed reads, stop, configuration errors |
+| `ReplayBackend` | Playing a video, a folder and a single image, looping, finishing, scaling, the playback rate, failing at once for a bad source, running through the service with a processor |
+| Robot setup (the post-install step) | Root check, unit install and keeping an edited unit, one apt call for all missing packages, nothing to install when all is present, a failing or missing apt, `--no-service` |
+| Backend dependencies | A missing dependency fails the start with an install hint, and is not checked before the backend is used |
 | `ProcessorHost` | Failure isolation, disabling, replacement, commands, refusing processors for backends without frames |
 | Service and client | Leases (open on start, immediate close on stop, expiry after a crash, heartbeat), `on_fail`, the falsy `FailedCamera`, results with their source, ready and timeouts, restarts of the program and of the service, exclusive start, switching backends, pause, errors, dropping frames, the frame stream, the wire format |
 
@@ -35,9 +38,9 @@ All of this runs in the test suite against an in-memory bus and a fake OpenCV.
 - **Steps** such as waiting for a detection.
 - **A processor included in the package.** There is no colour detector and no example. The pink and blue drum detection from `drum-bot` is not moved over.
 - **The AI camera backend.** The interface leaves room for it. What the camera delivers is not known yet.
-- **A bundle entry** that installs and starts the service.
+- **A release of `raccoon-cam`.** The image and `raccoon update` can install it once a release with the wheel exists. The bundle entry and the image build are written, but have not run.
 
-`libstp-cam` in `raccoon-lib` is an earlier client that nothing uses. It can be removed now that this client exists.
+`libstp-cam` in `raccoon-lib`, an earlier client that nothing used, is removed. The pull request is open in `raccoon-lib`.
 
 ## Open decisions
 

@@ -46,7 +46,14 @@ The service runs in the project directory, so classes from `src/` import without
 
 ### As a system service
 
-`packaging/raccoon-cam.service` in the `raccoon-cam` repository is a unit file template with `Restart=always` and a lower priority than the robot program (`Nice=5`). No bundle installs it yet.
+On the robot you do not set the service up. The RaccoonOS image installs `raccoon-cam`, its systemd unit (`Restart=always`, a lower priority than the robot program with `Nice=5`) and OpenCV from the distribution (`python3-opencv`). `raccoon update` keeps it that way: after an update, `raccoon-server`'s post-install hands over to the post-install of `raccoon-cam`, which does the following.
+
+1. Stops the service, if it runs.
+2. Installs the unit into `/etc/systemd/system/`. A unit that is already there is kept, so changes made on the robot stay.
+3. Installs the system packages that the built-in backends need and that are missing, with one `apt-get install` call. Today that is `python3-opencv`.
+4. Reloads systemd, enables the service and restarts it.
+
+If `apt-get` fails (no network) or does not exist, it prints what to install by hand, still sets up the service, and `raccoon-server` shows a warning. This is not a command you run, and nothing else triggers it: only `raccoon update`, the image build and `deploy.py` (which installs a local build on a Pi for development) do. On a laptop none of this happens: `pip install raccoon-cam` never installs system packages.
 
 ## The client in your program
 

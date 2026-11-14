@@ -31,7 +31,7 @@ The selection is only a declaration. The client sends it to the service on `star
 
 Capture runs on its own thread, and the device is opened on that thread. If the camera is missing, the backend retries, so `start` returns immediately and a camera that enumerates late at boot does not stop the service. How often it tries before the first open, and how long it waits between tries, comes from the client (`start_camera(retries=10, delay=1.0)`). When the tries run out it reports the failure with `sink.failed`. After the first successful open it never gives up. If reads fail repeatedly, it closes the device and opens it again.
 
-OpenCV is imported when the backend starts. On the robot it comes from the system package `python3-opencv`; it is not a pip dependency of `raccoon-cam`. If it is missing, `start` raises a `RuntimeError` that says so.
+It needs OpenCV (`cv2`), see [Dependencies of a backend](#dependencies-of-a-backend). OpenCV is only needed once this backend is used.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -45,6 +45,61 @@ OpenCV is imported when the backend starts. On the robot it comes from the syste
 An unknown option raises `ValueError`, so a typo does not pass silently. The first failed open and then every tenth attempt are reported to the sink as errors, not every attempt.
 
 `status()` returns the current `state` (`opening`, `running`, `reconnecting`, `stopped`), the settings, the frame count, the number of open attempts and the last error.
+
+## Replay backend
+
+`ReplayBackend` plays a recording as if it were a camera: a video file, a folder of images, or a single image. The service, the processors and the client run unchanged, so you can develop and test a processor on a laptop without a robot. It delivers frames and no detections (`allow_processors = True`, `provides_detections = False`).
+
+```python
+from raccoon_cam import ReplayBackend, set_backend
+
+set_backend(ReplayBackend, {"source": "recordings/field.mov", "fps": 15})
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `source` | required | A video file, a folder of images (played in file name order) or one image that repeats |
+| `fps` | the video's own rate, `15` for images | Playback rate |
+| `loop` | `True` | Start again at the end. With `False` the backend stops delivering after the last frame and its state becomes `finished` |
+| `resolution` | unchanged | `(width, height)` to scale every frame to |
+
+A source that does not exist, a video that cannot be opened and a folder without images are reported with `sink.failed` at once. The retries of `start_camera` do not apply, because trying again would not help. An unknown option raises `ValueError`. An image in a folder that cannot be read is skipped.
+
+It needs OpenCV (`cv2`) as the USB backend does. For the simulator, a processor reads the same kind of frames from a replay as from a camera, but the replay is not a model of the camera: exposure, motion blur and colour balance are those of the recording.
+
+`status()` returns the `state` (`opening`, `running`, `finished`, `failed`, `stopped`), the source, the rate, the frame count and the position.
+
+## Dependencies of a backend
+
+A backend declares what it needs installed in `requires`. The service checks this when it is about to start the backend, and not before. Selecting a backend, importing `raccoon_cam` and running a program that uses another backend need none of it. If something is missing, `start_camera()` fails at once with the reason and how to install it:
+
+```text
+The 'usb' camera backend needs OpenCV (module 'cv2'): install with `sudo apt install python3-opencv` on the robot or `pip install opencv-python-headless` elsewhere
+```
+
+| Backend | Needs | On the robot | Elsewhere |
+|---|---|---|---|
+| `UsbCameraBackend` | OpenCV (`cv2`) | `sudo apt install python3-opencv` | `pip install opencv-python-headless` |
+| `ReplayBackend` | OpenCV (`cv2`) | `sudo apt install python3-opencv` | `pip install opencv-python-headless` |
+
+Every backend ships in the `raccoon-cam` package. There are no extras to choose. `pip install raccoon-cam` installs only `numpy` and `raccoon-transport`; the rest is checked when the backend is used. On the robot the image and `raccoon update` install what the built-in backends need (see [Service and client](../03-service-and-client/)). On a laptop nothing is installed unless you ask: run the `pip install` from the table when you want to use the backend there.
+
+For your own backend:
+
+```python
+from raccoon_cam import CamBackend, Requirement
+
+
+class MyAiCamera(CamBackend):
+    name = "ai"
+    allow_processors = False
+    provides_detections = True
+    requires = (Requirement("tflite_runtime", label="TFLite", pip="tflite-runtime"),)
+```
+
+The same `requires` exists on a `CamProcessor`. It is checked when the processor is added to the service, not when you declare it with `set_processor`.
+
+`Requirement(module, label="", pip=None, apt=None)` looks for the import name `module` without importing it. `pip` and `apt` only feed the install hint. Import the heavy library inside `start` or `configure`, not at the top of your module, so that selecting the backend stays free.
 
 ## Writing a backend
 
