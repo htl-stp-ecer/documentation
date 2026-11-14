@@ -247,80 +247,21 @@ The direction (forward or backward) is chosen automatically at runtime by compar
 
 > **Direction inference edge case:** In some configurations the automatic direction inference can be wrong (e.g., non-monotonic sensor response or an inverted analog wiring). The cube-bot codebase implements a `DriveToAnalogTargetBidirectional` custom step that accepts an explicit direction override for these cases. If `drive_to_analog_target` drives the wrong way, add an explicit check of the current sensor reading before calling it, or implement a similar explicit-direction variant.
 
-## Camera Sensor
+## Camera
 
-The camera interface provides access to the Raccoon camera system for object detection. The camera module lives in the `raccoon.cam` subpackage — **not** the top-level `raccoon` package.
-
-### Declaration
+The camera is not a sensor of the library. It is its own service, `raccoon-cam`, with a Python client. The native `CamSensor` (`raccoon.cam`) is removed from the library, so `from raccoon.cam import CamSensor` no longer works. The `raccoon-cam` section describes the replacement: a camera backend, image processors that you write in your project, and a client that reads their detections.
 
 ```python
-from raccoon.cam import CamSensor    # correct import path
+from raccoon_cam import set_processor, start_camera
 
-cam = CamSensor()
+set_processor("src.vision.my_processor:MyProcessor")   # a CamProcessor in your project
+
+cam = start_camera()
+if cam.is_detected("MyProcessor", "ball"):
+    ball = cam.latest("MyProcessor", "ball")           # x, y, w, h normalised 0.0-1.0, area in pixels
 ```
 
-Camera functionality depends on the `raccoon-cam` and `object-detector` services running on the robot. The constructor starts a background receive thread that keeps an internal cache of the latest detection frame. All query methods below are thread-safe.
-
-### Detection Queries
-
-All query methods take a `label` string — the name of the class the object detector was trained to detect (e.g. `"orange"`, `"ball"`, `"cube"`). They operate on the **first** detected blob matching that label in the current frame.
-
-| Method | Return Type | Description |
-|--------|------------|-------------|
-| `cam.isDetected(label)` | `bool` | `True` if at least one blob with `label` is in the current frame |
-| `cam.getBlobX(label)` | `float` | X position of the blob centre, normalised 0.0–1.0 (0 = left edge) |
-| `cam.getBlobY(label)` | `float` | Y position of the blob centre, normalised 0.0–1.0 (0 = top edge) |
-| `cam.getBlobWidth(label)` | `float` | Width of the blob, normalised 0.0–1.0 |
-| `cam.getBlobHeight(label)` | `float` | Height of the blob, normalised 0.0–1.0 |
-| `cam.getBlobArea(label)` | `int` | Area of the blob in pixels |
-| `cam.getConfidence(label)` | `float` | Detection confidence, 0.0–1.0 |
-| `cam.getDetectedLabels()` | `list[str]` | All labels present in the current detection frame |
-| `cam.getFrameWidth()` | `int` | Camera frame width in pixels |
-| `cam.getFrameHeight()` | `int` | Camera frame height in pixels |
-
-`getBlobX`, `getBlobY`, `getBlobWidth`, `getBlobHeight`, and `getConfidence` return `0.0` if no blob with that label is detected. Always check `isDetected()` first.
-
-### Example: Object-Triggered Motion
-
-```python
-from raccoon.cam import CamSensor
-from raccoon import run, seq, drive_forward
-
-cam = CamSensor()
-
-def approach_orange_ball():
-    return seq([
-        # Wait until the ball is visible
-        run(lambda robot: print("waiting for ball...")),
-        drive_forward(speed=0.4).until(
-            lambda: cam.isDetected("orange")
-        ),
-        run(lambda robot: print(
-            f"Ball at ({cam.getBlobX('orange'):.2f}, {cam.getBlobY('orange'):.2f}), "
-            f"confidence={cam.getConfidence('orange'):.2f}"
-        )),
-    ])
-```
-
-### Example: Inspect All Current Detections
-
-```python
-from raccoon.cam import CamSensor
-
-cam = CamSensor()
-
-def print_detections():
-    labels = cam.getDetectedLabels()
-    if not labels:
-        print("Nothing detected")
-    for label in labels:
-        print(
-            f"{label}: x={cam.getBlobX(label):.2f}, "
-            f"y={cam.getBlobY(label):.2f}, "
-            f"area={cam.getBlobArea(label)} px, "
-            f"confidence={cam.getConfidence(label):.2f}"
-        )
-```
+See [raccoon-cam]({{< ref "/09-raccoon-cam/00-overview" >}}) for how to write a processor, how the camera is opened and closed, and what happens when it cannot be opened.
 
 ## ET Sensor (Distance)
 

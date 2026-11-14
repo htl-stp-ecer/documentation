@@ -124,7 +124,6 @@ Internally, the library is split into many `libstp-*` implementation modules, ea
 | `libstp-servo` | Actuator | Servo control |
 | `libstp-arm` | Actuator | Arm inverse-kinematics system (`ArmChain`, `ArmPreset`); named position motion |
 | `libstp-button` | Input | Digital button handling |
-| `libstp-cam` | Sensor | Camera interface (`CamSensor`) |
 | `libstp-calibration-store` | Support | Persistent calibration data |
 | `libstp-timing` | Support | Timing, checkpoint synchronization |
 | `libstp-async` | Support | Async/coroutine utilities |
