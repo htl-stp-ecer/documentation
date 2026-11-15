@@ -897,11 +897,15 @@ div.contributor-photo-placeholder {
     border-radius: 6px;
     padding: 16px;
     margin: 1.4rem 0;
+    width: fit-content;
+    min-width: 50%;
     max-width: 100%;
     overflow-x: auto;
 }
 
 .mermaid svg {
+    display: block;
+    margin: 0 auto;
     max-width: 100%;
     height: auto;
 }
