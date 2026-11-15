@@ -55,18 +55,17 @@ Output lands in `public/`.
 
 ```
 content/
-  00-quick-start/       Getting started guide
-  01-botui/             botui, the on-robot UI
-  02-programming/       raccoon SDK and DSL reference
-    algorithms/         Algorithm deep-dives (line following, lineup, etc.)
-  03-web-ide/           Web IDE usage
-  04-raccoon-cli/       raccoon CLI command reference
-  05-api-reference/     Auto-generated from raccoon-lib CI — do not edit
-  06-firmware/          Firmware internals
-  07-releases/          Releases and versions
-  08-build-system/      Build system (build.py, deploy.py, CI)
-  09-raccoon-cam/       raccoon-cam camera service
-  contributors/         Contributor listing
+  00-getting-started/        From a flashed SD card to a running robot
+  01-programming-guide/      Learning path for raccoon-lib
+    01-basics/ 02-driving/ 03-calibration/ 04-servos/ 05-motors/
+    06-sensors/ 07-custom-steps/ 08-more-topics/ 09-camera/
+  02-steps-reference/        Step catalog, generated from raccoon-lib CI. Do not edit
+  03-raccoon-cli/            raccoon CLI command reference
+  04-web-ide/                Using the Web IDE
+  05-bot-ui/                 Using the on-robot UI
+  06-advanced/               Architecture, transport, firmware, Web IDE internals
+  07-build-and-contribute/   Build system, releases, CI, contributing
+  contributors/              Contributor listing
 ```
 
 Section folders use numeric prefixes to control sidebar order. Pages use `weight` in front matter to control order within a section.
@@ -76,7 +75,7 @@ Section folders use numeric prefixes to control sidebar order. Pages use `weight
 ## Adding a page
 
 ```bash
-hugo new 02-programming/my-new-topic.md
+hugo new 01-programming-guide/08-more-topics/my-new-topic.md
 ```
 
 Edit the generated front matter:
