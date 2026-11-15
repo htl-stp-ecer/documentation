@@ -16,7 +16,7 @@ Run configurations solve this by letting you **name a bundle of flags** once and
 
 They work like PyCharm/IntelliJ run configurations: you select a name from the navbar dropdown and that name resolves to a fixed set of flags, environment variables, and a target.
 
-Configurations are stored in `raccoon.project.yml` under `run_configurations:` and are **shared between the Web IDE and the `raccoon run` CLI**. A configuration you create in the IDE is immediately available from the terminal, and vice versa.
+Configurations are stored in `raccoon.project.yml` under `run_configurations:` and are **shared between the WebIDE and the `raccoon run` CLI**. A configuration you create in the IDE is immediately available from the terminal, and vice versa.
 
 ---
 

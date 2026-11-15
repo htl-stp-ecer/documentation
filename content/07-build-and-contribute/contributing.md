@@ -16,7 +16,7 @@ RaccoonOS is open source and lives in several repositories in the [htl-stp-ecer]
 | Repository | What is in it | Tests |
 |------------|---------------|-------|
 | `raccoon-lib` | The robot library (C++20, Python bindings), steps, missions | `pytest tests/` and `ctest` |
-| `raccoon-cli` | The `raccoon` CLI, `raccoon-server`, the Web IDE | `pytest tests/` |
+| `raccoon-cli` | The `raccoon` CLI, `raccoon-server`, the WebIDE | `pytest tests/` |
 | `raccoon-transport` | Messages, channels, shared-memory transport, contract | `integration_tests/`, `python3 -m unittest scripts/test_contract.py` |
 | `stm32-data-reader` | The Pi service for the STM32, and the STM32 firmware | `python3 build.py --test` |
 | `botui` | The Flutter UI on the robot | `flutter analyze`, `flutter test` |

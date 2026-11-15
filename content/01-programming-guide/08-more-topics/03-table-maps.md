@@ -19,11 +19,11 @@ A **table map** describes the static geometry of the game table: where the black
 2. **Simulator scenes:** The sim physics engine loads the map as its collision and sensor geometry source.
 3. **Localization:** The extended Kalman filter uses map line features as landmarks to correct odometry drift.
 
-`.ftmap` is the shared file format that feeds all three consumers. Understanding the format — and its limitations — matters when you author maps in the Web IDE and need them to work at runtime.
+`.ftmap` is the shared file format that feeds all three consumers. Understanding the format — and its limitations — matters when you author maps in the WebIDE and need them to work at runtime.
 
 ```mermaid
 graph TD
-    F[".ftmap file on disk"] --> IDE["Web IDE<br/>(v2 normalised internally)"]
+    F[".ftmap file on disk"] --> IDE["WebIDE<br/>(v2 normalised internally)"]
     F --> CG["raccoon codegen<br/>embeds v1 dict into robot.py"]
     F --> SIM["simulator scene<br/>runtime WorldMap"]
     CG --> RT["TableMap.from_ftmap()<br/>at match runtime"]
@@ -43,7 +43,7 @@ It sits at the intersection of:
 - simulator scenes
 - localization
 - code generation
-- Web IDE map editing
+- WebIDE map editing
 
 The important part is that not every consumer speaks the exact same shape today.
 
@@ -168,7 +168,7 @@ This is intentionally preserved bit-for-bit with the earlier Python `table_map` 
 
 ## IDE/editor format: v2
 
-The Web IDE frontend already has a richer persistent format:
+The WebIDE frontend already has a richer persistent format:
 
 - same `format: "flowchart-table-map"`
 - `version: 2`
@@ -191,7 +191,7 @@ This is defined in:
 Today:
 
 - runtime `WorldMap` binding accepts v1
-- Web IDE accepts v1 and v2, then normalizes to v2 internally
+- WebIDE accepts v1 and v2, then normalizes to v2 internally
 - IDE backend also normalizes maps to v2
 
 So "the IDE can edit it" does **not** automatically mean "the runtime `TableMap.from_ftmap(...)` binding accepts the exact same structure."
@@ -252,7 +252,7 @@ During `raccoon codegen`, the CLI loads the `.ftmap` file, converts it to a v1 r
 
 Because the map is embedded at codegen time, **you must re-run `raccoon codegen` after editing the `.ftmap` file** for the change to take effect on the robot. Transferring only the `.ftmap` file to the Pi without regenerating will have no effect.
 
-> **Authoring workflow:** Edit the `.ftmap` in the Web IDE. Save it to `config/2026-game-table.ftmap`. Run `raccoon codegen`. Deploy. The embedded map in `robot.py` now matches your edits.
+> **Authoring workflow:** Edit the `.ftmap` in the WebIDE. Save it to `config/2026-game-table.ftmap`. Run `raccoon codegen`. Deploy. The embedded map in `robot.py` now matches your edits.
 
 ## Bundled scenes
 

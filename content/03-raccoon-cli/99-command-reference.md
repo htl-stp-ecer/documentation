@@ -94,7 +94,7 @@ Examples:
 Jeder Schritt ist ein hartes Gate: der erste Fehler bricht ab, bevor
 irgendetwas den Roboter erreicht.
 - `raccoon validate`  Check that config, mission files, and imports are consistent.
-- `raccoon web`  Start the Web IDE with full backend support.
+- `raccoon web`  Start the WebIDE with full backend support.
 
 Serves the web IDE with a full API backend on a local port.
 
@@ -879,7 +879,7 @@ Usage: raccoon validate [OPTIONS]
 
 ## `raccoon web`
 
-Start the Web IDE with full backend support.
+Start the WebIDE with full backend support.
 
 Serves the web IDE with a full API backend on a local port.
 

@@ -1,5 +1,5 @@
 ---
-title: "raccoon CLI"
+title: "Raccoon CLI"
 author: "Mario Scholze"
 date: 2026-11-15
 draft: false
@@ -9,9 +9,9 @@ aliases:
   - /04-raccoon-cli/
 ---
 
-# raccoon CLI
+# Raccoon CLI
 
-`raccoon` is the command line tool you use on your laptop. It connects to the robot, generates code from your config, syncs your files and runs your missions on the Pi. Install it with `uv sync` inside a project; see [Create Your Project]({{< ref "/00-getting-started/03-create-your-project.md" >}}). It needs Python 3.13 or newer.
+`raccoon` is the command line tool you use on your laptop. It connects to the robot, generates code from your config, syncs your files and runs your missions on the Pi. Install it with `uv sync` inside a project; see [Create Your Project]({{< ref "/00-getting-started/03-create-a-project.md" >}}). It needs Python 3.13 or newer.
 
 Projects are created with the setup script of the example project, not with the CLI. After that you use `raccoon` from inside the project.
 
@@ -51,7 +51,7 @@ Code generation and all validation happen on your laptop. The Pi only receives t
 | `raccoon migrate` | Apply project format migrations | [Versioning and Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}) |
 | `raccoon upload` | Full preflight, then push to the robot and confirm it starts | [Command Reference]({{< ref "/03-raccoon-cli/99-command-reference.md" >}}) |
 | `raccoon lcm` | Inspect and record bus traffic | [lcm]({{< ref "/03-raccoon-cli/17-lcm.md" >}}) |
-| `raccoon web` | Start the Web IDE | [Web IDE]({{< ref "/04-web-ide/_index.md" >}}) |
+| `raccoon web` | Start the WebIDE | [WebIDE]({{< ref "/04-web-ide/_index.md" >}}) |
 | `raccoon completion` | Shell tab completion | [completion]({{< ref "/03-raccoon-cli/19-completion.md" >}}) |
 
 All commands support `-h` / `--help`. The complete, generated list of every command and option is the [Command Reference]({{< ref "/03-raccoon-cli/99-command-reference.md" >}}).

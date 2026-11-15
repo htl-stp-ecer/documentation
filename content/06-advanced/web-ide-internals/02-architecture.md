@@ -1,17 +1,17 @@
 ---
-title: "Web IDE Architecture"
+title: "WebIDE Architecture"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 10
-description: "How the Web IDE's Angular frontend, local IDE backend, and robot Pi fit together."
+description: "How the WebIDE's Angular frontend, local IDE backend, and robot Pi fit together."
 aliases:
   - /03-web-ide/0a-architecture/
 ---
 
-## Concept: What is the Web IDE?
+## Concept: What is the WebIDE?
 
-The Web IDE is a browser-based editor that runs on **your laptop**, not on the robot. It gives you a visual flowchart editor, a Python code editor, and real-time tools for running and inspecting missions. Understanding one key fact up front saves a lot of confusion:
+The WebIDE is a browser-based editor that runs on **your laptop**, not on the robot. It gives you a visual flowchart editor, a Python code editor, and real-time tools for running and inspecting missions. Understanding one key fact up front saves a lot of confusion:
 
 > **There are two backends — the local IDE backend (laptop) and the Pi server (robot). They own completely different things and you cannot swap them.**
 
@@ -45,7 +45,7 @@ The split is intentional: the IDE backend runs locally so it works **offline** (
 
 ---
 
-## Starting the Web IDE
+## Starting the WebIDE
 
 ```
 raccoon web          # serves on localhost:4200, auto-opens browser
@@ -178,7 +178,7 @@ Custom steps decorated with `@dsl` appear automatically in the Step Library. Una
 
 ## Cross-references
 
-- [Starting the Web IDE]({{< ref "/04-web-ide/00-starting-the-web-ide.md" >}}) — `raccoon web` options
+- [Starting the WebIDE]({{< ref "/04-web-ide/00-starting-the-web-ide.md" >}}) — `raccoon web` options
 - [Interface Overview]({{< ref "/04-web-ide/01-interface-overview.md" >}}) — panel layout and controls
 - [Running a Mission]({{< ref "/04-web-ide/07-running-a-mission.md" >}}) — run/debug flow in detail
 - [Run Configurations]({{< ref "/04-web-ide/11-run-configurations.md" >}}) — how to configure targets and flags

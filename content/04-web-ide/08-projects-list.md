@@ -40,7 +40,7 @@ The IDE backend creates the project directory structure and `raccoon.project.yml
 
 ## Local backend port
 
-The Projects List page shows a **Backend Port** field in the header. This lets you point the Web IDE at a different local IDE backend port if you are running multiple instances or using a non-default port. Type a port number and press Enter. The selected port is persisted in `localStorage` as `localBackendPort`.
+The Projects List page shows a **Backend Port** field in the header. This lets you point the WebIDE at a different local IDE backend port if you are running multiple instances or using a non-default port. Type a port number and press Enter. The selected port is persisted in `localStorage` as `localBackendPort`.
 
 The default port is **4200** (set by `raccoon web --port 4200`). The Angular dev server (`npm start`) runs on port 4300 and proxies to the backend on 4200.
 
@@ -92,5 +92,5 @@ Below the canvas the dialog shows a list of detected collision events. Each entr
 
 ## Cross-references
 
-- [Starting the Web IDE]({{< ref "/04-web-ide/00-starting-the-web-ide.md" >}}) — `raccoon web` and the local backend port
+- [Starting the WebIDE]({{< ref "/04-web-ide/00-starting-the-web-ide.md" >}}) — `raccoon web` and the local backend port
 - [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — what the local IDE backend owns vs. the Pi server

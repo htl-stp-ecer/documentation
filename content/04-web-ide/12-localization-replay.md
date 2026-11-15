@@ -10,7 +10,7 @@ aliases:
 
 ## Overview
 
-When a real robot run is recorded with localization tracking, the Web IDE can load that recording and play it back in the **Table Visualization** panel. The playback shows the robot's historical path, particle cloud, and sensor hit events — giving you a frame-by-frame view of what the localization filter saw during the run.
+When a real robot run is recorded with localization tracking, the WebIDE can load that recording and play it back in the **Table Visualization** panel. The playback shows the robot's historical path, particle cloud, and sensor hit events — giving you a frame-by-frame view of what the localization filter saw during the run.
 
 This is useful for:
 
@@ -90,7 +90,7 @@ The recording system uses three environment variables that the CLI sets automati
 
 ## Auto-loading after a run
 
-When a run with `record_localization: true` completes, the IDE backend emits a `run_recorded` WebSocket event to the frontend. The Web IDE responds automatically:
+When a run with `record_localization: true` completes, the IDE backend emits a `run_recorded` WebSocket event to the frontend. The WebIDE responds automatically:
 
 1. The **Table Visualization** bottom panel opens
 2. The recording for that run is loaded and displayed

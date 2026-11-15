@@ -54,7 +54,7 @@ What it does, in order:
 
 1. **Resolve** the five versions and show them in the job summary.
 2. **Check the releases:** the release exists, and for each component exactly one asset matches, with a SHA-256 digest. (The same code the image build uses.)
-3. **Gate:** the transport release's `contract-hash.txt` is the target. The marker `RACCOON_CONTRACT_V1=<hash>` is read out of the `raccoon_sim` aarch64 wheel, the Bot UI `.deb` and the STM reader tarball and must equal it. On any difference the run **stops before anything is committed**, with a table naming the artifact, the hash found and the expected one. The gate cannot be switched off.
+3. **Gate:** the transport release's `contract-hash.txt` is the target. The marker `RACCOON_CONTRACT_V1=<hash>` is read out of the `raccoon_sim` aarch64 wheel, the BotUI `.deb` and the STM reader tarball and must equal it. On any difference the run **stops before anything is committed**, with a table naming the artifact, the hash found and the expected one. The gate cannot be switched off.
 4. **Name** the bundle, write `bundles/<name>.json`, set `latest.json`.
 5. **Commit** both to `main` as the Raccoon OS Bot (only with Publish).
 6. **Image:** start `image.yml` with the bundle name (only with Publish and Build image).
@@ -66,7 +66,7 @@ A **concurrency group** stops two runs from choosing the same name or pushing at
 
 ### When the gate fails
 
-After a **transport release** the default "everything newest" fails on purpose: `raccoon-lib`, the Bot UI and the STM reader still contain the old transport. Each of them gets an automatic *bump transport* pull request; merge them, let each one release, then run Create Bundle again. The error table says exactly which artifact has which hash. If you only want the older, consistent set, enter the older transport tag.
+After a **transport release** the default "everything newest" fails on purpose: `raccoon-lib`, the BotUI and the STM reader still contain the old transport. Each of them gets an automatic *bump transport* pull request; merge them, let each one release, then run Create Bundle again. The error table says exactly which artifact has which hash. If you only want the older, consistent set, enter the older transport tag.
 
 A transport release made before the contract hash existed has no `contract-hash.txt` and cannot be bundled.
 

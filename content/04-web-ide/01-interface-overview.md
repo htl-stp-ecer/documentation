@@ -10,9 +10,9 @@ aliases:
 
 ## Interface Overview
 
-The Web IDE is built around a **tool-stripe + panel** layout. Panels are toggled on demand from icon strips on the left and right edges — there is no fixed three-column split. Only the panels you need are open at any time, giving the center editor maximum space.
+The WebIDE is built around a **tool-stripe + panel** layout. Panels are toggled on demand from icon strips on the left and right edges — there is no fixed three-column split. Only the panels you need are open at any time, giving the center editor maximum space.
 
-![Web IDE tour](/images/web-ide/webide-tour.gif)
+![WebIDE tour](/images/web-ide/webide-tour.gif)
 
 ### Layout structure
 

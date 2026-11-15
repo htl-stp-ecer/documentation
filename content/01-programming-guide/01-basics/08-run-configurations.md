@@ -259,5 +259,5 @@ raccoon run simulated  # error: hidden
 ## Related pages
 
 - [raccoon run]({{< ref "/03-raccoon-cli/03-run.md" >}}) — the full run reference including `--no-mN` mission skipping
-- [Create your project]({{< ref "/00-getting-started/03-create-your-project.md" >}}) — how run configurations are added to a new project
+- [Create your project]({{< ref "/00-getting-started/03-create-a-project.md" >}}) — how run configurations are added to a new project
 - [raccoon-server]({{< ref "/03-raccoon-cli/16-raccoon-server.md" >}}) — the Pi daemon that executes the run

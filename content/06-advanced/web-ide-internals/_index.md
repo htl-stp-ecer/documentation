@@ -1,17 +1,17 @@
 ---
-title: "Web IDE Internals"
+title: "WebIDE Internals"
 author: "Mario Scholze"
 date: 2026-11-15
 draft: false
 weight: 40
-description: "How the Web IDE is built: the backend inside raccoon-cli and the Angular frontend."
+description: "How the WebIDE is built: the backend inside raccoon-cli and the Angular frontend."
 ---
 
-# Web IDE Internals
+# WebIDE Internals
 
-This section is for people who work on the Web IDE itself. To **use** it, see the [Web IDE]({{< ref "/04-web-ide/_index.md" >}}) section.
+This section is for people who work on the WebIDE itself. To **use** it, see the [WebIDE]({{< ref "/04-web-ide/_index.md" >}}) section.
 
-The Web IDE starts with `raccoon web`. Its backend lives in `raccoon-cli` (`raccoon_cli/ide`) and serves a frontend that is built from `web-ide/` in the same repository. Both use the same project operations as the command line, so the CLI and the Web IDE always agree.
+The WebIDE starts with `raccoon web`. Its backend lives in `raccoon-cli` (`raccoon_cli/ide`) and serves a frontend that is built from `web-ide/` in the same repository. Both use the same project operations as the command line, so the CLI and the WebIDE always agree.
 
 | Page | What it covers |
 |------|----------------|

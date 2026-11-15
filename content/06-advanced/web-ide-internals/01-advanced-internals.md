@@ -4,20 +4,20 @@ author: "Docs Bot"
 date: 2026-06-18
 draft: false
 weight: 20
-description: "Technical internals of the Web IDE: backends, run configurations, simulation modes, maps, and replay."
+description: "Technical internals of the WebIDE: backends, run configurations, simulation modes, maps, and replay."
 aliases:
   - /03-web-ide/09-advanced-internals/
 ---
 
 # Advanced Internals
 
-This page covers the parts of the Web IDE that matter when you need to debug behavior, understand how it talks to the robot, or keep the docs aligned with the actual application.
+This page covers the parts of the WebIDE that matter when you need to debug behavior, understand how it talks to the robot, or keep the docs aligned with the actual application.
 
 For a higher-level overview with diagrams, see [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}).
 
 ## Two backends, not one
 
-The Web IDE talks to two different backend classes:
+The WebIDE talks to two different backend classes:
 
 - A **local IDE backend**, default port **4200** (set by `raccoon web --port 4200`)
 - **Device backends** running on robot Pis, typically on port **8421**
@@ -96,7 +96,7 @@ That service is responsible for:
 
 ## Run configurations are first-class
 
-The Web IDE has a dedicated run configuration editor. It mirrors the Python-side `RunConfiguration` dataclass and writes `run_configurations:` in `raccoon.project.yml`.
+The WebIDE has a dedicated run configuration editor. It mirrors the Python-side `RunConfiguration` dataclass and writes `run_configurations:` in `raccoon.project.yml`.
 
 This is implemented in:
 
@@ -108,7 +108,7 @@ This means the docs site should treat run configurations as a shared platform co
 
 The flowchart run pipeline distinguishes between different simulation modes.
 
-From the Web IDE code (`flowchart-run-manager.ts`):
+From the WebIDE code (`flowchart-run-manager.ts`):
 
 ```typescript
 if (mode === 'debug') {
@@ -139,7 +139,7 @@ Relevant implementation points:
 
 ## Localization recording and replay
 
-The Web IDE can load replay runs backed by `localization.jsonl`.
+The WebIDE can load replay runs backed by `localization.jsonl`.
 
 This is not just a UI overlay. It depends on a recorder/player contract shared with `raccoon-lib`.
 
@@ -166,7 +166,7 @@ Pieces involved:
 
 See [Localization Replay](/04-web-ide/12-localization-replay/) for the full user-facing workflow.
 
-## Table maps in the Web IDE — v2 format
+## Table maps in the WebIDE — v2 format
 
 The `.ftmap` format is currently **version 2** with stacked layers and inter-layer transitions. Version 1 maps are accepted on read and automatically migrated.
 

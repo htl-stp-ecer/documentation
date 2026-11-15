@@ -80,7 +80,7 @@ The **Back to Projects** link inside the Mission Panel navigates to `/projects` 
 
 ## How mission numbering works
 
-Missions in the Web IDE use 3-digit numeric prefixes: `M000`, `M010`, `M020`, …, `M999`. These numbers determine execution order but leave gaps for future insertions — increment by 10 so you can insert `M015` later without renumbering everything.
+Missions in the WebIDE use 3-digit numeric prefixes: `M000`, `M010`, `M020`, …, `M999`. These numbers determine execution order but leave gaps for future insertions — increment by 10 so you can insert `M015` later without renumbering everything.
 
 `M000` is conventionally the setup mission (`is_setup: true`), and `M999` is the shutdown mission (`is_shutdown: true`). All numbers between 001 and 998 are valid for regular missions.
 

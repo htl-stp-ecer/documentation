@@ -206,9 +206,9 @@ Every checkpoint is a hard synchronization point. Two or three well-placed check
 
 ## Catching Collisions Before They Happen
 
-Sketching out a timeline on paper is fine, but it's easy to miss a conflict when two missions are long and both involve sweeping arms, wide turns, or shared lanes. The **Web IDE** can do this check for you.
+Sketching out a timeline on paper is fine, but it's easy to miss a conflict when two missions are long and both involve sweeping arms, wide turns, or shared lanes. The **WebIDE** can do this check for you.
 
-If you open both robots' projects in the Web IDE, it can replay each mission against the simulated game table, time-stamp every motion step based on the mission clock, and overlay the two paths on the same timeline. Wherever the two robots occupy overlapping space *at the same timestamp*, the IDE flags a collision — before you ever run the robots on a real table.
+If you open both robots' projects in the WebIDE, it can replay each mission against the simulated game table, time-stamp every motion step based on the mission clock, and overlay the two paths on the same timeline. Wherever the two robots occupy overlapping space *at the same timestamp*, the IDE flags a collision — before you ever run the robots on a real table.
 
 This turns picking checkpoint times from guesswork into a measurement exercise: you change a `wait_for_checkpoint()` value, the IDE re-simulates, and any remaining collision markers tell you exactly which checkpoints still need slack. Catching a collision in the browser costs nothing. Catching it at competition costs a run.
 

@@ -10,7 +10,7 @@ aliases:
 
 ## Concept: How running works
 
-The Web IDE uses an **IntelliJ/PyCharm-style run-configuration model**. Instead of a "Sim on/off" toggle, you choose a named run configuration that encodes everything: where to run (simulated, local, remote robot), what flags to set, and which environment variables to inject.
+The WebIDE uses an **IntelliJ/PyCharm-style run-configuration model**. Instead of a "Sim on/off" toggle, you choose a named run configuration that encodes everything: where to run (simulated, local, remote robot), what flags to set, and which environment variables to inject.
 
 There is no inline Sim toggle in the current UI — it was removed. Run mode is controlled entirely by the active run configuration's `target` field.
 
@@ -50,7 +50,7 @@ sequenceDiagram
 
 See [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) for the sequence diagram showing what happens end-to-end when you press Run.
 
-Run configurations are shared between the Web IDE and the `raccoon run` CLI. Any configuration you save in the IDE is written to `run_configurations:` in `raccoon.project.yml` and immediately available from the command line.
+Run configurations are shared between the WebIDE and the `raccoon run` CLI. Any configuration you save in the IDE is written to `run_configurations:` in `raccoon.project.yml` and immediately available from the command line.
 
 ---
 
@@ -153,9 +153,9 @@ You can also stop a run from the CLI using Ctrl+C in the terminal where `raccoon
 
 ## Simulation vs real robot
 
-> **Important:** Running from the Web IDE with a `simulated` configuration does NOT sync files to the robot, does NOT create checkpoints, and does NOT calibrate motors. For competition runs use `raccoon run` from the terminal, which handles all of those steps.
+> **Important:** Running from the WebIDE with a `simulated` configuration does NOT sync files to the robot, does NOT create checkpoints, and does NOT calibrate motors. For competition runs use `raccoon run` from the terminal, which handles all of those steps.
 
-| | Simulated run | Real run (Web IDE) | `raccoon run` (CLI) |
+| | Simulated run | Real run (WebIDE) | `raccoon run` (CLI) |
 |-|--------------|-------------------|---------------------|
 | Syncs to Pi | No | Yes (if connected) | Yes |
 | Creates checkpoint | No | Depends on config | Yes (by default) |
@@ -184,7 +184,7 @@ run_configurations:
     record_hz: 30
 ```
 
-Then from the Web IDE: select **competition** in the run-configuration dropdown, press **Run**. The recording auto-loads in the Table Visualization panel after the run finishes.
+Then from the WebIDE: select **competition** in the run-configuration dropdown, press **Run**. The recording auto-loads in the Table Visualization panel after the run finishes.
 
 For quick iteration during development, use the built-in `dev` preset or create a custom one:
 

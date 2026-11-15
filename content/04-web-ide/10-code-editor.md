@@ -10,7 +10,7 @@ aliases:
 
 ## Overview
 
-The center panel of the Web IDE can switch between two views:
+The center panel of the WebIDE can switch between two views:
 
 - **Flow** — the visual flowchart editor (default)
 - **Code** — a full Python source code editor backed by CodeMirror 6

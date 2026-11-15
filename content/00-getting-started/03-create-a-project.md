@@ -1,15 +1,16 @@
 ---
-title: "Create Your Project"
+title: "Create a Project"
 author: "Tobias Madlberger, Mario Scholze"
 date: 2026-11-15
 draft: false
 weight: 30
 description: "Set up a new robot project from the example template with one command."
 aliases:
+  - /00-getting-started/03-create-your-project/
   - /04-raccoon-cli/01-create/
 ---
 
-# Create Your Project
+# Create a Project
 
 One command sets up everything: it installs the tools you need, asks you a few questions, downloads the example project, and prepares it for you.
 
@@ -34,14 +35,14 @@ The script will:
 4. Download the matching branch of the [example project](https://github.com/htl-stp-ecer/raccoon-example) into a new folder named after your project, and rename the project inside its config files
 5. Give the project its own fresh git repository and a unique project ID (`uuid`)
 6. Run `uv sync` to download `raccoon-cli` and `raccoon-library` and create the virtual environment
-7. Create the first commit, titled *Initial Commit (created by raccoon-setup)*
+7. Create the first commit
 
 If the current folder is not writable, or a folder with your project name already exists, the script stops without changing anything.
 
 Once it finishes, go into your project and activate the Python virtual environment, which makes the `raccoon` command available:
 
 ```bash
-cd MyRobot
+cd MyRobot     # replace "MyRobot" with your project name
 ```
 
 - **Windows (PowerShell):** `.venv\Scripts\Activate.ps1`
@@ -49,12 +50,6 @@ cd MyRobot
 - **Linux / macOS:** `source .venv/bin/activate`
 
 You know it worked when the command line is prefixed with `(MyRobot)` or `(.venv)`. Remember to activate the venv again whenever you open a new terminal.
-
-> **Prefer to do it by hand?** Clone the branch yourself with
-> `git clone -b <differential|mecanum> --single-branch https://github.com/htl-stp-ecer/raccoon-example MyRobot`,
-> then run `uv sync` inside it. You'll also want to change the `name` in `pyproject.toml` and `raccoon.project.yml`
-> and replace the `uuid` in `raccoon.project.yml` with a new one. It is also recommended to delete the cloned `.git`
-> and initialize a fresh repository in the project folder.
 
 The project you get looks like this:
 
@@ -82,7 +77,6 @@ MyRobot/
     │   ├── m020_collect_object_mission.py
     │   ├── m030_deliver_object_mission.py
     │   └── m999_shutdown_mission.py
-    ├── service/                # shared, stateful logic (RobotService subclasses)
     └── steps/                  # reusable custom steps used by the missions
 ```
 
@@ -93,7 +87,3 @@ The example comes with a small set of demo missions you can read, change, or del
 ## Optional: IDE Setup
 
 Open the project folder in your preferred IDE (PyCharm, VS Code, etc.). You'll have full tab completion on all `raccoon` types out of the box — no special interpreter configuration needed. Stubs are provided for the `raccoon.*` namespace and are installed alongside the library.
-
----
-
-**Next:** [Connect to the robot and update](/00-getting-started/04-connect-and-update/)

@@ -17,7 +17,7 @@ aliases:
 raccoon missions <create|list|rename|remove|reorder>
 ```
 
-`raccoon missions` replaces the old `raccoon create mission`, `raccoon list`, `raccoon remove` and `raccoon reorder`. raccoon no longer creates projects: a project is a git repository made by the setup script, and the CLI is used inside the project's own environment. The same operations power the Web IDE, so both always agree.
+`raccoon missions` replaces the old `raccoon create mission`, `raccoon list`, `raccoon remove` and `raccoon reorder`. raccoon no longer creates projects: a project is a git repository made by the setup script, and the CLI is used inside the project's own environment. The same operations power the WebIDE, so both always agree.
 
 A mission `M010DriveToPoleMission` lives in `src/missions/m010_drive_to_pole_mission.py`. The number is part of the order: `M000` is the setup mission, `M999` the shutdown mission, and everything in between runs in ascending number.
 

@@ -1,5 +1,5 @@
 ---
-title: "Bot UI"
+title: "BotUI"
 author: "Jakob Schlögl"
 date: 2026-06-18
 draft: false
@@ -8,7 +8,7 @@ aliases:
   - /01-botui/
 ---
 
-# Bot UI
+# BotUI
 
 BotUI is the on-robot Flutter touchscreen application that runs on the Raspberry Pi inside every RaccoonOS robot. It gives you access to all robot features — sensor graphs, program execution, network settings, and system management — directly from the robot's display, without needing a laptop or SSH session.
 

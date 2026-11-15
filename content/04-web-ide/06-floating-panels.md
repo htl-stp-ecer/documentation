@@ -10,7 +10,7 @@ aliases:
 
 ## Tool Panels
 
-The Web IDE's supplementary views are **docked tool panels** — they slide open from the bottom or the right side of the editor and are resizable. Only the **Timing Panel** is a floating, draggable overlay (inside the flowchart canvas itself).
+The WebIDE's supplementary views are **docked tool panels** — they slide open from the bottom or the right side of the editor and are resizable. Only the **Timing Panel** is a floating, draggable overlay (inside the flowchart canvas itself).
 
 **Bottom panels** are for observing — Logs (what is the robot printing?), Table Visualization (where is the robot?), and Arm Visualizer (what are the joint angles?).
 
@@ -168,7 +168,7 @@ The arm configuration (joint count, lengths, axis directions) is read from the p
 
 ## Timing Panel (Floating, Inside Flowchart)
 
-The Timing Panel is the one remaining **floating overlay** in the Web IDE. It appears inside the flowchart canvas after a run completes and shows per-step execution data.
+The Timing Panel is the one remaining **floating overlay** in the WebIDE. It appears inside the flowchart canvas after a run completes and shows per-step execution data.
 
 **Content:**
 

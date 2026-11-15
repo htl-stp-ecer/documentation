@@ -1,5 +1,5 @@
 ---
-title: "Starting the Web IDE"
+title: "Starting the WebIDE"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
@@ -8,7 +8,7 @@ aliases:
   - /03-web-ide/00-starting-the-web-ide/
 ---
 
-## Starting the Web IDE
+## Starting the WebIDE
 
 From inside your project folder:
 
@@ -39,7 +39,7 @@ raccoon web --no-open    # start the server but don't open the browser
 - `GET/POST/PUT/DELETE /api/v1/...` — IDE backend API (project files, missions, steps, IK/FK)
 - `WebSocket /ws/...` — live run output and simulation pose events
 
-The Pi server on the robot is **separate** — it is not started by `raccoon web`. The Web IDE connects to it at `robot-ip:8421` when you issue real-robot run commands. See [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) for the full two-backend diagram.
+The Pi server on the robot is **separate** — it is not started by `raccoon web`. The WebIDE connects to it at `robot-ip:8421` when you issue real-robot run commands. See [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) for the full two-backend diagram.
 
 ## Troubleshooting startup
 
@@ -51,7 +51,7 @@ Error: Port 4200 is already in use. Try a different port with -p.
 
 Another process (perhaps a previous `raccoon web`) is holding port 4200. Either kill that process or use `-p 8080`.
 
-**Web IDE files not found**
+**WebIDE files not found**
 
 This means the Angular frontend was not bundled during installation. Reinstall with `pip install .` from the toolchain directory (requires Node.js).
 

@@ -13,6 +13,6 @@ When a sequence of steps shows up in several missions, wrap it in your own step.
 
 | Page | What it covers |
 |------|----------------|
-| [Custom Steps]({{< ref "/01-programming-guide/07-custom-steps/01-custom-steps.md" >}}) | Function-based steps (recommended), `@dsl` for Web IDE discovery, class-based steps, custom motion steps, resources |
+| [Custom Steps]({{< ref "/01-programming-guide/07-custom-steps/01-custom-steps.md" >}}) | Function-based steps (recommended), `@dsl` for WebIDE discovery, class-based steps, custom motion steps, resources |
 
 Custom steps live in `src/steps/` of your project. Read [Steps DSL]({{< ref "/01-programming-guide/01-basics/07-steps-dsl.md" >}}) first if you have not met `seq`, `parallel` and the builder methods yet.

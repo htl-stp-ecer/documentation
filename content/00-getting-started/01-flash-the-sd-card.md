@@ -22,10 +22,6 @@ Use **[Raspberry Pi Imager](https://www.raspberrypi.com/software/)** (Windows, m
 
 Alternatively, [Balena Etcher](https://etcher.balena.io/) works just as well: **Flash from file** → select the `.img.xz` → **Select target** → **Flash!**
 
-Then unscrew the lid on the **back** of the Wombat, insert the SD card, and close it up again.
+Then unscrew the lid on the back of the Wombat, insert the SD card, and close it up again.
 
 > If your SD card was pre-flashed with raccoon (e.g. at a workshop), skip to Step 2.
-
----
-
-**Next:** [Power on and connect to a network](/00-getting-started/02-power-on-and-network/)

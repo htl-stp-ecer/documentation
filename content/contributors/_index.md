@@ -1,7 +1,7 @@
 ---
 title: "Contributors"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-15
 draft: false
 weight: 90
 layout: "list"

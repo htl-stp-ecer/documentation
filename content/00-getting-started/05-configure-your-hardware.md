@@ -1,5 +1,5 @@
 ---
-title: "Configure Your Hardware"
+title: "Configure your Hardware"
 author: "Tobias Madlberger, Mario Scholze"
 date: 2026-11-15
 draft: false
@@ -16,11 +16,15 @@ The example project ships with a default hardware setup for the drivetrain type 
 | Motor ports, `inverted` flags, encoder scaling | `config/motors.yml` |
 | Servo ports and named positions | `config/servos.yml` |
 | Sensors | `config/hardware.yml` |
-| Kinematics, PID gains, physical dimensions (wheel size, track width, ...) | `config/robot.yml` |
+| Wheel size, Track width, PIDs, ... | `config/robot.yml` |
 
-Each file is commented, so open it and work through the values from top to bottom. The generated `src/hardware/` files are rebuilt from the YAML on every `raccoon run`, so never edit those by hand.
+The generated `src/hardware/` files are rebuilt from the YAML on every `raccoon run`, so never edit those by hand.
 
-### Measure your robot's dimensions
+You shouldn't edit most values in `robot.yml`, as those are automatically adjusted by autotune.
+
+→ See [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) for the full YAML reference.
+
+## Measure your robot's dimensions
 
 The drivetrain dimensions live in `config/robot.yml` under `drive.kinematics`. They are what lets the robot turn by exactly 90° and drive exactly 30 cm, so measure them carefully (calipers or a ruler is fine).
 
@@ -36,16 +40,11 @@ The drivetrain dimensions live in `config/robot.yml` under `drive.kinematics`. T
 >
 > Note that the `physical:` section further down the same file is the opposite: its keys end in `_cm` (`width_cm`, `x_cm`, ...) and are in **centimeters**. Always go by the unit in the key name or the comment next to it.
 
-**Both drivetrains**
+### Configuring a differential (two-wheeled) bot
 
 | Key | What to measure |
 |-----|-----------------|
 | `wheel_radius` | Radius of one wheel: measure the **diameter** with calipers and halve it. Convert to meters. |
-
-**Differential (two-wheeled)** — one value:
-
-| Key | What to measure |
-|-----|-----------------|
 | `wheelbase` | Distance between the **left and right wheels**, measured between the points where each wheel touches the ground (contact points), not between the motors or the outside of the robot. In other words, this is the track width. |
 
 ```yaml
@@ -55,10 +54,13 @@ kinematics:
   wheelbase: 0.16        # 16 cm between left and right contact points -> 0.16 m
 ```
 
-**Mecanum (four-wheeled)** — two values. Be careful: the name `wheelbase` means something different than on a differential robot.
+### Configuring a mecanum (four-wheeled with omniwheels) bot
+
+> **Careful:** the name `wheelbase` means something different than on a differential robot!
 
 | Key | What to measure |
 |-----|-----------------|
+| `wheel_radius` | Radius of one wheel: measure the **diameter** with calipers and halve it. Convert to meters. |
 | `track_width` | **Left-to-right** distance between the wheel contact points (same measurement as `wheelbase` on a differential robot). |
 | `wheelbase` | **Front-to-back** distance between the front and rear axles. |
 
@@ -72,16 +74,8 @@ kinematics:
 
 If the robot turns too much or too little, the width value (`wheelbase` on differential, `track_width` and `wheelbase` on mecanum) is usually the culprit. If it drives too far or too short, check `wheel_radius`. `raccoon calibrate` can fine-tune the rest later.
 
-### Motor direction
+## Configuring Motor Direction
 
 **The most critical setting:** all motors must spin **forward** when given a positive power command. Decide which direction is "forward" for your robot, then set `inverted: true` in `config/motors.yml` for any motor that spins the wrong way.
 We recommend you plug in all motors with the **red cable facing up** to keep it simple when you for example quickly need to plug in a cable that fell out under stress.
 For that, you need to configure the `inverted` property of each motor correctly.
-
-> The Wombat can be mounted in any orientation — the software accounts for it.
-
-→ See [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) for the full YAML reference.
-
----
-
-**Next:** [Run it and test basic motion](/00-getting-started/06-run-it/)

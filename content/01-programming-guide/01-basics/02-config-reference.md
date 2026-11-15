@@ -60,7 +60,7 @@ The root project descriptor. Only a handful of keys live here directly; the rest
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `name` | `string` | Human-readable project name. Displayed in the raccoon CLI and web IDE. Set once when the project is created, in `raccoon.project.yml` (and `pyproject.toml`). |
+| `name` | `string` | Human-readable project name. Displayed in the Raccoon CLI and web IDE. Set once when the project is created, in `raccoon.project.yml` (and `pyproject.toml`). |
 | `uuid` | `string` | A unique identifier for the project (UUID v4). Used by the raccoon daemon to route commands to the correct project on the Pi. Set once at `raccoon create`, never change manually. |
 | `format_version` | `integer` | Schema version of this project file. Written by `raccoon migrate` and checked by `raccoon run` against `raccoon-lib.MIN_FORMAT_VERSION`. Projects at an older version than the library requires will not run until `raccoon migrate` is executed. Omit or leave at `0` for newly-created projects. |
 | `robot` | `!include` | Delegates to `config/robot.yml`. The entire robot subsystem configuration lives there. |
@@ -693,7 +693,7 @@ Controls how `raccoon` connects to the robot over the network and copies files v
 | `pi_port` | `integer` | `8421` | TCP port on which the raccoon daemon (`raccoon server`) is listening on the Pi. |
 | `pi_user` | `string` | `pi` | SSH username used for SFTP file transfers. |
 | `remote_path` | `string` | *(empty)* | Absolute path on the Pi where the project is deployed. When empty, raccoon uses a default path derived from the project UUID. |
-| `auto_connect` | `bool` | `true` | When `true`, raccoon CLI commands that require a connection (`run`, `sync`, `calibrate`, etc.) will attempt to connect automatically without prompting. Set to `false` to always require an explicit `raccoon connect`. |
+| `auto_connect` | `bool` | `true` | When `true`, Raccoon CLI commands that require a connection (`run`, `sync`, `calibrate`, etc.) will attempt to connect automatically without prompting. Set to `false` to always require an explicit `raccoon connect`. |
 
 ---
 

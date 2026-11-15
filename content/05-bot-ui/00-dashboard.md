@@ -12,7 +12,7 @@ aliases:
 
 The Dashboard is the first screen shown after BotUI boots. It acts as the root of the application: every other screen is reached by navigating forward from here, and pressing back from any sub-screen returns here.
 
-![IMG: Dashboard Screen on the Bot UI](/images/botui/botui-dashboard.png)
+![IMG: Dashboard Screen on the BotUI](/images/botui/botui-dashboard.png)
 
 ## Concept
 

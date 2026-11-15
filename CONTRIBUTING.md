@@ -60,7 +60,7 @@ Each top-level folder under `content/` is a section. The numeric prefix controls
 | `01-programming-guide/` | Learning path for `raccoon-lib`: `01-basics/`, `02-driving/`, `03-calibration/`, `04-servos/`, `05-motors/`, `06-sensors/`, `07-custom-steps/`, `08-more-topics/`, `09-camera/` |
 | `02-steps-reference/` | The step catalog. Generated from `raccoon-lib`, do not edit by hand |
 | `03-raccoon-cli/` | One page per `raccoon` CLI command |
-| `04-web-ide/` | Using the Web IDE |
+| `04-web-ide/` | Using the WebIDE |
 | `05-bot-ui/` | Using the on-robot UI |
 | `06-advanced/` | How RaccoonOS works inside: architecture, `transport/`, `firmware/`, `web-ide-internals/` |
 | `07-build-and-contribute/` | Building, releases, CI, contributing |

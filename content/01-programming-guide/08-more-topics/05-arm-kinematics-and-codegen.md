@@ -299,11 +299,11 @@ def to(self, x: float, y: float, z: float = 0.0, speed: float | None = None) -> 
     """
 ```
 
-**The production path is named positions.** Use the YAML `positions:` block and let `raccoon codegen` solve IK at build time. The Web IDE arm editor uses the same toolchain-side IK code and can help you visualize positions before committing them to YAML.
+**The production path is named positions.** Use the YAML `positions:` block and let `raccoon codegen` solve IK at build time. The WebIDE arm editor uses the same toolchain-side IK code and can help you visualize positions before committing them to YAML.
 
-## Web IDE Relationship
+## WebIDE Relationship
 
-The Web IDE arm editor uses the same toolchain-side kinematics helpers as code generation:
+The WebIDE arm editor uses the same toolchain-side kinematics helpers as code generation:
 
 - chain construction
 - forward kinematics
@@ -311,7 +311,7 @@ The Web IDE arm editor uses the same toolchain-side kinematics helpers as code g
 - joint-axis visualization
 - link-segment visualization
 
-That is why editing an arm in the Web IDE and generating code from the CLI can stay consistent: they are sharing the same math code, not two separate implementations.
+That is why editing an arm in the WebIDE and generating code from the CLI can stay consistent: they are sharing the same math code, not two separate implementations.
 
 ## Common Failure Modes
 
@@ -442,5 +442,5 @@ seq([
 ## Related Pages
 
 - [Servos]({{< ref "/01-programming-guide/04-servos/01-servos.md" >}})
-- [Web IDE Advanced Internals]({{< ref "/06-advanced/web-ide-internals/01-advanced-internals.md" >}})
+- [WebIDE Advanced Internals]({{< ref "/06-advanced/web-ide-internals/01-advanced-internals.md" >}})
 - [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}})

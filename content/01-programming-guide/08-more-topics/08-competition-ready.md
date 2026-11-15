@@ -10,7 +10,7 @@ aliases:
 
 # Making Your Robot Competition Ready
 
-At some point your robot stops being a development toy and has to survive on a real table, in front of real judges, with no laptop tethered to it. Competition mode is different from running from the Web IDE or with `raccoon run`: the robot has to start on a **light signal**, it has to **stop itself after 120 seconds** without anyone pressing a key, and it has to do it reliably whether the Wi-Fi works or not.
+At some point your robot stops being a development toy and has to survive on a real table, in front of real judges, with no laptop tethered to it. Competition mode is different from running from the WebIDE or with `raccoon run`: the robot has to start on a **light signal**, it has to **stop itself after 120 seconds** without anyone pressing a key, and it has to do it reliably whether the Wi-Fi works or not.
 
 This page walks you through the three things you need to turn your development robot into a competition robot:
 

@@ -19,7 +19,7 @@ aliases:
 ```mermaid
 graph LR
     subgraph Laptop
-        CLI[raccoon CLI]
+        CLI[Raccoon CLI]
     end
     subgraph Pi
         Server[raccoon-server<br/>HTTP/WebSocket :8421]
@@ -48,7 +48,7 @@ At start the server runs the [transport contract check]({{< ref "/06-advanced/tr
 
 `POST /api/v1/run/<project>` and `POST /api/v1/calibrate/<project>` answer **409** with the affected components while a component has `mismatch`, `version-mismatch` or `bundle-fehler` (and is running, or is a service that refused and exited), or while the bundle file is missing, unreadable or empty. The refusal comes before services are deployed or a process is started. Dev mode never blocks. Off a Raccoon device (a development server on a laptop) the endpoint reports `on_device: false` and nothing is enforced.
 
-The CLI (`doctor`, `connect`, `run`) and the Web IDE read this endpoint; neither looks at the files itself.
+The CLI (`doctor`, `connect`, `run`) and the WebIDE read this endpoint; neither looks at the files itself.
 
 ## Commands
 
