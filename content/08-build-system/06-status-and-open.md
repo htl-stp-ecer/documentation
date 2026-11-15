@@ -1,6 +1,6 @@
 ---
 title: "Status and open points"
-author: "marios271"
+author: "Mario Scholze"
 date: 2026-11-04
 draft: false
 weight: 7

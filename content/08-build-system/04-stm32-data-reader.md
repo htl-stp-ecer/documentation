@@ -1,6 +1,6 @@
 ---
 title: "stm32-data-reader"
-author: "marios271"
+author: "Mario Scholze"
 date: 2026-11-04
 draft: false
 weight: 5

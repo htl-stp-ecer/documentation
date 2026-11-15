@@ -1,6 +1,6 @@
 ---
 title: "Backends"
-author: "marios271"
+author: "Mario Scholze"
 date: 2026-11-14
 draft: false
 weight: 30
