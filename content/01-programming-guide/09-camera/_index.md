@@ -1,5 +1,5 @@
 ---
-title: "raccoon-cam"
+title: "Camera"
 author: "Mario Scholze"
 date: 2026-11-14
 draft: false
