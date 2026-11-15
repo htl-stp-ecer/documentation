@@ -93,6 +93,8 @@ For **WiFi Client** mode:
 
 > Note the IP — you'll need it shortly. Example: `192.168.178.124`
 
+For **Hotspot** mode, select **Hotspot** and start it with the default values. The Wombat then creates a network named **`RaccoonOS`** with the password **`raccoonos`**. Connect your laptop to it, then tap **Device Info** to see the IP address. You can change the name and password in the hotspot settings.
+
 **If the robot isn't reachable after connecting:** this is a known network manager issue. Reboot the Wombat and it will reconnect.
 
 → See [BotUI documentation]({{< ref "/01-botui" >}}) for full detail on all connection modes.
