@@ -4,8 +4,8 @@
 
 <div align="center">
 
-[![Build](https://img.shields.io/github/actions/workflow/status/htl-stp-ecer/documentation/hugo.yml?branch=main&style=flat-square&color=DAA03E&labelColor=1E1A17&label=build)](https://github.com/htl-stp-ecer/documentation/actions/workflows/hugo.yml)
 [![License: CC BY 4.0](https://img.shields.io/badge/license-CC%20BY%204.0-DAA03E?style=flat-square&labelColor=1E1A17)](LICENSE)
+[![Build](https://img.shields.io/github/actions/workflow/status/htl-stp-ecer/documentation/hugo.yml?branch=main&style=flat-square&color=DAA03E&labelColor=1E1A17&label=build)](https://github.com/htl-stp-ecer/documentation/actions/workflows/hugo.yml)
 [![Live Site](https://img.shields.io/badge/live-raccoon--docs.pages.dev-DAA03E?style=flat-square&labelColor=1E1A17)](https://raccoon-docs.pages.dev)
 
 </div>
