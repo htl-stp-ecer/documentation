@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 4
-aliases:
-  - /06-firmware/data-pipeline/
 ---
 
 ## Concept

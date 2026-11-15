@@ -5,9 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 30
 description: "Set up a new robot project from the example template with one command."
-aliases:
-  - /00-getting-started/03-create-your-project/
-  - /04-raccoon-cli/01-create/
 ---
 
 # Create a Project
@@ -19,20 +16,20 @@ Open a terminal in the folder you'd like to create the project in, then run the 
 **Linux / macOS:**
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
+curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-template/main/raccoon-setup.sh | bash
 ```
 
 **Windows (PowerShell):**
 
 ```
-irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-template/main/raccoon-setup.ps1 | iex
 ```
 
 The script will:
 1. Install **Git** and **uv** if they are missing (uv also downloads the right Python version for you — no separate Python install needed)
 2. Ask for a **project name** (letters, digits, `-` and `_`; must start with a letter)
 3. Ask for your **drivetrain type**: `differential` (two-wheeled) or `mecanum` ("omniwheeled"). Other bot types are currently not supported by the template.
-4. Download the matching branch of the [example project](https://github.com/htl-stp-ecer/raccoon-example) into a new folder named after your project, and rename the project inside its config files
+4. Download the matching branch of the [example project](https://github.com/htl-stp-ecer/raccoon-template) into a new folder named after your project, and rename the project inside its config files
 5. Give the project its own fresh git repository and a unique project ID (`uuid`)
 6. Run `uv sync` to download `raccoon-cli` and `raccoon-library` and create the virtual environment
 7. Create the first commit

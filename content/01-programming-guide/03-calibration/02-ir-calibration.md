@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 20
-aliases:
-  - /02-programming/algorithms/ir-calibration/
 ---
 
 # IR Sensor Calibration — K-Means Clustering

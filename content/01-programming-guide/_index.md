@@ -5,8 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 10
 description: "Learn to program a Botball robot with raccoon, in the order you need it: project basics, driving, calibration, servos, motors, sensors and custom steps."
-aliases:
-  - /02-programming/
 ---
 
 # Programming Guide
@@ -49,6 +47,6 @@ class M010DriveToZone(Mission):
 
 ## Where things live
 
-- **Concepts and architecture:** [How Raccoon works]({{< ref "/00-getting-started/07-how-raccoon-works.md" >}}) explains the project model, `Defs` and the mission lifecycle. The full layer diagram is in [Advanced → Architecture]({{< ref "/06-advanced/01-architecture.md" >}}).
+- **Concepts and architecture:** [How Raccoon works]({{< ref "/06-advanced/02-project-model.md" >}}) explains the project model, `Defs` and the mission lifecycle. The full layer diagram is in [Advanced → Architecture]({{< ref "/06-advanced/01-architecture.md" >}}).
 - **Command line tools:** [Raccoon CLI]({{< ref "/03-raccoon-cli/_index.md" >}}) and the visual [WebIDE]({{< ref "/04-web-ide/_index.md" >}}).
 - **Every step with its signature:** [Steps Reference]({{< ref "/02-steps-reference/_index.md" >}}).

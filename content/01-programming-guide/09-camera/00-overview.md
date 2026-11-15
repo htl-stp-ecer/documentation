@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 0
 description: "The parts of raccoon-cam and how data flows from the camera to your mission code."
-aliases:
-  - /09-raccoon-cam/00-overview/
 ---
 
 # Overview

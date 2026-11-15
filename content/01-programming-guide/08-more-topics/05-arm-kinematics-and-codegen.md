@@ -4,8 +4,6 @@ author: "OpenAI Codex"
 date: 2026-06-18
 draft: false
 weight: 50
-aliases:
-  - /02-programming/20-arm-kinematics-and-codegen/
 ---
 
 # Arm Kinematics and Code Generation

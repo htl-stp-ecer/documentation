@@ -5,8 +5,6 @@ date: 2026-11-02
 draft: false
 weight: 1
 description: "What a bundle is, how the manual Create Bundle workflow makes one, and how an image is built from it."
-aliases:
-  - /07-releases/00-bundles-and-create-bundle/
 ---
 
 # Bundles and Create Bundle
@@ -39,7 +37,7 @@ The first bundle of a day is `YYYY.MM.DD`, the next `YYYY.MM.DD-2`, then `-3` an
 
 ## The Create Bundle workflow
 
-Actions → **Create Bundle** → **Run workflow** in `raccoon-image`. It runs only when started by hand, and it is the **only** place that publishes bundles and moves the pins in `raccoon-example`.
+Actions → **Create Bundle** → **Run workflow** in `raccoon-image`. It runs only when started by hand, and it is the **only** place that publishes bundles and moves the pins in `raccoon-template`.
 
 | Input | Empty means |
 |-------|-------------|
@@ -58,7 +56,7 @@ What it does, in order:
 4. **Name** the bundle, write `bundles/<name>.json`, set `latest.json`.
 5. **Commit** both to `main` as the Raccoon OS Bot (only with Publish).
 6. **Image:** start `image.yml` with the bundle name (only with Publish and Build image).
-7. **Example:** send `bundle-released` to `raccoon-example` so the template pins move (only with Publish).
+7. **Example:** send `bundle-released` to `raccoon-template` so the template pins move (only with Publish).
 
 A **dry run** (Publish off) does 1 to 3 completely, but commits, releases and dispatches nothing. It also builds no image, because `image.yml` reads the bundle from `main`, where a dry run has not put it.
 

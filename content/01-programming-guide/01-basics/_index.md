@@ -23,4 +23,4 @@ Everything you need before the robot can drive: what is in a project, how the YA
 | [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) | Named profiles for `raccoon run` |
 | [Parallel and Background]({{< ref "/01-programming-guide/01-basics/09-parallel-and-background.md" >}}) | Doing several things at once |
 
-A good first read is [How Raccoon works]({{< ref "/00-getting-started/07-how-raccoon-works.md" >}}), which explains how these pieces fit together.
+A good first read is [How Raccoon works]({{< ref "/06-advanced/02-project-model.md" >}}), which explains how these pieces fit together.

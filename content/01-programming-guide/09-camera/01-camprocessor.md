@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 10
 description: "Write a CamProcessor, declare it with set_processor, and learn how the ProcessorHost runs it and handles failures."
-aliases:
-  - /09-raccoon-cam/01-camprocessor/
 ---
 
 # CamProcessor

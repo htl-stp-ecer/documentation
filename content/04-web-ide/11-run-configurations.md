@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 14
-aliases:
-  - /03-web-ide/11-run-configurations/
 ---
 
 ## Concept: Why run configurations?

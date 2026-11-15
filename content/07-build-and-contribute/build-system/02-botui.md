@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 3
 description: "botui converted to the new build system: the .deb is built in Docker."
-aliases:
-  - /08-build-system/02-botui/
 ---
 
 # botui

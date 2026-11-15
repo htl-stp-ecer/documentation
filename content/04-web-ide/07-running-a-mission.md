@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 10
-aliases:
-  - /03-web-ide/07-running-a-mission/
 ---
 
 ## Concept: How running works

@@ -3,9 +3,7 @@ title: "Your First Robot Program"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 80
-aliases:
-  - /02-programming/00a-first-robot-program/
+weight: 5
 ---
 
 # Your First Robot Program
@@ -515,7 +513,7 @@ seq([
 
 The code snippets on this page are intentionally minimal — each one teaches one thing. Once you understand the pieces, it helps to see them all working together in a real project.
 
-**[raccoon-example](https://github.com/htl-stp-ecer/raccoon-example)** is a clean reference robot that demonstrates everything on this page in a single, readable codebase:
+**[raccoon-template](https://github.com/htl-stp-ecer/raccoon-template)** is a clean reference robot that demonstrates everything on this page in a single, readable codebase:
 
 - `m000_setup_mission.py` — servo homing, `calibrate()`, `wait_for_button()`  
 - `m010_navigate_to_object_mission.py` — `mark_heading_reference()`, `parallel()`, `.until()` with a sensor stop condition  
@@ -523,10 +521,10 @@ The code snippets on this page are intentionally minimal — each one teaches on
 - `m030_deliver_object_mission.py` — `strafe_follow_line_single()`, combined stop conditions  
 - `steps/arm_steps.py` — `seq()` composition and `defer()` for runtime decisions  
 
-It is built with the same patterns as competition robots, but written for clarity rather than speed. The competition robots ([drumbot](https://gitlab.com/fallgame2025/drumbot), [conebot](https://gitlab.com/fallgame2025/conebot), [packingbot](https://gitlab.com/fallgame2025/packingbot)) show what the platform looks like under real pressure — raccoon-example shows what the code *should* look like when you have time to write it properly.
+It is built with the same patterns as competition robots, but written for clarity rather than speed. The competition robots ([drumbot](https://gitlab.com/fallgame2025/drumbot), [conebot](https://gitlab.com/fallgame2025/conebot), [packingbot](https://gitlab.com/fallgame2025/packingbot)) show what the platform looks like under real pressure — raccoon-template shows what the code *should* look like when you have time to write it properly.
 
 ```bash
-git clone https://github.com/htl-stp-ecer/raccoon-example.git
+git clone https://github.com/htl-stp-ecer/raccoon-template.git
 ```
 
 ---

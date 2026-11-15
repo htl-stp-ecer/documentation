@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 4
-aliases:
-  - /04-raccoon-cli/03-run/
 ---
 
 # raccoon run

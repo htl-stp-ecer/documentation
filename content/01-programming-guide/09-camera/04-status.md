@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 40
 description: "What is verified in raccoon-cam, what has not been tried on a robot, and the decisions that are still open."
-aliases:
-  - /09-raccoon-cam/04-status/
 ---
 
 # Status

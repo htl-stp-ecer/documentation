@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 5
-aliases:
-  - /06-firmware/pi-bridge-internals/
 ---
 
 ## Mental model

@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 70
-aliases:
-  - /02-programming/04-steps/
 ---
 
 # Steps DSL

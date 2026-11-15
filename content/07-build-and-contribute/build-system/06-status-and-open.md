@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 7
 description: "What is done, what is planned per repository, and what must happen in which order."
-aliases:
-  - /08-build-system/06-status-and-open/
 ---
 
 # Status and open points
@@ -28,7 +26,7 @@ All work is on branches called `refactor/build-system`. Nothing is merged and no
 
 ## Planned per repository
 
-Nothing: all repositories except `raccoon-example` are converted. The simulator tests of raccoon-lib are a TODO (issue #109).
+Nothing: all repositories except `raccoon-template` are converted. The simulator tests of raccoon-lib are a TODO (issue #109).
 
 ## Order and what breaks
 

@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 9
-aliases:
-  - /03-web-ide/06-floating-panels/
 ---
 
 ## Tool Panels

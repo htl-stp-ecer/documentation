@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 8
-aliases:
-  - /06-firmware/imu/
 ---
 
 ## Mental model

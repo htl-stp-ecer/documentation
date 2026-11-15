@@ -5,8 +5,6 @@ date: 2026-11-02
 draft: false
 weight: 5
 description: "How raccoon update brings the laptop project and the robot to the versions of one bundle."
-aliases:
-  - /04-raccoon-cli/04-update/
 ---
 
 # raccoon update

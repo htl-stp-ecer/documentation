@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 8
 description: "Work in progress: how every repository builds and deploys. One build.py, one deploy.py, results in ./builds/. To be cleaned up and merged into the other sections."
-aliases:
-  - /08-build-system/
 ---
 
 # Build System

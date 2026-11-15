@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 30
 description: "The actual .ftmap contract: runtime v1 shape, IDE v2 shape, codegen resolution, and coordinate conventions."
-aliases:
-  - /02-programming/17-table-maps/
 ---
 
 # Table Maps

@@ -5,8 +5,6 @@ date: 2026-11-02
 draft: false
 weight: 3
 description: "How the contract hash is computed, what changes it, where it is embedded, the shared check specification and the image build gates."
-aliases:
-  - /07-releases/02-transport-contract-in-ci/
 ---
 
 # Transport contract in CI

@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 13
 description: "How raccoon checkpoint works: invisible git snapshots, and how to list, inspect, restore, delete, and clean them."
-aliases:
-  - /04-raccoon-cli/12-checkpoint/
 ---
 
 # raccoon checkpoint

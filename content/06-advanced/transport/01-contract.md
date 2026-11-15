@@ -5,8 +5,6 @@ date: 2026-11-02
 draft: false
 weight: 21
 description: "How raccoon makes sure every component on the robot speaks the same transport, and what to do when it does not."
-aliases:
-  - /04-raccoon-cli/20-transport-contract/
 ---
 
 # Transport contract

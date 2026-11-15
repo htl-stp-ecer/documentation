@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 20
-aliases:
-  - /02-programming/13-configuration-reference/
 ---
 
 ## Concept: Config → Code Pipeline

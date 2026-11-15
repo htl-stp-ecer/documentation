@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 20
-aliases:
-  - /02-programming/22-localization-resync/
 ---
 
 # Localization and Resync

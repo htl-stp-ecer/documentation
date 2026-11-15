@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 1
-aliases:
-  - /06-firmware/architecture/
 ---
 
 ## Mental model — why two processors?

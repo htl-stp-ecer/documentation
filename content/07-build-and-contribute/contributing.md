@@ -39,4 +39,4 @@ Every repository has a `README` with the build commands and a `CONTRIBUTING.md` 
 The documentation is a Hugo site. The folders under `content/` are the top-level sections of the sidebar, and the numeric prefixes set their order. `CONTRIBUTING.md` in the documentation repository has the style rules, the front matter and the shortcodes. Two things to know:
 
 - The [Steps Reference]({{< ref "/02-steps-reference/_index.md" >}}) is generated from `raccoon-lib` (`data/dsl_steps.json`). Do not edit the catalog by hand; fix the docstring of the step in the library instead.
-- A page that moves needs an `aliases:` entry with its old URL in the front matter, so old links keep working.
+- When a page moves, fix the `ref` links that point to it. Use the full path from `content/`.

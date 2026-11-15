@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 20
-aliases:
-  - /02-programming/algorithms/wait-for-light/
 ---
 
 # Wait for Light

@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 9
 description: "Source-verified recovery playbooks for raccoon connect, sync, run, update, logs, services, and migrations."
-aliases:
-  - /04-raccoon-cli/08-troubleshooting-and-recovery/
 ---
 
 # Troubleshooting And Recovery

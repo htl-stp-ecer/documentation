@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 90
-aliases:
-  - /01-programming-guide/02-driving/11-wall-alignment/
-  - /02-programming/algorithms/wall-alignment/
 ---
 
 # Wall Alignment

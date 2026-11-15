@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 20
 description: "CamBackend, the sink it pushes into, selecting a backend with set_backend, the USB backend and its options, and writing your own."
-aliases:
-  - /09-raccoon-cam/02-backends/
 ---
 
 # Backends

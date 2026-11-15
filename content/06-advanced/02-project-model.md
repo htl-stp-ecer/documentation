@@ -3,9 +3,7 @@ title: "Architecture & Project Model"
 author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
-weight: 70
-aliases:
-  - /02-programming/00b-architecture-concepts/
+weight: 15
 ---
 
 # Architecture & Project Model
@@ -251,6 +249,6 @@ from libstp import *   # ← do not use
 |-------|------|
 | Full YAML reference for `raccoon.project.yml` | [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}}) |
 | `Defs` class patterns, `ServoPreset`, `SensorGroup` | [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) |
-| Writing your first mission | [Your First Robot Program]({{< ref "/00-getting-started/08-first-program.md" >}}) |
+| Writing your first mission | [Your First Robot Program]({{< ref "/01-programming-guide/01-basics/00-first-program.md" >}}) |
 | YAML includes and `!include-merge` | [YAML Includes]({{< ref "/01-programming-guide/01-basics/03-yaml-includes.md" >}}) |
 | Motion profiles and control loop internals | [Motion Flow and Kinematics]({{< ref "/01-programming-guide/02-driving/11-motion-flow-and-kinematics.md" >}}) |

@@ -4,9 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 50
-aliases:
-  - /01-programming-guide/02-driving/03-smooth-path/
-  - /02-programming/21-smooth-path/
 ---
 
 # Smooth Path and Spline Motion

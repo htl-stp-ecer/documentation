@@ -5,8 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 60
 description: "Run the project with raccoon run and drive a first smoke-test mission."
-aliases:
-  - /00-getting-started/06-run-it/
 ---
 
 # Run the program

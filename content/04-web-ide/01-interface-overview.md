@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 4
-aliases:
-  - /03-web-ide/01-interface-overview/
 ---
 
 ## Interface Overview

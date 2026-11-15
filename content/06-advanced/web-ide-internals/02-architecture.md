@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 10
 description: "How the WebIDE's Angular frontend, local IDE backend, and robot Pi fit together."
-aliases:
-  - /03-web-ide/0a-architecture/
 ---
 
 ## Concept: What is the WebIDE?

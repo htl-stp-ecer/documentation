@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 11
 description: "How raccoon logs actually works: local vs remote runs, filtering, following, sources, clearing, and project services."
-aliases:
-  - /04-raccoon-cli/10-logs/
 ---
 
 # raccoon logs

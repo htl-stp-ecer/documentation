@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 5
 description: "The reader and the STM32 firmware, cross compiled in Docker at native speed; the release is a .deb."
-aliases:
-  - /08-build-system/04-stm32-data-reader/
 ---
 
 # stm32-data-reader

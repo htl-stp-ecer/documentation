@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 6
 description: "The compiled library and the type stubs, cross compiled in Docker for the Pi; what the CI still does with cibuildwheel."
-aliases:
-  - /08-build-system/05-raccoon-lib/
 ---
 
 # raccoon-lib

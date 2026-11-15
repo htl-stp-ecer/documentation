@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 30
 description: "Run the camera service, use the CamClient from your program, and the channels, commands and status behind them."
-aliases:
-  - /09-raccoon-cam/03-service-and-client/
 ---
 
 # Service and client

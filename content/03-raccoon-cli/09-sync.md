@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 10
 description: "How raccoon sync actually works: backends, verification, sync counters, and failure modes."
-aliases:
-  - /04-raccoon-cli/09-sync/
 ---
 
 # raccoon sync

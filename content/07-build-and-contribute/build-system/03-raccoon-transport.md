@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 4
 description: "raccoon-transport converted to the new build system, and where the contract is matched."
-aliases:
-  - /08-build-system/03-raccoon-transport/
 ---
 
 # raccoon-transport

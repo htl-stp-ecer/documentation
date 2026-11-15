@@ -5,9 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 80
 description: "Named bundles of raccoon run flags declared in raccoon.project.yml, including the three builtin presets and how to add your own."
-aliases:
-  - /01-programming-guide/01-basics/09-run-configurations/
-  - /04-raccoon-cli/13-run-configurations/
 ---
 
 # Run Configurations

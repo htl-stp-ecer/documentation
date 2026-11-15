@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 10
-aliases:
-  - /02-programming/09a-motor-steps/
 ---
 
 # Motor Steps

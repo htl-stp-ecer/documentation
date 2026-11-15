@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 9
 description: "Systemd unit topology, PrivateTmp and SHM constraints, MotorWatchdog safety service, SystemMonitor, UartMonitor, and flash-based calibration storage."
-aliases:
-  - /06-firmware/robot-services-and-systemd/
 ---
 
 # Robot Services And systemd

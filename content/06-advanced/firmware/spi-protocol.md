@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 3
-aliases:
-  - /06-firmware/spi-protocol/
 ---
 
 # SPI Communication Protocol

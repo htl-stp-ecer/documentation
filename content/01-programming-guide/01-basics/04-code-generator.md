@@ -68,5 +68,5 @@ If a mission fails with a missing attribute on `Defs`, the YAML entry is missing
 
 - [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}}): every key of every config file.
 - [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}): how drivetrain, motors, servos and sensors are declared.
-- [How Raccoon works]({{< ref "/00-getting-started/07-how-raccoon-works.md" >}}): the path from YAML to a running robot.
+- [How Raccoon works]({{< ref "/06-advanced/02-project-model.md" >}}): the path from YAML to a running robot.
 - [Arm Kinematics and Code Generation]({{< ref "/01-programming-guide/08-more-topics/05-arm-kinematics-and-codegen.md" >}}): the extra code generated for arms.

@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 20
 description: "Technical internals of the WebIDE: backends, run configurations, simulation modes, maps, and replay."
-aliases:
-  - /03-web-ide/09-advanced-internals/
 ---
 
 # Advanced Internals

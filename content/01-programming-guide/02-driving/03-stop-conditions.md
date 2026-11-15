@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 30
-aliases:
-  - /01-programming-guide/02-driving/02-stop-conditions/
-  - /02-programming/04a-stop-conditions/
 ---
 
 # Stop Conditions

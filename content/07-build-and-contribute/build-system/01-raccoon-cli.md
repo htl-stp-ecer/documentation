@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 2
 description: "The first repository converted to the new build system."
-aliases:
-  - /08-build-system/01-raccoon-cli/
 ---
 
 # raccoon-cli

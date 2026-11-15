@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 30
 description: "Exact semantics of !include and !include-merge, including recursive resolution and write-back behavior."
-aliases:
-  - /02-programming/18-yaml-includes/
 ---
 
 # YAML Includes

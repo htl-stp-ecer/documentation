@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 8
 description: "How raccoon update, bundle manifests, format_version, and migrations actually work."
-aliases:
-  - /04-raccoon-cli/07-versioning-and-upgrades/
 ---
 
 # Versioning And Upgrades

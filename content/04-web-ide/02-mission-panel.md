@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 5
-aliases:
-  - /03-web-ide/02-mission-panel/
 ---
 
 ## Mission Panel (Left)

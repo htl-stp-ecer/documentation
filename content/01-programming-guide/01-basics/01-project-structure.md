@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 10
-aliases:
-  - /02-programming/01-project-structure/
 ---
 
 # Project Structure
@@ -25,10 +23,10 @@ Everything else on this page explains what lives where and why.
 
 Before reading the rest of this page, it helps to have a real project open in front of you.
 
-**[raccoon-example](https://github.com/htl-stp-ecer/raccoon-example)** is a clean reference robot built specifically for documentation purposes — no competition pressure, no half-finished experiments. It demonstrates every concept on this page in a single, readable project:
+**[raccoon-template](https://github.com/htl-stp-ecer/raccoon-template)** is a clean reference robot built specifically for documentation purposes — no competition pressure, no half-finished experiments. It demonstrates every concept on this page in a single, readable project:
 
 ```bash
-git clone https://github.com/htl-stp-ecer/raccoon-example.git
+git clone https://github.com/htl-stp-ecer/raccoon-template.git
 ```
 
 Open it alongside this page. The file layout, naming conventions, and patterns described below all map directly to files in that repository.
@@ -37,16 +35,16 @@ Open it alongside this page. The file layout, naming conventions, and patterns d
 
 ## Creating a Project
 
-A project is a git repository made by the setup script of [raccoon-example](https://github.com/htl-stp-ecer/raccoon-example). The CLI itself no longer creates projects; it is installed **in the project's own environment** (`uv sync`) and used from inside the project folder.
+A project is a git repository made by the setup script of [raccoon-template](https://github.com/htl-stp-ecer/raccoon-template). The CLI itself no longer creates projects; it is installed **in the project's own environment** (`uv sync`) and used from inside the project folder.
 
 ```bash
 # Linux / macOS
-curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.sh | bash
+curl -LsSf https://raw.githubusercontent.com/htl-stp-ecer/raccoon-template/main/raccoon-setup.sh | bash
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-example/main/raccoon-setup.ps1 | iex
+irm https://raw.githubusercontent.com/htl-stp-ecer/raccoon-template/main/raccoon-setup.ps1 | iex
 ```
 
 The script installs git and uv if they are missing, asks for a project name and a drivetrain (`d` differential, `m` mecanum), clones the matching template branch into a new folder, renames the project in `pyproject.toml` and `raccoon.project.yml`, starts a fresh git history with a new project UUID, runs `uv sync` and makes the first commit. That gives you a fully working reference project as a starting point rather than an empty skeleton. Then edit `raccoon.project.yml` in the project to describe your hardware.

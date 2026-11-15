@@ -4,8 +4,6 @@ author: "Jakob Schlögl"
 date: 2026-06-18
 draft: false
 weight: 3
-aliases:
-  - /01-botui/02-programs/
 ---
 
 # Programs

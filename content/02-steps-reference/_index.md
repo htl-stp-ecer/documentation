@@ -5,9 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 20
 description: "Every public step of the raccoon library with signature, arguments and docs. Generated from the library source on each release."
-aliases:
-  - /05-api-reference/
-  - /05-api-reference/01-available-steps/
 ---
 
 # Steps Reference

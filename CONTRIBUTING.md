@@ -194,11 +194,4 @@ Open an issue on GitHub or reach out to the maintainers listed in `content/contr
 
 ## Moving or renaming a page
 
-Add the old URL to `aliases:` in the front matter of the page's new location, so old links keep working:
-
-```yaml
-aliases:
-  - /02-programming/03-missions/
-```
-
-Then fix the links that point to the page. Use `{{< ref "/section/page.md" >}}` with the full path from `content/`, not a relative path.
+Fix the links that point to the page. Use `{{< ref "/section/page.md" >}}` with the full path from `content/`, not a relative path.

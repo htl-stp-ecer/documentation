@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 40
-aliases:
-  - /02-programming/03a-synchronizing-robots/
 ---
 
 # Synchronizing Two Robots

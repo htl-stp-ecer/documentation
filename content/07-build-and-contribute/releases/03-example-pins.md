@@ -4,18 +4,16 @@ author: "Tobias Madlberger"
 date: 2026-11-02
 draft: false
 weight: 4
-description: "How raccoon-example keeps the raccoon-cli and raccoon-library pins of its template branches in sync with a bundle."
-aliases:
-  - /07-releases/03-example-pins/
+description: "How raccoon-template keeps the raccoon-cli and raccoon-library pins of its template branches in sync with a bundle."
 ---
 
 # Example project pins
 
-The template branches of `raccoon-example` (`differential`, `mecanum`) pin `raccoon-cli` and `raccoon-library` exactly in `pyproject.toml`. Every new project created from a template starts with those pins.
+The template branches of `raccoon-template` (`differential`, `mecanum`) pin `raccoon-cli` and `raccoon-library` exactly in `pyproject.toml`. Every new project created from a template starts with those pins.
 
 ## How they move
 
-Only **Create Bundle** moves them: it sends `bundle-released` (bundle name, CLI tag, library tag) to `raccoon-example`, and `bump-raccoon.yml` there:
+Only **Create Bundle** moves them: it sends `bundle-released` (bundle name, CLI tag, library tag) to `raccoon-template`, and `bump-raccoon.yml` there:
 
 1. strips the `v` from the tags and waits until both versions are on PyPI (up to 10 minutes),
 2. sets **both** pins to exactly those versions in each template branch, also when they are *older* than the current pins — the bundle is the tested truth,

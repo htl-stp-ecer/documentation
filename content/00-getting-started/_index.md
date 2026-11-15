@@ -5,9 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 1
 description: "From a flashed SD card to a robot that drives: set up, connect, configure and run your first mission."
-aliases:
-  - /04-raccoon-cli/00-quick-start/
-  - /00-quick-start/
 ---
 
 # Getting Started

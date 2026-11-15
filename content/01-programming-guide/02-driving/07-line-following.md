@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 70
-aliases:
-  - /01-programming-guide/02-driving/09-line-following/
-  - /02-programming/algorithms/line-following/
 ---
 
 # Line Following

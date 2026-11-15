@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 80
-aliases:
-  - /01-programming-guide/02-driving/10-lineup/
-  - /02-programming/algorithms/lineup/
 ---
 
 # Lineup (Line Alignment)

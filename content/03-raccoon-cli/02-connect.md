@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 3
-aliases:
-  - /04-raccoon-cli/06-connect-disconnect/
-  - /04-raccoon-cli/02-connect/
 ---
 
 # raccoon connect, disconnect & shell

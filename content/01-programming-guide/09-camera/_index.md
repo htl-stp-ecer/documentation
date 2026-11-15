@@ -5,8 +5,6 @@ date: 2026-11-14
 draft: false
 weight: 90
 description: "The camera service: swappable camera backends, CamProcessors that turn images into data, and a client for your program. Work in progress: runs in tests, not yet on a robot."
-aliases:
-  - /09-raccoon-cam/
 ---
 
 # raccoon-cam

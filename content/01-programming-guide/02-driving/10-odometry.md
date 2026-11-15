@@ -4,9 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 100
-aliases:
-  - /01-programming-guide/02-driving/07-odometry/
-  - /02-programming/08-odometry/
 ---
 
 # Odometry

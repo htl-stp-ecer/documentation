@@ -5,8 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 20
 description: "Boot the Wombat and join a network: WiFi client, hotspot or LAN."
-aliases:
-  - /00-getting-started/02-power-on-and-network/
 ---
 
 # Set up the robot

@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 6
-aliases:
-  - /06-firmware/motor-control/
 ---
 
 ## Mental model — why the hierarchy exists

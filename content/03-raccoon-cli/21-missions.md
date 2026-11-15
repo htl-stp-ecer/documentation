@@ -5,10 +5,6 @@ date: 2026-11-02
 draft: false
 weight: 22
 description: "Create, list, rename, remove and reorder the missions of a project."
-aliases:
-  - /04-raccoon-cli/05-list/
-  - /04-raccoon-cli/18-reorder/
-  - /04-raccoon-cli/21-missions/
 ---
 
 # raccoon missions

@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 11
-aliases:
-  - /03-web-ide/08-projects-list/
 ---
 
 ## Overview

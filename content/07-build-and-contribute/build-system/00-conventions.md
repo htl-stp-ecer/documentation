@@ -5,8 +5,6 @@ date: 2026-11-04
 draft: false
 weight: 1
 description: "The rules every repository follows for building and deploying."
-aliases:
-  - /08-build-system/00-conventions/
 ---
 
 # Conventions

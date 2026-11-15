@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 12
-aliases:
-  - /04-raccoon-cli/11-doctor/
 ---
 
 # raccoon doctor

@@ -5,8 +5,6 @@ date: 2026-06-18
 draft: false
 weight: 70
 description: "How the raccoon simulator, bundled scenes, and pytest fixtures actually work."
-aliases:
-  - /02-programming/16-simulator-testing/
 ---
 
 # Simulator And Testing

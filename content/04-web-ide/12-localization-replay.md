@@ -4,8 +4,6 @@ author: "Raccoon Docs Team"
 date: 2026-06-18
 draft: false
 weight: 15
-aliases:
-  - /03-web-ide/12-localization-replay/
 ---
 
 ## Overview

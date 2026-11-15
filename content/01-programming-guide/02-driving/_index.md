@@ -5,8 +5,6 @@ date: 2026-11-15
 draft: false
 weight: 20
 description: "Drive, turn, arc and strafe, stop on conditions, keep an absolute heading, follow lines and optimize paths."
-aliases:
-  - /02-programming/algorithms/
 ---
 
 # Driving

@@ -4,8 +4,6 @@ author: "Tobias Madlberger"
 date: 2026-06-18
 draft: false
 weight: 50
-aliases:
-  - /02-programming/02-robot-definition/
 ---
 
 # Robot Definition
@@ -649,7 +647,7 @@ seq([
 
 ## See Also
 
-- [Architecture & Project Model]({{< ref "/00-getting-started/07-how-raccoon-works.md" >}}) — the full `Defs`/`Robot` relationship diagram and the YAML→codegen→runtime lifecycle
+- [Architecture & Project Model]({{< ref "/06-advanced/02-project-model.md" >}}) — the full `Defs`/`Robot` relationship diagram and the YAML→codegen→runtime lifecycle
 - [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}}) — complete YAML key reference for all hardware types
 - [Arm Kinematics and Code Generation]({{< ref "/01-programming-guide/08-more-topics/05-arm-kinematics-and-codegen.md" >}}) — IK pipeline detail for `ArmChain`
 
