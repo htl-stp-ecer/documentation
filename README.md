@@ -56,13 +56,16 @@ Output lands in `public/`.
 ```
 content/
   00-quick-start/       Getting started guide
-  01-botui/             BotUI web interface
+  01-botui/             botui, the on-robot UI
   02-programming/       raccoon SDK and DSL reference
     algorithms/         Algorithm deep-dives (line following, lineup, etc.)
   03-web-ide/           Web IDE usage
   04-raccoon-cli/       raccoon CLI command reference
   05-api-reference/     Auto-generated from raccoon-lib CI — do not edit
   06-firmware/          Firmware internals
+  07-releases/          Releases and versions
+  08-build-system/      Build system (build.py, deploy.py, CI)
+  09-raccoon-cam/       raccoon-cam camera service
   contributors/         Contributor listing
 ```
 
