@@ -1,260 +1,255 @@
 ---
 title: "Settings"
-author: "Jakob Schlögl"
-date: 2026-06-18
+author: "Jakob Schlögl, Mario Scholze"
+date: 2026-11-16
 draft: false
 weight: 4
 ---
 
 # Settings
 
-The Settings screen is a **two-tier hierarchy**. The top-level screen shows six tiles; each tile opens a dedicated sub-screen with its own controls. There is no single flat list of settings — you must navigate into the appropriate sub-screen to find what you need.
+The Settings screen is a grid of seven tiles. Four of them (Network, System, Display, Services) lead to further screens, the other three open one screen each.
+
+| Tile | Opens |
+|------|-------|
+| **Network** | [Connection mode, Wi-Fi, hotspot, Ethernet](#network) |
+| **System** | [Hostname, keyboard layout, reboot, shutdown](#system) |
+| **Display** | [Color theme, rotation, overview panel, screensaver, touch calibration, hide UI](#display) |
+| **Personality** | [The robot's face](#personality) |
+| **Logs** | [Output of earlier program runs](#logs) |
+| **Versions** | [Installed component versions](#app-status) |
+| **Services** | [Status and control of the robot's systemd services](#services) |
 
 ![IMG: Homepage for settings](/images/botui/settings/botui-settings.png)
 
-## Concept: Two-Tier Settings Model
+## Where Settings Are Stored
 
-Settings in BotUI come from two different sources with different persistence mechanisms. Understanding this helps you find the right screen and avoid confusion when a setting does not seem to survive a restart.
+Settings live in two different places. This matters when something does not survive a restart, or when you change a robot with `raccoon` from the laptop.
 
-```mermaid
-graph LR
-    subgraph "BotUI SharedPreferences\n(persisted across reboots)"
-        ROT["Screen rotation\n(screen_rotation key)"]
-        SCRN["Screensaver toggle\n(shared_preferences)"]
-        TOUCH["Touch calibration matrix\n(touch_calibration key)"]
-    end
-    subgraph "OS / Service Layer\n(managed by Linux)"
-        WIFI["Wi-Fi credentials\n(NetworkManager)"]
-        SYSAUTO["Service autostart\n(systemd enable/disable)"]
-    end
-    subgraph "Settings Sub-Screens"
-        DISP["Display"]
-        NET["Network"]
-        SYS["System → Services"]
-    end
+| Kept by | Settings | Survive a reboot? |
+|---------|----------|-------------------|
+| **BotUI** (its own preferences on the robot) | Color theme, overview panel position, screensaver on/off, touch calibration, remembered screen rotation | Yes |
+| **The operating system** | Hostname, keyboard layout, Wi-Fi networks and hotspot, service autostart, screen rotation (in the `flutter-ui` service) | Yes |
 
-    DISP --> ROT
-    DISP --> SCRN
-    DISP --> TOUCH
-    NET --> WIFI
-    SYS --> SYSAUTO
-```
+None of this touches your project's configuration (`raccoon.project.yml`, `robot.yml`, calibration files). Those belong to the project and are managed with the [raccoon CLI]({{< ref "/03-raccoon-cli/_index.md" >}}).
 
-The **Display** sub-screen writes to `SharedPreferences` — these settings are owned by BotUI and survive the application restarting. The **Network** sub-screen issues commands to NetworkManager; credentials are stored by the OS, not by BotUI. The **System → Services** screen issues `systemctl enable/disable` commands; autostart state lives in systemd unit files, not in BotUI.
-
-Neither tier touches raccoon's Python configuration files (`robot.yml`, `raccoon.calibration.yml`, etc.) — those are project-level settings managed by the toolchain, not by BotUI.
-
-## Top-Level Tiles
-
-| Tile | Icon colour | Sub-screen |
-|------|-------------|------------|
-| **Network** | Green | Wi-Fi and LAN management |
-| **Camera** | Blue | Camera feature configuration |
-| **Display** | Purple | Calibrate, Rotate, Screensaver, Hide UI |
-| **System** | Orange | Services, Reboot, Shutdown |
-| **App Status** | Teal | Installed component versions |
-| **Robot** | Pink | Robot personality (read-only inspector) |
+Everything that changes the system runs with `sudo`. If passwordless `sudo` is missing for the `pi` user, BotUI says so in a dialog ("Missing passwordless sudo, can't …") instead of failing quietly.
 
 ---
 
 ## Network {#network}
 
-The Network sub-screen is a two-tile menu:
+**Settings → Network** has two tiles:
 
-- **Manage Connection** — connects to Wi-Fi networks or configures hotspot/LAN mode.
-- **Network Scan** — scans Wi-Fi channels and displays signal-strength data for nearby access points.
+- **Manage Connection**: pick the connection mode and manage it.
+- **Network Scan**: see which Wi-Fi channels are busy.
 
-### Wi-Fi Client Mode
+### Manage Connection
 
-Allows the device to join an existing wireless network. New networks can be added manually. Once connected, networks are saved automatically so the password does not need to be re-entered. If a saved network is nearby and the robot has no internet connection, it reconnects automatically.
+At the top you choose the **network mode**. Exactly one mode is active at a time, and switching takes a few seconds (a message "Switching to …" is shown until it is done).
 
-> **Note:** A USB keyboard must be plugged into the Wombat to type the Wi-Fi password.
+| Mode | The robot… | Tiles below the selector |
+|------|------------|---------------------------|
+| **WiFi** | joins an existing Wi-Fi network | Scan Networks, Saved Networks, Device Info |
+| **Hotspot** | creates its own Wi-Fi network that your laptop joins | Hotspot Settings, Device Info |
+| **Ethernet** | uses the cable only; Wi-Fi and hotspot are off | Device Info |
 
-After connecting, open **Manage Connection → Device Info** to see the assigned IP address — you will need this address to connect raccoon-cli from your laptop.
+#### WiFi Mode
 
-**Troubleshooting:** If the robot connects successfully (status turns green) but your laptop cannot reach it, reboot the Wombat. A known NetworkManager bug occasionally requires this.
+- **Scan Networks** lists the networks in range with signal strength. Tap one to connect. A network with a password asks for it (a USB keyboard is needed to type it, see below), an open network connects directly, and a WPA2/WPA3 Enterprise network asks for the user name and password. **Manual** at the top connects to a network that is not in the list (hidden SSID): enter the name, choose the encryption type, enter the credentials.
+- **Saved Networks** lists every network the robot has connected to before. A saved network is reconnected by itself when it is in range. Each entry shows whether the robot is connected to it, when it was last connected or that it is not in range, and the saved password. Tap an entry to connect, or remove it from the list (with confirmation).
 
-### Hotspot Mode
+> **Note:** Typing a password needs a USB keyboard on the Wombat. The layout of that keyboard is set under [System → Keyboard](#system).
 
-Allows the robot to create its own wireless access point. Configurable options:
+#### Hotspot Mode
 
-| Setting | Default |
-|---------|---------|
-| Network name (SSID) | `RaccoonOS` |
-| Password | `raccoonos` |
-| Wi-Fi band | Auto (5 GHz / 2.4 GHz / Auto) |
-| Security type | WPA2 Personal (also: WPA3 Personal, WPA3 Enterprise, WPA2 Enterprise, Open) |
-| Hidden network | Off |
-| Max clients | Configurable |
+**Hotspot Settings** is where the hotspot is configured and started:
 
-The hotspot status indicator shows **inactive** or **active**. When active, the assigned IP address is displayed.
+| Setting | Notes |
+|---------|-------|
+| **Network Name (SSID)** | At least 3 characters |
+| **Password** | At least 8 characters; a button generates a secure one |
+| **WiFi Band** | 2.4 GHz, 5 GHz or Auto |
+| **Security** | WPA3 Personal (recommended) or WPA2 Personal |
+| **Hidden Network** | Does not appear in scan lists |
 
 ![IMG: Example of using default values to create a new hotspot](/images/botui/settings/wifi-hotspot.png)
 
-### LAN Only Mode
+The buttons are **Start Hotspot**, and, once it runs, **Restart** (apply changed settings) and **Stop Hotspot**. If you switch to Hotspot mode without having configured one, BotUI starts one with a generated name `Raccoon-Robot-NNN` and password `raccoonNNN` (three random digits), on the best band.
 
-Used when the device is connected via an Ethernet cable. Displays information about the currently connected network.
+The hotspot needs a restart after you [change the hostname](#system); BotUI does that for you.
 
-All three modes provide a Device Info page showing IP address, SSID, encryption type, and MAC address.
+#### Ethernet Mode
+
+Uses the wired connection only. The Ethernet status shows whether the mode is active and whether a cable is detected. You can only switch to Ethernet mode while a cable is plugged in.
+
+BotUI also reacts to the cable itself, see [System Popups → Ethernet cable]({{< ref "/05-bot-ui/07-system-popups.md#ethernet-cable" >}}).
+
+#### Device Info
+
+**Device Info** is the page to open after connecting: it shows the **IP address** you need for `raccoon connect`, the **MAC address**, and the status. Depending on the mode it adds the SSID and security of the joined network, the Ethernet role (host or client) and connected devices, or the hotspot's name, password (hidden until you tap show), security, band and connected devices.
 
 ![IMG: Device info example screen](/images/botui/settings/wifi-device-info.png)
 
----
+If the robot says it is connected, but your laptop cannot reach it, reboot the robot. NetworkManager sometimes needs that.
 
-## Camera {#camera}
+### Network Scan
 
-Opens the camera configuration feature. Camera settings are managed through the dedicated camera sub-system.
-
----
-
-## Display {#display}
-
-The Display sub-screen contains four tiles: **Calibrate**, **Rotate**, **Screensaver**, and **Hide UI**.
-
-### Calibrate
-
-Starts the touchscreen calibration process. The screen presents five calibration targets in sequence (four corners and the centre). At each target you see:
-
-- A **red crosshair** painted by `_CrossPainter` centred on the target point.
-- A **Wombat PNG image** (`assets/wombat.png`) overlaid at the same position.
-- Instruction text: *"Tap the wombat-crosshair (N / 5)"*.
-
-Tap each target as precisely as possible — hold the stylus or finger as vertically as you can for the most accurate result. After the fifth tap, BotUI computes a 6-coefficient affine calibration matrix using least-squares and:
-
-1. Persists the coefficients to `SharedPreferences` under the key `touch_calibration`.
-2. Writes the calibration to `/etc/pointercal` (the standard Linux tslib calibration file).
-3. **Automatically restarts `flutter-ui.service`** so the new calibration takes effect immediately.
-
-### Rotate
-
-Changes the screen orientation. Four options are available:
-
-| Option | Description |
-|--------|-------------|
-| **0°** | Default landscape orientation |
-| **90°** | Portrait, rotated 90° clockwise |
-| **180°** | Upside-down landscape |
-| **270°** | Portrait, rotated 90° counter-clockwise |
-
-There is no 360° option. Selecting a rotation that is different from the current one updates the `ExecStart` line in `/etc/systemd/system/flutter-ui.service` (injects `-r <degrees>` into the flutter-pi command), reloads systemd, and **restarts `flutter-ui.service`**. A brief "Applying rotation..." loading indicator is shown while the service restarts.
-
-The current rotation is remembered in `SharedPreferences` under the key `screen_rotation`.
-
-![IMG: Screen of the rotation options](/images/botui/settings/rotate-screen.png)
-
-### Screensaver
-
-Toggles the screensaver on or off. The tile label reflects the current state:
-
-- **Screensaver On** (cyan) — screensaver is enabled (this is the default).
-- **Screensaver Off** (grey) — screensaver is disabled.
-
-Tapping the tile toggles the state immediately and persists it to `SharedPreferences`. The screensaver is active only on the Dashboard screen; it has no effect on any other screen.
-
-### Hide UI
-
-Stops the BotUI Flutter application entirely. This is useful when you need access to the underlying Linux desktop or TTY without rebooting.
-
-**Important behaviours:**
-
-- A **confirmation dialog** is shown before the service is stopped. The dialog displays a warning icon and the message *"The UI will stop. Reboot required to restore."* You must tap the red **Hide UI** button in the dialog to confirm; tapping **Cancel** dismisses the dialog without any change.
-- Confirming runs `systemctl stop flutter-ui`. The display will typically show a blank screen or a TTY prompt after the service exits.
-- Hide UI does **not** show system logs. To view service logs, use **System → Services → [service] → Logs** instead.
-- To restore BotUI without rebooting: SSH into the Pi and run `sudo systemctl start flutter-ui`.
+**Network Scan** is the **Wi-Fi Channel Graph**. It scans the surroundings and shows, for the 2.4 GHz and 5 GHz band, how many networks use which channel and how much they overlap. It **recommends** the channel with the least interference. Use it before a competition to set the hotspot band, because at a crowded event the choice of channel decides whether the connection is stable.
 
 ---
 
 ## System {#system}
 
-The System sub-screen contains three tiles: **Services**, **Reboot**, and **Shutdown**.
+| Tile | What it does |
+|------|--------------|
+| **Hostname** | Sets the robot's name. This changes the system hostname and the mDNS name together, so other devices reach the robot as `<name>.local`. Only letters, digits and hyphens are allowed (up to 63 characters). **Apply** saves it and restarts the hotspot if one is running. |
+| **Keyboard** | Chooses the layout of a USB keyboard: **English (US)** or **German (DE / AT)**. It is written to `/etc/default/keyboard`; a reboot makes sure it applies everywhere. |
+| **Reboot** | Asks for confirmation ("The device will restart."), then reboots. |
+| **Shutdown** | Asks for confirmation ("The device will power off."), then powers off. Always shut the robot down this way before pulling the battery. |
 
-### Services
-
-Opens a grid showing the status of six systemd services:
-
-| Service unit | Display name |
-|-------------|--------------|
-| `flutter-ui.service` | Flutter UI |
-| `stm32_data_reader.service` | STM32 Reader |
-| `ssh.service` | SSH |
-| `raccoon.service` | Raccoon |
-| `ide-backend.service` | IDE Backend |
-| `raccoon-cam.service` | Camera |
-
-Each tile shows the service icon, display name, and a colour-coded status badge:
-
-- **Running** (green) — `ActiveState=active`, `SubState=running`.
-- **Active but not running** (orange) — `ActiveState=active` but a different sub-state (e.g. `exited`).
-- **Not running** (red) — `ActiveState` is anything other than `active`.
-- **Not found** (grey) — the unit file does not exist on this system.
-
-Tap a service tile to open the **Service Control** screen for that service. The Service Control screen provides four actions in a 2×2 grid:
-
-| Button | Action |
-|--------|--------|
-| **Start** / **Stop** | Toggles between `systemctl start` and `systemctl stop` depending on current state. |
-| **Restart** | Runs `systemctl restart`. |
-| **Logs** | Navigates to the Service Log screen showing live `journalctl` output. |
-| **Enable** / **Disable** | Toggles between `systemctl enable` and `systemctl disable` to control autostart at boot. |
-
-A refresh button in the top bar re-queries all service states on demand.
-
-![IMG: Example status page of the flutter-ui.service](/images/botui/settings/systemd-status.png)
-
-### Reboot
-
-Immediately reboots the device by calling `reboot`. No confirmation dialog is shown — tap it only when you intend to restart.
-
-### Shutdown
-
-Powers off the device. A **confirmation dialog** is shown before the shutdown is executed. The dialog displays a power-off icon and the message *"The device will power off."* Tap the red **Shutdown** button to confirm, or **Cancel** to return without shutting down. Confirming runs `shutdown -h now`.
+Give every robot its own **hostname**, especially when several robots share a network. The name is shown on the Dashboard, and it is what you use as `<name>.local`.
 
 ---
 
-## App Status {#app-status}
+## Display {#display}
 
-The App Status screen shows the installed version of every RaccoonOS component. This is the first place to check when debugging "why is the robot behaving differently than expected" — it lets you verify that all components are at the versions you deployed.
+| Tile | What it does |
+|------|--------------|
+| **Color Theme** | [Changes the colors of all tiles](#color-theme) |
+| **Rotate** | [Turns the screen](#rotate) |
+| **Overview** | Cycles the [overview panel]({{< ref "/05-bot-ui/00-dashboard.md#overview-panel" >}}) between left, right and off. The label shows the current state, and in portrait mode it says Top / Bottom. |
+| **Screensaver** | Turns the [screensaver]({{< ref "/05-bot-ui/00-dashboard.md#screensaver" >}}) on or off. The tile reads **Screensaver On** (cyan) or **Screensaver Off** (grey). |
+| **Calibrate** | [Calibrates the touchscreen](#calibrate) |
+| **Hide UI** | [Stops BotUI](#hide-ui) |
 
-Versions are fetched from the raccoon-server version endpoint at `http://localhost:8421/version`. The UI version is read from the `APP_VERSION` compile-time define (falls back to the `pubspec.yaml` version) and always shown locally, even if the server is unreachable.
+### Color Theme {#color-theme}
 
-### Components Shown
+One tile per theme, tap to select; the selected one has a white border and a check mark. The choice is saved at once and applies to the whole app.
 
-| Component | What it is |
-|-----------|-----------|
-| `ui` | BotUI Flutter application |
-| `raccoon-cli` | Command-line toolchain (`raccoon sync`, `raccoon run`, etc.) |
-| `raccoon-lib` | Python robot-control library |
-| `raccoon-transport` | Shared-memory transport layer |
-| `stm32-data-reader` | C++ service that reads STM32 sensor data over SPI |
-| `raccoon-cam` | Camera service |
+| Theme | Look |
+|-------|------|
+| **Colorful** | Every kind of tile has its own color (default) |
+| **Raccoon** | The docs palette: gold, rust and green, repeating from tile to tile, with dark text |
+| **Monochrome** | One grey for everything |
 
-The first row, **Bundle Version**, is the `bundle` name from `/etc/raccoon-bundle.json`, the file that says which versions belong together ([Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})). Below the component rows a **Bundle file** section lists the file's `contract_hash` and every entry of `components` **exactly as written there**, in file order: `v173`, an empty value stays empty, and `dev` shows as `dev`. This is where you see that the bundle is in dev mode or that a single component's version check is switched off. A missing or unreadable file is shown as "bundle file missing" / "bundle file unreadable"; this part works even if the server is not reachable.
+Disabled things are grey in every theme.
 
-Each row shows the component name with its icon and either a green version badge (e.g. `1.4.2`) or the text "not installed" in grey.
+### Rotate {#rotate}
 
-A **refresh button** in the top bar re-fetches versions from the server. If the server is unreachable an orange warning banner is shown at the top of the list, but the UI version is still displayed from local state.
+Turns the display by **0°**, **90°**, **180°** or **270°** (clockwise). Picking another angle changes the `flutter-ui` service so that `flutter-pi` starts with `-r <angle>` (as a drop-in file, the packaged unit stays untouched), reloads systemd and restarts the UI. The screen says "Applying rotation…" while this happens, which takes a few seconds.
 
-> **Tip:** Before a competition run, open App Status and verify that `raccoon-lib` and `raccoon-cli` are at the versions you tested with. A version mismatch between the toolchain on your laptop and the library on the robot is a common source of unexpected behaviour.
+![IMG: Screen of the rotation options](/images/botui/settings/rotate-screen.png)
+
+In portrait the Dashboard stacks the overview panel and the menu on top of each other.
+
+### Calibrate {#calibrate}
+
+Calibrates the touchscreen with five targets: the four corners and the center. Each target is a crosshair with a wombat on it, and the text says "Tap the wombat-crosshair (N / 5)". Tap as exactly as you can, and hold the finger or stylus as upright as possible.
+
+After the fifth tap BotUI calculates the 6-coefficient affine matrix with a least-squares fit, saves it in its own preferences and in `/etc/pointercal` (the standard `tslib` file), and restarts `flutter-ui.service` so it takes effect. The matrix is then applied to every tap in the app.
+
+Calibrate again if taps land beside your finger.
+
+### Hide UI {#hide-ui}
+
+Stops the BotUI app so that you can reach the Linux console on the display. A dialog asks first ("The UI will stop. Reboot required to restore."). It runs `systemctl stop flutter-ui`. To bring the UI back without a reboot, log in over SSH and run `sudo systemctl start flutter-ui`. It does not show logs; for those use [Services → Logs](#services).
 
 ---
 
-## Robot (Personality) {#robot}
+## Personality {#personality}
 
-The Robot sub-screen is a **read-only inspector** for the robot's current personality configuration. It does not allow editing — personality traits are assigned at build time or via configuration files.
+A read-only page that shows the robot's face. Each robot gets its own look. It is derived from the MAC address of the device, so a robot always has the same face and two robots do not look the same. It is the face you see in the screensaver.
 
-The screen is split into two panels:
+The left side is a live, animated preview (blinking, looking around). The right side lists the traits:
 
-- **Left panel** — a live animated preview of the robot face, showing the eyes blinking and gazing in real time using the same `RobotFacePainter` used by the screensaver.
-- **Right panel** — a detail list of the personality attributes.
-
-### Personality Attributes
-
-| Attribute | Options |
-|-----------|---------|
+| Attribute | Possible values |
+|-----------|-----------------|
 | **Trait** | Cheerful, Grumpy, Sleepy, Nervous, Chill, Dramatic, Brainy, Playful |
 | **Eye shape** | Rounded, Standard, Angular, Pill, Blocky |
 | **Pupil style** | Tall rectangle, Circle, Diamond, Horizontal bar, Cross, Solid |
 | **Eyebrows** | Standard, Curved, Thin, Thick, Split, Notched |
-| **Eye size** | Width and height factor (numeric multipliers) |
-| **Cosmetics** | Antenna, Scar, Freckles, Blush, Circuit lines, Ear nodes, Crown dots, Chin mark (zero or more) |
-| **Palette** | Palette name and variant name from the device colour scheme |
+| **Eye size** | Width and height factors |
+| **Cosmetics** | None, or any of: Antenna, Scar, Freckles, Blush, Circuit lines, Ear nodes, Crown dots, Chin mark |
+| **Palette** | Name of the color palette and its variant |
+
+Nothing here can be edited.
+
+---
+
+## Logs {#logs}
+
+**Logs** lists every program run on the robot, newest first, across all programs. Each row shows
+
+- the **number** (1 is the newest run on the robot; this is the same number that `raccoon logs show` uses),
+- the **program name**,
+- red **`n E`** and yellow **`n W`** badges if the run logged errors or warnings,
+- the **duration**, and
+- the **start time**.
+
+Tap a row to read the run. The lines are laid out in the same columns as `raccoon logs show`: elapsed time, level, `file:line`, function (if the log has one) and message. Lines are never wrapped; scroll sideways for long ones.
+
+The chips above the log switch levels on and off: **TRACE**, **DEBUG**, **INFO**, **WARN**, **ERROR**. By default INFO, WARN and ERROR are shown. Lines of other levels (such as CRITICAL) are always shown. A counter shows how many lines are visible. The refresh button in the top bar of the list reloads it.
+
+The list loads the 20 newest runs of each program. See [raccoon logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) for the laptop side.
+
+---
+
+## Versions {#app-status}
+
+**Versions** shows which versions of the RaccoonOS components belong together, and which are installed. Open it first when the robot behaves differently from what you expect.
+
+The page has two sections, in the same component order:
+
+**Bundle metadata** is what the bundle file `/etc/raccoon-bundle.json` says ([Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})). **Bundle Version** is the name of the bundle, followed by the version of each component that this bundle expects and the `contract_hash`. The values are shown exactly as written in the file: `v173` stays `v173`, an empty value stays empty, and `dev` is shown as `dev` (version check for this component switched off). If the file is missing or broken, the page says "bundle file missing" or "bundle file unreadable". This part works even when the server is not reachable.
+
+**Installed versions** is what is really on the robot. It is read from the `raccoon-server` (`/version`), except for BotUI itself, whose version is built into the app and shown immediately.
+
+| Component | What it is |
+|-----------|------------|
+| `raccoon-cli` | The raccoon command-line tool |
+| `raccoon-lib` | The Python robot library |
+| `raccoon-transport` | The shared-memory transport |
+| `botui` | This app |
+| `stm32-data-reader` | The service that talks to the STM32 coprocessor |
+| `raccoon-cam` | The camera service |
+
+A component that is not installed shows "not installed". If the server cannot be reached, a message says `raccoon-server not reachable`. The refresh button in the top bar reads everything again.
+
+> **Tip:** Before a competition, open Versions and check that the installed versions match the bundle and what you tested with.
+
+---
+
+## Services {#services}
+
+**Services** shows the state of the five systemd services that make up the robot, one tile each:
+
+| Service | Name on screen |
+|---------|----------------|
+| `ssh.service` | SSH |
+| `raccoon.service` | Raccoon |
+| `flutter-ui.service` | Bot UI |
+| `stm32_data_reader.service` | STM32 Reader |
+| `raccoon-cam.service` | Camera |
+
+| Tile status | Meaning |
+|-------------|---------|
+| **Running** (green) | Active and running |
+| **Orange** | Active, but not "running" (for example it already finished) |
+| **Red** | Not active, or the state could not be read |
+| **Grey** | The service does not exist on this system |
+
+All services are queried at the same time with a timeout of 10 seconds, so the page never hangs. The refresh button in the top bar queries them again, and the page also refreshes when you come back from a service.
+
+Tap a service for its control page, with four buttons:
+
+| Button | Does |
+|--------|------|
+| **Start** / **Stop** | Starts or stops the service, depending on its current state |
+| **Restart** | Restarts it |
+| **Logs** | Shows the `journalctl` output of the service: the last 200 lines, then new lines live. The pause button stops the scrolling, the refresh button reloads. |
+| **Enable** / **Disable** | Turns autostart at boot on or off |
+
+![IMG: Example status page of the flutter-ui.service](/images/botui/settings/systemd-status.png)
+
+Stopping `flutter-ui` stops BotUI itself, and stopping `raccoon` or `stm32_data_reader` stops programs and hardware access. These are tools for diagnosing a problem, not for everyday use.

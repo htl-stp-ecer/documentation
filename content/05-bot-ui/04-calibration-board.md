@@ -1,7 +1,7 @@
 ---
 title: "Calibration Board"
-author: "Raccoon Docs Team"
-date: 2026-06-18
+author: "Raccoon Docs Team, Mario Scholze"
+date: 2026-11-16
 draft: false
 weight: 5
 ---
@@ -38,7 +38,7 @@ sequenceDiagram
     Ring-->>BotUI: display PASS / FAIL
 ```
 
-The board's **Calib Board** tile is always visible on the Sensors & Actors selection screen. Its visual state tells you whether the board is reachable:
+The board's **Calib Board** tile is always visible on the [Sensors & Actors]({{< ref "/05-bot-ui/01-sensors-actors.md" >}}) selection screen. Its visual state tells you whether the board is reachable:
 
 | Tile state | Meaning |
 |---|---|
@@ -47,7 +47,7 @@ The board's **Calib Board** tile is always visible on the Sensors & Actors selec
 
 You do not need to restart BotUI after connecting the board. The status updates live as the bridge publishes on its status channel.
 
-Source: `botui/lib/features/sensors/presentation/screens/sensor_selection_screen.dart:124-142`
+Source: `botui/lib/features/sensors/presentation/screens/sensor_selection_screen.dart`
 
 ---
 

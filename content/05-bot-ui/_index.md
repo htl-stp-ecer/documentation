@@ -1,222 +1,121 @@
 ---
 title: "BotUI"
-author: "Jakob Schlögl"
-date: 2026-06-18
+author: "Jakob Schlögl, Mario Scholze"
+date: 2026-11-16
 draft: false
 weight: 50
 ---
 
 # BotUI
 
-BotUI is the on-robot Flutter touchscreen application that runs on the Raspberry Pi inside every RaccoonOS robot. It gives you access to all robot features — sensor graphs, program execution, network settings, and system management — directly from the robot's display, without needing a laptop or SSH session.
+BotUI is the touchscreen app on the Raspberry Pi inside every RaccoonOS robot. It shows live sensor data, starts and stops your programs, manages the network, and shows the screens your program asks for while it runs. You can do all of this without a laptop or an SSH session.
 
-## What BotUI Is
+It is a Flutter app (package name `stpvelox`) that runs on `flutter-pi`, directly on the Pi's framebuffer. There is no desktop environment. The display is 800×480 and the app also works rotated (see [Settings → Display]({{< ref "/05-bot-ui/03-settings.md#display" >}})).
 
-Think of BotUI as the robot's cockpit. It is the only process on the Pi that has a screen, and it acts as a real-time window into every other service running in the RaccoonOS stack. It does not implement robot logic itself; instead it reads and writes to the shared-memory transport bus that all raccoon services communicate through.
+## What BotUI Is (and Is Not)
 
-BotUI is implemented in Flutter (targeting `flutter-pi` on ARM64 Linux) and communicates with the rest of the stack exclusively through `raccoon_ring` — the same shared-memory IPC mechanism used by raccoon-lib and stm32-data-reader. There is no REST API, no WebSocket, and no inter-process call: everything is publish/subscribe over named transport channels.
+BotUI does not contain any robot logic. It is a window into the services that already run on the robot, and a remote control for them:
+
+- **Live hardware data** (sensors, motors, servos, IMU, battery, camera) comes over the shared-memory transport (`raccoon_ring`). BotUI only subscribes and publishes on named channels.
+- **Running programs, logs and versions** go through the `raccoon-server` on `localhost:8421`. BotUI is a client of that server, like `raccoon run` on your laptop.
+- **System settings** (hostname, keyboard, Wi-Fi, services, reboot) are done by running OS commands (`systemctl`, `hostnamectl`, NetworkManager, …) with `sudo`. The settings live in the OS, not in BotUI.
 
 ## How BotUI Talks to the Robot
 
-The data path between BotUI's Flutter widgets and the robot's hardware services has three distinct layers:
-
 ```mermaid
 graph LR
-    subgraph "Flutter UI (Dart)"
-        W[Widget / Riverpod Provider]
+    subgraph "BotUI (Flutter)"
+        W[Screens / Riverpod providers]
         TS[TransportService]
+        EX[RaccoonExecutionClient]
     end
-    subgraph "Bridge Layer"
-        FFI["libraccoon_ring_bridge.so\n(C++ FFI)"]
+    subgraph "Shared memory"
+        RING["raccoon_ring<br/>(/dev/shm)"]
     end
-    subgraph "Shared Memory Bus"
-        RING["raccoon_ring\n(transport channels)"]
-    end
-    subgraph "Robot Services"
-        STM["stm32-data-reader\n(sensor data)"]
-        RACC["raccoon service\n(program runner)"]
-        CAM["raccoon-cam\n(camera)"]
-        CALIB["raccoon-calib-bridge\n(calibration board)"]
+    subgraph "Robot services"
+        STM["stm32-data-reader<br/>(sensors, motors, servos)"]
+        LIB["raccoon-lib<br/>(your program)"]
+        CAM["raccoon-cam"]
+        CALIB["raccoon-calib-bridge"]
+        SRV["raccoon-server<br/>:8421"]
     end
 
-    W -->|publish / subscribe| TS
-    TS -->|Dart FFI| FFI
-    FFI -->|shared memory| RING
-    RING <-->|transport messages| STM
-    RING <-->|transport messages| RACC
-    RING <-->|transport messages| CAM
-    RING <-->|transport messages| CALIB
+    W --> TS
+    TS -->|"FFI: libraccoon_ring_bridge.so"| RING
+    RING <--> STM
+    RING <--> LIB
+    RING <--> CAM
+    RING <--> CALIB
+    W --> EX
+    EX -->|"HTTP + WebSocket"| SRV
+    SRV -->|"runs"| LIB
 ```
 
-The `libraccoon_ring_bridge.so` is a thin C++ shared library compiled for ARM64 and bundled with every BotUI build. It wraps the `raccoon_ring` C++ API and exposes a C-ABI that the Dart `dart:ffi` layer calls directly. From Flutter's perspective, `TransportService` (a `keepAlive` Riverpod provider) is the single entry point: every widget subscribes to or publishes on a named channel and the bridge takes care of the rest.
+**Transport.** `libraccoon_ring_bridge.so` is a small C++ library that is built into every BotUI package. It exposes the `raccoon_ring` API to Dart through FFI. `TransportService` is the single entry point in the app. Every screen subscribes to a channel (for example a sensor value) or publishes on one (for example a motor command). A timer drains the incoming frames about 30 times per second and hands them to Riverpod providers, which rebuild the widgets. The channel list is in [Transport]({{< ref "/06-advanced/transport/_index.md" >}}).
 
-The spin timer inside `RaccoonRingTransport` drains the bridge's receive queue into Dart streams at 33 ms intervals (~30 fps). The bridge's C++ poll thread queues frames as they arrive via a futex-woken loop; the Dart spin timer simply reads from that queue — it does not block or poll hardware.
+**Execution server.** To start, stop or inspect a program, BotUI calls the `raccoon-server`:
 
-## Screen / Navigation Map
+| What | How |
+|------|-----|
+| Start a program | `POST /api/v1/run/<project>` |
+| Live output | WebSocket `/ws/output/<command>` |
+| Stop | `POST /api/v1/commands/<command>/cancel` |
+| Is something running? | `GET /api/v1/commands/running` |
+| Logs of earlier runs | `GET /api/v1/logs/<project>/runs` |
+| Component versions | `GET /version` |
 
-BotUI uses `go_router` for declarative navigation. The application starts at `/` (Dashboard) and all navigation is push/pop on a single `Navigator` stack:
+BotUI reads the API token from `/home/pi/.raccoon/api_token`. On a machine without this file (for example when you try the UI on your PC) the server features simply stay empty or show an error.
+
+## Screen Map
 
 ```mermaid
 graph TD
-    DASH["/ — Dashboard"]
-    SENS["/sensors — Sensors & Actors"]
-    PROG["/programs — Programs"]
-    SETT["/settings — Settings"]
+    DASH["Dashboard (/)"]
+    DASH --> SENS["Sensors & Actors"]
+    DASH --> PROG["Programs"]
+    DASH --> SETT["Settings"]
 
-    DASH --> SENS
-    DASH --> PROG
-    DASH --> SETT
+    SENS --> CAT["Category lists<br/>(Analog, Digital, Motor, Servo, IMU)"]
+    CAT --> SCR["Graph / Motor / Servo / Quaternion screens"]
+    SENS --> CAM["Camera"]
+    SENS --> SYS["System Health → Disk Usage"]
+    SENS --> CB["Calibration Board"]
 
-    SENS --> CAT["/sensors/category\nSensor Category"]
-    SENS --> IMU["/sensors/imu\nIMU Selection"]
-    SENS --> CB["/sensors/calib_board\nCalibration Board"]
-    CAT --> SCREEN["/sensors/screen\nSensor Screen"]
+    PROG --> RUN["Program screen<br/>(Start, Advanced, terminal)"]
 
-    CB --> PAA["/sensors/calib_board/paa\nOptical Flow"]
-    CB --> ICM["/sensors/calib_board/icm\nICM IMU"]
-    CB --> ODO["/sensors/calib_board/odometry\nOdometry"]
-
-    PROG --> ACT["/programs/action\nProgram Action"]
-    ACT --> RUN["/programs/run\nProgram Run (xterm)"]
-
-    SETT --> DISP["/settings/display"]
-    SETT --> SYS["/settings/system"]
-    SETT --> NET["/wifi — Network"]
-    SETT --> STATUS["/settings/app-status"]
-    SETT --> ROBOT["/settings/personality"]
+    SETT --> NET["Network"]
+    SETT --> SYSS["System<br/>(Hostname, Keyboard, Reboot, Shutdown)"]
+    SETT --> DISP["Display<br/>(Color Theme, Rotate, Overview, Screensaver, Calibrate, Hide UI)"]
+    SETT --> PERS["Personality"]
+    SETT --> LOGS["Logs"]
+    SETT --> VER["Versions"]
+    SETT --> SERV["Services"]
 ```
 
-Every screen can be reached by pressing back to return toward the Dashboard. The back arrow in the top bar is present on every sub-screen. The screensaver lives at `/robot-face` and is pushed automatically from the Dashboard when idle.
-
-## Two-Tier Settings Model
-
-Settings in BotUI follow a two-tier model that is worth understanding before navigating the Settings section:
-
-- **Persisted on the Pi (SharedPreferences):** Screen rotation, screensaver toggle, touch calibration matrix. These survive reboots and are written by BotUI itself.
-- **Persisted by system services:** Wi-Fi credentials (NetworkManager), service autostart (systemd). BotUI issues commands to the OS (via shell commands over SSH or direct syscalls) and the OS persists them.
-
-The Settings screen at `/settings` is the gateway to both tiers. Neither tier stores anything in raccoon's Python configuration files — settings here are Pi-level, not project-level.
+Navigation is a stack: every screen has a back arrow in the top bar, and the top bar also shows the battery voltage. Two things sit outside this tree, because they must be reachable from anywhere: the [dynamic screens]({{< ref "/05-bot-ui/05-dynamic-screens.md" >}}) your program can show, and the [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}).
 
 ## Section Overview
 
 | Page | What you will find |
 |------|--------------------|
-| [Dashboard]({{< ref "/05-bot-ui/00-dashboard.md" >}}) | Entry screen, tile layout, and screensaver behaviour |
-| [Sensors & Actors]({{< ref "/05-bot-ui/01-sensors-actors.md" >}}) | All sensor graph views, motor/servo control, and system health |
-| [Programs]({{< ref "/05-bot-ui/02-programs.md" >}}) | Browsing, launching, and monitoring robot programs |
-| [Settings]({{< ref "/05-bot-ui/03-settings.md" >}}) | Network, display, system services, and robot personality |
-| [Calibration Board]({{< ref "/05-bot-ui/04-calibration-board.md" >}}) | USB-C external board for precision odometry and IMU calibration |
+| [Dashboard]({{< ref "/05-bot-ui/00-dashboard.md" >}}) | The home screen: overview panel, menu tiles, screensaver |
+| [Sensors & Actors]({{< ref "/05-bot-ui/01-sensors-actors.md" >}}) | Sensor graphs, motor and servo control, camera, system health |
+| [Programs]({{< ref "/05-bot-ui/02-programs.md" >}}) | Starting, watching and stopping programs, sync state |
+| [Settings]({{< ref "/05-bot-ui/03-settings.md" >}}) | Network, system, display, personality, logs, versions, services |
+| [Calibration Board]({{< ref "/05-bot-ui/04-calibration-board.md" >}}) | USB-C board for optical-flow odometry and IMU calibration |
+| [Dynamic Screens]({{< ref "/05-bot-ui/05-dynamic-screens.md" >}}) | Screens your program shows on the display, and the answers it gets back |
+| [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}) | Stop a program, restart the UI, reboot, reset the STM32, games |
+| [System Popups]({{< ref "/05-bot-ui/07-system-popups.md" >}}) | Low battery, hardware shutdown, version mismatch, error and Ethernet dialogs |
 
----
+## Installing and Building BotUI
 
-## Installation
+BotUI is part of the RaccoonOS image and is updated with `raccoon update`, so normally there is nothing to install. To build your own version, deploy it to a robot, or try the UI in a window on your PC, see [Build System → botui]({{< ref "/07-build-and-contribute/02-build-system/04-botui.md" >}}).
 
-### Requirements
+## Under the Hood
 
-The Flutter toolchain is version-pinned via **FVM (Flutter Version Management)**. The exact version is declared in `botui/.fvmrc`:
+A few details that explain how BotUI behaves on the Pi:
 
-```json
-{
-  "flutter": "3.32.7"
-}
-```
-
-Install FVM and activate the pinned version before doing anything else:
-
-```bash
-dart pub global activate fvm
-fvm install    # reads .fvmrc and installs 3.32.7
-fvm use        # activates it for this project
-```
-
-The `build.sh` script automatically detects FVM and prefixes all Flutter commands with `fvm`. If `fvm` is not on `PATH` it falls back to the system-installed `flutter`, which is appropriate for CI environments that provision Flutter 3.32.7 directly.
-
-Additional tools required:
-
-| Tool | Purpose |
-|------|---------|
-| Python 3 | `install.py` deployment script |
-| SSH & SCP | Uploading the build to the Raspberry Pi |
-| `flutterpi_tool` | ARM64 cross-compile for flutter-pi (installed by `build.sh` automatically) |
-| Git (SSH key configured) | Fetching Git-hosted dependencies (e.g. `sleek_circular_slider`) |
-| C cross-compiler (`aarch64-linux-gnu-gcc`) | Building `libraccoon_ring_bridge.so` (see below) |
-
-Dart SDK constraint is `^3.5.4` (`>=3.5.4 <4.0.0`), as declared in `pubspec.yaml`.
-
-### Clone the Repository
-
-The project uses Git submodules for `raccoon-transport`. Always clone with `--recurse-submodules`:
-
-```bash
-git clone https://github.com/htl-stp-ecer/botui.git --recurse-submodules
-```
-
-Via SSH:
-
-```bash
-git clone git@github.com:htl-stp-ecer/botui.git --recurse-submodules
-```
-
-Via GitHub CLI:
-
-```bash
-gh repo clone htl-stp-ecer/botui -- --recurse-submodules
-```
-
-If you already cloned without `--recurse-submodules`, initialise submodules manually:
-
-```bash
-git submodule update --init --recursive
-```
-
-### Project Setup
-
-Fetch Flutter and Dart dependencies. Use `flutter pub get` (not `dart pub get`) so that Flutter plugin registration is performed correctly:
-
-```bash
-fvm flutter pub get
-```
-
-### Code Generation
-
-BotUI uses `riverpod_generator`, `freezed`, and `json_serializable` for code generation. Run the build runner once after cloning (and again whenever you change annotated files):
-
-```bash
-fvm flutter pub run build_runner build -d
-```
-
-The `-d` flag deletes conflicting outputs from previous runs.
-
-### Build & Deployment
-
-Use `build.sh` to compile and `install.py` to deploy. The two are combined in `deploy.sh`:
-
-```bash
-chmod +x deploy.sh
-./deploy.sh
-```
-
-Internally `build.sh`:
-1. Runs `flutter pub get` and `build_runner`.
-2. Cross-compiles the app for ARM64 using `flutterpi_tool build --arch=arm64 --cpu=pi3 --release`.
-3. Cross-compiles `libraccoon_ring_bridge.so` — the shared library that embeds `raccoon_ring` (the shared-memory transport from the `raccoon-transport` submodule) — and copies it into the build output directory. This `.so` is required at runtime; the build will fail with an error if it cannot be produced.
-
-`install.py` then:
-1. Stops the `flutter-ui` systemd service on the Pi via SSH.
-2. Copies the entire build output to `/home/pi/stp-velox` on the Pi using SCP.
-3. Writes a `version` file so `raccoon-server` can report the UI version.
-4. Installs or updates the systemd unit file.
-5. Enables and starts `flutter-ui.service`.
-
-#### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPI_HOST` | `192.168.68.110` | IP address of the target Raspberry Pi |
-| `RPI_USER` | `pi` | SSH user on the Pi |
-
-Override them on the command line if your Pi is on a different address:
-
-```bash
-RPI_HOST=192.168.1.42 ./deploy.sh
-```
+- **Touch debounce.** The resistive touchscreen often reports one press as several quick presses. A filter in front of the whole app drops a press that starts within 150 ms and 30 px of the last accepted one.
+- **Touch calibration.** The calibration matrix from [Settings → Display → Calibrate]({{< ref "/05-bot-ui/03-settings.md#display" >}}) is applied to every tap.
+- **Frame stall watchdog.** On the Pi 3 the rendering pipeline can occasionally freeze while the app logic keeps running. A watchdog notices that no frame was drawn, tries to wake the pipeline, and if that fails exits the app. `flutter-ui.service` is set to `Restart=always` with a 2 s delay, so the UI comes back by itself after a brief flicker.
+- **Colors.** Screens never hardcode a color. A tile asks for a named slot (red, green, blue, …) and the active [color theme]({{< ref "/05-bot-ui/03-settings.md#color-theme" >}}) decides what it looks like.

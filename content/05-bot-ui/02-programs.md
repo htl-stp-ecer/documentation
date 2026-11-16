@@ -1,101 +1,131 @@
 ---
 title: "Programs"
-author: "Jakob Schlögl"
-date: 2026-06-18
+author: "Jakob Schlögl, Mario Scholze"
+date: 2026-11-16
 draft: false
 weight: 3
 ---
 
 # Programs
 
-The Programs screen lists all executable robot programs stored on the Pi. Tap any tile to open its detail screen and launch it.
+The Programs screen lists every program on the robot. Tap one to see its sync state, start it, and watch its output. This is how you run a program on the day of the competition, without a laptop.
 
 ![IMG: A list of all programs](/images/botui/programs/program-list.png)
 
 ## Concept
 
-A "program" in BotUI is any directory under the programs folder that contains a `run.sh` script. BotUI does not know about raccoon missions, steps, or Python — it simply launches `run.sh` and streams the process output to a terminal widget. The raccoon toolchain (`raccoon sync`) is responsible for placing the right code there; BotUI just exposes a launch button and a console.
+BotUI does not run your Python code itself. When you press **Start**, it asks the `raccoon-server` on the robot to run the project, exactly like `raccoon run` does from your laptop. The server runs the project and streams the output back over a WebSocket, and BotUI shows it in a terminal. That is why a program that was started from your laptop can also be stopped from the robot, and the other way around.
 
-The one thing BotUI adds on top of raw script execution is **sync state visibility**: the version chip on each program tile shows whether the code was pushed by the raccoon toolchain and when. This is the primary competition-day check that you are running the code you think you are.
-
-### Program Launch Lifecycle
+What BotUI adds on top is **visibility**: the version chip on every program shows whether and when the code was pushed with `raccoon sync`. The most important competition-day check is: *is this the code I think it is?*
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ProgramList: open Programs screen
-    ProgramList --> ActionScreen: tap program tile
-    ActionScreen --> ArgOverlay: program declares typed args
-    ArgOverlay --> ArgOverlay: submit one arg, more remain
-    ArgOverlay --> Launching: all args submitted
-    ActionScreen --> Launching: Start (no args)
-    ActionScreen --> AdvancedOverlay: tap Advanced
-    AdvancedOverlay --> Launching: Start with flags
-    Launching --> RunScreen: process started (xterm)
-    RunScreen --> [*]: back button pressed\n(process killed)
+    [*] --> List: open Programs
+    List --> ProgramScreen: tap a program
+    ProgramScreen --> Args: Start (program has arguments)
+    ProgramScreen --> Running: Start (no arguments)
+    ProgramScreen --> Advanced: Advanced
+    Advanced --> Args: Start with flags
+    Advanced --> Running: Start with flags (no arguments)
+    Args --> Args: Submit, more arguments left
+    Args --> Running: Submit, last argument
+    Running --> Finished: program ends
+    Running --> [*]: stopped from the Dev Menu
 ```
 
-## Project Descriptors
+## The Program List
 
-BotUI discovers programs by scanning the programs directory for subdirectories. Each subdirectory is treated as one program. BotUI reads metadata from project descriptor files in the following priority order:
+The list is a grid with one tile per project in the robot's `programs` directory (`/home/pi/programs`). Each project is one subdirectory, and `raccoon sync` puts them there. If the directory is empty the screen says **No programs**.
 
-1. **`raccoon.project.yml`** (preferred) — YAML file that defines the program `name`. The run script is always `run.sh` when this file is present.
-2. **`project.json`** (fallback) — JSON file that can define `name`, `run_script` (defaults to `run.sh` if absent or empty), and typed launch `args`.
+Each tile shows the program name and a **version label**:
 
-If neither descriptor exists, BotUI uses the directory name as the program name and `run.sh` as the run script.
+- **`v3`**: the program was pushed with `raccoon sync`, and the number counts the successful pushes.
+- **`NOT SYNCED`** (red): the robot has no sync record for this project, so the files may be placed by hand or old.
 
-Example `raccoon.project.yml`:
+The list watches the directory. When `raccoon sync` writes files, the list updates by itself a moment after the last change, without flickering, so you can watch a new version arrive.
+
+### Where the Name and Arguments Come From
+
+For each project directory, BotUI reads the descriptor files in this order:
+
+1. **`raccoon.project.yml`**: the `name` field is the program name. This file defines no arguments.
+2. **`project.json`**: used when there is no (readable) `raccoon.project.yml`. It can set `name` and a list of launch `args`.
+3. If neither file helps, the **directory name** is the program name.
 
 ```yaml
+# raccoon.project.yml
 name: "Autonomous Mission A"
 ```
 
-Example `project.json` (legacy format, also supports typed arguments):
-
 ```json
+// project.json: name and typed arguments
 {
   "name": "Autonomous Mission A",
-  "run_script": "run.sh",
   "args": [
-    { "type": "boolean", "name": "skip_intro" },
-    { "type": "number",  "name": "target_score" }
+    { "type": "bool",   "name": "skip_intro", "initial": false },
+    { "type": "number", "name": "speed", "initial": 50, "min": 0, "max": 100, "step": 5 }
   ]
 }
 ```
 
-## Sync State Version Chip
+| Argument type | Fields | Input on the robot |
+|---------------|--------|--------------------|
+| `bool` | `name`, `initial` (default `false`) | Large checkbox |
+| `number` | `name`, `initial` (0), `min` (0), `max` (100), `step` (1) | Counter with plus and minus |
 
-Every program tile displays a small version chip in its bottom-right corner:
+## The Program Screen
 
-- **`v3`** (green) — the program has been pushed from a development machine at least once, and the displayed number is the push counter (incremented by `raccoon sync` on every verified push).
-- **`NOT SYNCED`** (red) — no `.raccoon/sync_state.json` file exists, meaning this program has never been pushed through the raccoon toolchain. The files on the Pi may be manually placed or stale.
+Tapping a tile opens the screen of that program. The top bar shows the program name and the version chip. Before a run it shows two large tiles, **Start** and **Advanced**, and the **sync details** card below them.
 
-The same chip appears in the top-right corner of the program's detail and run screens. When a synced program is open, a **Sync Details Card** below the Start button shows the full version number, last sync timestamp, who pushed it (e.g. `tobias@laptop`), and the SHA-256 content fingerprint. Always verify this information before running a program in competition — it confirms you are executing the code that was last verified and pushed.
+### Sync Details
 
-The sync state is read from `<programDir>/.raccoon/sync_state.json` at startup. This file is written by `raccoon sync` on the toolchain side and is never modified by BotUI itself.
+The card shows what the robot knows about the last push. For a synced program:
 
-## Starting a Program
+| Row | Meaning |
+|-----|---------|
+| **Version** | The push counter (also in the chip) |
+| **Last update** | When the push happened, for example `just now` or `3 hours ago` |
+| **Updated by** | Who pushed, for example `tobias@laptop` |
+| **Fingerprint** | The start of the SHA-256 hash of the project files |
 
-Tapping a program tile on the selection screen opens **ProgramActionScreen**, which shows a single large **Start** button alongside the Sync Details Card.
+For a project that was never pushed, the card says that the files on the robot may be stale or edited by hand.
 
-Tapping **Start** may show one or more **argument overlay** screens if the program declares typed arguments in `project.json`. Each overlay presents one argument at a time with an appropriate input widget (toggle for boolean, number pad for numeric). Tap **Submit** on each overlay to advance. Once all arguments are filled in, the program launches.
+BotUI reads this from `<project>/.raccoon/sync_state.json`, which `raccoon sync` writes. BotUI never changes it.
 
-### Terminal Output
+### Start
 
-When the program is running, the screen switches to a full-screen **xterm terminal view** that streams the program's stdout/stderr output in real time. The terminal uses 14 pt DejaVu Sans Mono font. Navigating away from the screen (using the back button) stops the program.
+**Start** begins the run. If the program declares arguments, one full-screen question per argument appears first. Set the value and tap **Submit** to go to the next one. After the last answer the program starts.
 
-## Advanced Launch Options
+The arguments are handed to the program as `--name=value`, for example `--skip_intro=false --speed=50.0`.
 
-In addition to **Start**, the program run screen also has an **Advanced** button (grey, tune icon). Tapping it opens an overlay with two toggle switches:
+If the start fails (no API token, the server is not running, the server refuses), a red message **Start failed: …** appears at the bottom for a few seconds and nothing starts.
 
-| Flag | Default | Effect |
-|------|---------|--------|
-| `--dev` | Off | Passes `--dev` to the program's run script, enabling development-mode behaviour (defined by the program itself). |
-| `--no-calibrate` | Off | Passes `--no-calibrate` to the run script, skipping any hardware calibration step the program would otherwise perform at startup. |
+### Advanced
 
-After toggling the desired flags, tap **Start** inside the Advanced overlay to launch with those flags applied. Tap **Cancel** to dismiss the overlay without launching.
+**Advanced** opens two switches. Set them, then tap **Start** (or **Cancel** to close the dialog):
 
-Use `--no-calibrate` when you need a fast restart during testing and the calibration step has already been completed in an earlier run. Use `--dev` to activate verbose logging or other developer conveniences your program implements.
+| Flag | Effect |
+|------|--------|
+| `--dev` | Passed to the program as `--dev`. What it does is up to your program (for example more logging). |
+| `--no-calibrate` | Passed as `--no-calibrate`: the program skips the calibration at the start. Useful for quick test restarts after a calibration is done. |
 
-> **Note:** `--dev` and `--no-calibrate` are forwarded to `run.sh` as command-line arguments. They only have an effect if `run.sh` reads and acts on `$@`. The raccoon scaffold's `run.sh` passes all arguments to the Python entry point, where `--no-calibrate` suppresses `SetupMission.sequence()` calibration steps.
+The flags go to the program as command-line arguments, so they only have an effect if the program reads them. `raccoon run` has the same flags: see [raccoon run]({{< ref "/03-raccoon-cli/05-run.md" >}}).
+
+### During the Run
+
+The screen turns into a terminal that shows the output of the program live (monospace, 14 pt). When the program ends, the last line says how: `Process completed (exit code: 0)`, or the status and exit code if it failed or was cancelled.
+
+- **Leaving the screen does not stop the program.** The run continues on the robot, and the output is there again when you come back.
+- **A run that failed** keeps its output on the screen, so you can read what went wrong.
+- **A run that finished with exit code 0** is treated as done: when you open the program again, you get the Start tiles for a fresh run, not the old output.
+- If a running program stops (because it ended, or someone stopped it) while you are on the program screen, BotUI goes back to the Dashboard.
 
 ![IMG: Shows functions for programs](/images/botui/programs/program-details.png)
+
+## Stopping a Program
+
+There is no stop button on the program screen. Hold the **built-in button 10** for two seconds, or ask for the [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}), and tap **Stop Program**. BotUI then cancels whatever the server reports as running. This also works for programs that were not started from BotUI, and while a [dynamic screen]({{< ref "/05-bot-ui/05-dynamic-screens.md" >}}) covers the display.
+
+## Logs of Earlier Runs
+
+The output of finished runs is stored on the robot and can be read under [Settings → Logs]({{< ref "/05-bot-ui/03-settings.md#logs" >}}), with a filter by log level. It is the same data that `raccoon logs show` prints on your laptop.
