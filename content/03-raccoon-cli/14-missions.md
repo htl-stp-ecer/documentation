@@ -1,7 +1,7 @@
 ---
 title: "missions"
 author: "Mario Scholze"
-date: 2026-11-02
+date: 2026-11-16
 draft: false
 weight: 14
 description: "Create, list, rename, remove and reorder the missions of a project."

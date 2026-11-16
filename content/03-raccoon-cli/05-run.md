@@ -1,7 +1,7 @@
 ---
 title: "run"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-06-18
+date: 2026-11-16
 draft: false
 weight: 5
 ---
@@ -121,14 +121,14 @@ The setup and shutdown missions cannot be skipped. Skipping is entirely a runtim
 
 ## Run configurations
 
-`raccoon run` supports named run configurations that bundle multiple flags together. See [Run Configurations](/01-programming-guide/01-basics/08-run-configurations/) for full details.
+`raccoon run` supports named run configurations that bundle multiple flags together. See [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) for full details.
 
 The three built-in presets are always available:
 
 ```bash
 raccoon run           # same as raccoon run default
 raccoon run dev       # --dev --no-calibrate --no-checkpoints (fast iteration)
-raccoon run simulated # runs under the libstp simulator
+raccoon run simulated # WebIDE only: the CLI does not start the simulator
 ```
 
 Pass the configuration name as the first positional argument:

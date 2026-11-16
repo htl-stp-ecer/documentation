@@ -1,9 +1,9 @@
 ---
 title: "Conventions"
 author: "Mario Scholze"
-date: 2026-11-04
+date: 2026-11-16
 draft: false
-weight: 1
+weight: 01
 description: "The rules every repository follows for building and deploying."
 ---
 
@@ -11,7 +11,7 @@ description: "The rules every repository follows for building and deploying."
 
 ## The two scripts
 
-Every repository has exactly two build and install scripts. There are no other ones (`build.sh`, `install.py`, `deploy.sh`, `setup.py`... are removed).
+Every repository has exactly two scripts: `build.py` and `deploy.py`.
 
 ### `build.py`
 
@@ -23,7 +23,7 @@ Every repository has exactly two build and install scripts. There are no other o
 | Parameter | Meaning |
 |---|---|
 | `--version` | Version stamped into the result. Default **`0.0`** = local build. CI passes the release number. |
-| repository specific | for example `--no-webide` or `--skip-tests` |
+| repository specific | for example `--no-webide` (raccoon-cli), `--test` and `--skip-firmware` (stm32-data-reader), `--python-tests` (raccoon-lib) |
 
 Standard library only, so it runs without installing anything.
 
@@ -40,7 +40,7 @@ Standard library only, so it runs without installing anything.
 | `--artifact` | Result to install. Default: the one in `builds/manifest.json`. |
 | `--ssh-params` | Extra options for `ssh` and `scp` as one string. Default none. |
 
-`deploy.py` always sets the component to `"dev"` in the Pi's `/etc/raccoon-bundle.json`. A deployed local build is a **custom build**, and the component version check is skipped for components the bundle marks `dev` (see the contract documentation in the releases section).
+`deploy.py` always sets the component to `"dev"` in the Pi's `/etc/raccoon-bundle.json`. A deployed local build is a **custom build**, and the component version check is skipped for components the bundle marks `dev` (see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})).
 
 ## Versions
 
@@ -53,7 +53,7 @@ Standard library only, so it runs without installing anything.
 - All Dockerfiles live in the **repository root**: `Dockerfile`, variants as `Dockerfile.<name>`.
 - `.devcontainer/` stays as the VS Code convention asks.
 - The build runs in a copy of the sources inside the container, so the repository never gets build output or root-owned files.
-- CI runs the same `build.py` in raccoon-cli, raccoon-transport, botui and stm32-data-reader. Workflows only decide the version, create the release and publish. **raccoon-lib is the exception**: its CI keeps cibuildwheel, because PyPI needs manylinux wheels for Linux and macOS and Windows cannot run in Docker; there `build.py` is for local builds only. See [CI overview](../07-ci/).
+- CI runs the same `build.py` in raccoon-cli, raccoon-transport, botui and stm32-data-reader. Workflows only decide the version, create the release and publish. **raccoon-lib is the exception**: its CI keeps cibuildwheel, because PyPI needs manylinux wheels for Linux and macOS and Windows cannot run in Docker; there `build.py` is for local builds only.
 
 ## Cross and native (raccoon-lib, stm32-data-reader)
 
@@ -65,6 +65,10 @@ These two repositories build C++ for the Pi (aarch64) and have two modes in `bui
 | `native` | aarch64, e.g. the CI's ARM runner | normal compiler in an arm64 image, everything runs natively, no qemu |
 
 One `Dockerfile` has the stages `cross` and `native`; `build.py` builds the image with `--target <mode>`. The stm32-data-reader CI builds the release on an ARM runner (`native`); the raccoon-lib CI does not use `build.py` (see its page). `--mode native` on an x86 PC works (it makes x86_64 results) and is how the native path is tried without an ARM machine.
+
+## The transport pin gate
+
+botui, stm32-data-reader and raccoon-lib have a workflow `pin-gate.yml` that runs on pull requests to `main`. It fails if the `raccoon-transport` submodule does not point at a **released tag**, because message layouts and the ring format are compiled into every component and a commit without a release cannot be matched against the others.
 
 ## The "release" switch in CI
 

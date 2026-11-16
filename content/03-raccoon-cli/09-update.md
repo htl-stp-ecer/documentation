@@ -1,7 +1,7 @@
 ---
 title: "update"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-02
+date: 2026-11-16
 draft: false
 weight: 9
 description: "How raccoon update brings the laptop project and the robot to the versions of one bundle."
@@ -24,6 +24,29 @@ raccoon does not update packages independently. It fetches a **bundle manifest**
 3. A bundle that does not name a transport version (and its contract hash) is refused. All components of a bundle must share one transport.
 
 The project's own format version is a separate thing, see [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}).
+
+### Bundle files
+
+Bundles are JSON files in the `raccoon-image` repository, one per release:
+
+```json
+{
+  "bundle": "2026.11.02",
+  "components": {
+    "raccoon-lib": "v155",
+    "raccoon-cli": "v173",
+    "stm32-data-reader": "v58",
+    "raccoon-cam": "",
+    "botui": "v73",
+    "raccoon-transport": "v69"
+  },
+  "contract_hash": "93ac36836810c9fe"
+}
+```
+
+- A component value is the release tag. An **empty** one (`raccoon-cam` above) means `raccoon update` does not touch that component.
+- `latest` is the bundle you get by default. `dev` always points to the newest component releases and is only installed with `--dev`.
+- Names are `YYYY.MM.DD`, then `YYYY.MM.DD-2`, `-3` and so on for more bundles on the same day. Use the name with `--bundle`.
 
 ## What you see
 
@@ -107,4 +130,3 @@ The Pi's bundle file is only rewritten when at least one Pi package is installed
 
 - [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})
 - [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}})
-- [Bundles and releases]({{< ref "/07-build-and-contribute/releases/00-bundles-and-create-bundle.md" >}}) (how a bundle is made)

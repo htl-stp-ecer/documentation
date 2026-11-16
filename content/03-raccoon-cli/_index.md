@@ -1,7 +1,7 @@
 ---
 title: "Raccoon CLI"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-15
+date: 2026-11-16
 draft: false
 weight: 30
 description: "The raccoon command line tool: connect to the robot, generate code, sync and run your project, inspect logs and keep versions in line."

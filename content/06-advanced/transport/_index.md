@@ -62,7 +62,7 @@ The wire format of a reliable channel is unchanged, so subscribers that do not c
 
 ## Contract
 
-All components must agree on the layout of every message, every channel name and the ring layout. That agreement is summarized in a 16-character **contract hash**, which is computed from the C++ sources and generated into C++, Python and Dart. At startup each component compares its own hash with the one in the bundle file `/etc/raccoon-bundle.json` and refuses to run on a mismatch. The details are on the [Transport Contract]({{< ref "/06-advanced/transport/01-contract.md" >}}) page, and how CI enforces it is in [Transport contract in CI]({{< ref "/07-build-and-contribute/releases/02-transport-contract-in-ci.md" >}}).
+All components must agree on the layout of every message, every channel name and the ring layout. That agreement is summarized in a 16-character **contract hash**, which is computed from the C++ sources and generated into C++, Python and Dart. At startup each component compares its own hash with the one in the bundle file `/etc/raccoon-bundle.json` and refuses to run on a mismatch. The details are on the [Transport Contract]({{< ref "/06-advanced/transport/01-contract.md" >}}) page.
 
 ---
 

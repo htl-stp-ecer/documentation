@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting And Recovery"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-06-18
+date: 2026-11-16
 draft: false
 weight: 17
 description: "Source-verified recovery playbooks for raccoon connect, sync, run, update, logs, services, and migrations."

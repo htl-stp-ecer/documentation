@@ -1,128 +1,42 @@
 ---
 title: "Run Configurations"
 author: "Raccoon Docs Team"
-date: 2026-06-18
+date: 2026-11-16
 draft: false
 weight: 80
-description: "Named bundles of raccoon run flags declared in raccoon.project.yml, including the three builtin presets and how to add your own."
+description: "Named bundles of raccoon run flags declared in raccoon.project.yml: the builtin presets, all fields, and how to add your own."
 ---
 
 # Run Configurations
 
-A *run configuration* is a named bundle of `raccoon run` flags and environment variables stored in your project. It works like a PyCharm run configuration: pick a name and get a fixed set of options automatically.
+A *run configuration* is a named bundle of `raccoon run` flags and environment variables stored in your project. It works like a PyCharm run configuration: pick a name and get a fixed set of options.
 
-## Concept: why they exist
+During development you constantly switch between very different modes:
 
-During development you constantly switch between two very different execution modes:
+- **Competition:** full calibration, wait-for-light start, all checkpoints active. Correct for the competition, but painful when iterating, because every run needs a calibration drive and a light trigger.
+- **Dev:** button start, stored calibration, checkpoint waiting skipped. Fast feedback, but you must not forget to switch back before the competition.
 
-- **Competition mode** — full calibration, wait-for-light start, all checkpoints active. Correct for competition but painful when iterating: each run requires a calibration drive and a physical light trigger.
-- **Dev mode** — button start, stored calibration, checkpoint waiting skipped. Fast feedback, but you must remember to switch back before competition.
-
-Without run configurations you must type `--dev --no-calibrate --no-checkpoints` for every dev run and risk forgetting a flag. With configurations you name the mode once in YAML and invoke it by name.
-
-### Where the YAML lives
-
-Real competition bots separate run configurations into their own file and include it from the root config:
-
-```yaml
-# raccoon.project.yml (from the clawbot)
-run_configurations: !include config/run-configurations.yml
-```
-
-```yaml
-# config/run-configurations.yml
-default:
-  description: Standard run (codegen + calibrate + checkpoints)
-  target: auto
-  dev: false
-  no_calibrate: false
-  no_checkpoints: false
-  env: {}
-
-dev:
-  description: 'Fast iteration: --dev --no-calibrate --no-checkpoints'
-  dev: true
-  no_calibrate: true
-  no_checkpoints: true
-```
-
-This keeps `raccoon.project.yml` readable while the detailed flag set lives in a dedicated file that can be diffed independently.
-
-## Concept: environment variables as feature flags
-
-The `env:` field makes run configurations a natural place for feature flags. The drumbot competition bot uses this to switch between real and fake hardware services without changing mission code:
-
-```yaml
-# config/run-configurations.yml (from the drumbot)
-dev:
-  description: 'Fast iteration: --dev --no-checkpoints'
-  dev: true
-  no_checkpoints: true
-  env:
-    DRUMBOT_NO_POSITION_HOLD: '1'
-    DRUMBOT_DETECTION_DEBUG: '0'
-
-dev-fake:
-  description: 'Fast iteration with fake camera service'
-  dev: true
-  no_checkpoints: true
-  env:
-    DRUMBOT_NO_POSITION_HOLD: '1'
-    DRUMBOT_FAKE_CAMERA: '1'   # triggers fake service injection in main.py
-```
-
-In `main.py`:
-
-```python
-if os.getenv("DRUMBOT_FAKE_CAMERA") == "1":
-    from src.service.fake_color_detection_service import install_fake_color_service
-    install_fake_color_service(robot)
-```
-
-Switching from `raccoon run dev` to `raccoon run dev-fake` swaps the entire camera subsystem — no code edit needed.
-
-The drumbot also hides the default framework presets that do not apply to this project:
-
-```yaml
-# raccoon.project.yml
-hidden_run_configurations:
-  - default
-  - simulated
-```
+Without run configurations you type `--dev --no-calibrate --no-checkpoints` every time and risk forgetting a flag. With them you name the mode once in YAML and call it by name:
 
 ```bash
-raccoon run dev          # activates the "dev" configuration
-raccoon run simulated    # activates the "simulated" configuration
-raccoon run competition  # activates a user-defined configuration
+raccoon run              # same as raccoon run default
+raccoon run dev
+raccoon run competition  # a configuration you defined
 ```
 
-## Why run configurations exist
-
-During a typical project you switch repeatedly between a few execution modes:
-
-- Full run with calibration and light-sensor start (competition mode)
-- Fast iteration with button start and no calibration (dev mode)
-- Simulator run without touching the robot at all
-
-Without run configurations you have to remember and type multiple flags every time (`--dev --no-calibrate --no-checkpoints`). With configurations, you name the mode once and refer to it by name.
+The names are case-insensitive (`raccoon run Dev` works). The configurations are shared with the WebIDE: one you create there is available in the terminal, and the other way around. See [Run Configurations in the WebIDE]({{< ref "/04-web-ide/11-run-configurations.md" >}}) for the dialog.
 
 ## Builtin presets
 
-Three configurations are always available, even for projects with no explicit `run_configurations:` section:
+Three presets exist in every project, even without a `run_configurations:` section:
 
 | Name | Equivalent flags | Purpose |
 |------|-----------------|---------|
-| `default` | (none) | Standard run: codegen + calibrate + wait-for-light start |
+| `default` | (none) | Standard run: codegen, calibrate, checkpoints. Uses the robot if one is connected |
 | `dev` | `--dev --no-calibrate --no-checkpoints` | Fast iteration: button start, skip calibration, skip checkpoint waiting |
-| `simulated` | `target: simulated` | Run under the libstp simulator on the laptop |
+| `simulated` | `target: simulated` | Run the project under the libstp simulator. **Only the WebIDE uses this.** `raccoon run simulated` does not start the simulator; it runs like `auto` |
 
-```bash
-raccoon run           # same as raccoon run default
-raccoon run dev
-raccoon run simulated
-```
-
-## Defining custom configurations
+## Defining your own
 
 Add a `run_configurations:` block to `raccoon.project.yml`:
 
@@ -131,8 +45,8 @@ run_configurations:
   competition:
     description: "Competition: full run with all systems active"
     target: remote
-    dev: false
-    no_calibrate: false
+    record_localization: true
+    record_hz: 30
 
   dev-fast:
     description: "Dev: button start, skip calibration and checkpoints"
@@ -140,121 +54,110 @@ run_configurations:
     no_calibrate: true
     no_checkpoints: true
 
-  record:
-    description: "Dev with localization recording enabled"
-    dev: true
-    no_calibrate: true
+  tune:
+    description: "Long tuning session on the robot"
+    target: remote
     no_checkpoints: true
-    record_localization: true
-    record_hz: 10.0
-
-  camera-test:
-    description: "Skip setup mission, run only the camera mission"
-    dev: true
-    no_calibrate: true
-    args:
-      - "--verbose"
     env:
-      CAMERA_DEBUG: "1"
+      RACCOON_SHUTDOWN_IN: "900"
 ```
 
-## Configuration fields
+An entry with the name of a builtin replaces that builtin. Real bots keep the block in its own file and include it from the root config:
+
+```yaml
+# raccoon.project.yml
+run_configurations: !include config/run-configurations.yml
+```
+
+### Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `description` | string | `""` | Human-readable description shown when the configuration activates |
-| `target` | string | `"auto"` | Execution target: `"auto"` (Pi if connected, else local), `"local"`, `"remote"`, or `"simulated"` |
-| `dev` | bool | `false` | Dev mode: uses button press instead of wait-for-light to start a mission |
-| `no_calibrate` | bool | `false` | Skip calibration steps; use stored calibration values |
-| `no_checkpoints` | bool | `false` | Skip time-checkpoint waiting (wait_for_checkpoint steps return immediately) |
-| `debug` | bool | `false` | Enable debug mode: breakpoint() steps pause and wait for a button press |
-| `no_codegen` | bool | `false` | Skip code generation (rarely used directly) |
-| `no_sync` | bool | `false` | Skip the pre-run push sync |
-| `record_localization` | bool | `false` | Record particle filter state to `.raccoon/runs/<ts>/localization.jsonl` |
-| `record_hz` | float | `null` | Localization recorder downsample rate (default 20 Hz if `record_localization` is true) |
-| `args` | list of strings | `[]` | Extra command-line arguments forwarded to `src/main.py` |
-| `env` | mapping of strings | `{}` | Extra environment variables forwarded to the program process |
+| `description` | string | `""` | Shown when the configuration activates, and as the tooltip in the WebIDE |
+| `target` | string | `auto` | Where to run, see below |
+| `dev` | bool | `false` | Dev mode: a button press instead of wait-for-light starts a mission |
+| `no_calibrate` | bool | `false` | Skip calibration steps; use stored values |
+| `no_checkpoints` | bool | `false` | Skip time-checkpoint waiting (`wait_for_checkpoint` steps return immediately) |
+| `debug` | bool | `false` | Debug mode: `breakpoint()` steps pause and wait for a button press |
+| `no_codegen` | bool | `false` | Skip code generation |
+| `no_sync` | bool | `false` | Skip the sync to the robot before a remote run |
+| `record_localization` | bool | `false` | Record the particle filter state for [replay]({{< ref "/04-web-ide/12-localization-replay.md" >}}) |
+| `record_hz` | float | `null` | Sample rate of that recording (20 Hz if empty) |
+| `profile` | bool | `true` | Step profiling. Set `false` to switch it off for this configuration |
+| `args` | list of strings | `[]` | Extra arguments, put in front of the ones you type on the command line |
+| `env` | mapping | `{}` | Environment variables for the program |
 
-## How CLI flags interact with configurations
+Unknown keys are ignored, and a wrong `target` or a non-list `args` is an error.
 
-CLI flags always win over configuration defaults. This lets you use a configuration as a starting point and override individual settings:
+### Target values
+
+| Value | Meaning |
+|-------|---------|
+| `auto` | Use the robot if one is connected, otherwise run locally |
+| `local` | Always run locally |
+| `remote` | Always run on the connected robot |
+| `simulated` | WebIDE only: run under the simulator |
+
+## Command line flags and configurations
+
+A configuration is the starting point, and the flags you type are added on top:
 
 ```bash
-# "dev" config sets --dev and --no-calibrate, but add --no-m030 on top
-raccoon run dev --no-m030
-
-# "competition" config uses remote target, but force local for testing
-raccoon run competition --local
+raccoon run dev --no-m030    # the dev flags, plus skip mission M030
 ```
 
-The name matching is case-insensitive:
+- **Flags add, they do not subtract.** `dev`, `no_calibrate` and the other switches are combined with your flags. You cannot turn a switch off from the command line. Use another configuration for that.
+- **`target: local` and `target: remote` win over `--local`.** `raccoon run competition --local` still runs remotely if `competition` has `target: remote`.
+- **`record_hz`:** a `--record-hz` on the command line beats the value of the configuration.
+- **`--no-mXXX` only works on the command line.** Writing it into `args` does not skip a mission, because `raccoon run` reads these flags before it merges the configuration. See [raccoon run]({{< ref "/03-raccoon-cli/05-run.md" >}}).
 
-```bash
-raccoon run Dev     # works the same as raccoon run dev
-raccoon run DEV     # also works
+## Environment variables as feature flags
+
+`env:` is a good place for feature flags. A competition bot switches between real and fake camera without touching the mission code:
+
+```yaml
+run_configurations:
+  dev:
+    description: "Fast iteration"
+    dev: true
+    no_checkpoints: true
+
+  dev-fake:
+    description: "Fast iteration with the fake camera service"
+    dev: true
+    no_checkpoints: true
+    env:
+      DRUMBOT_FAKE_CAMERA: "1"
 ```
+
+```python
+import os
+
+if os.getenv("DRUMBOT_FAKE_CAMERA") == "1":
+    install_fake_color_service(robot)
+```
+
+`raccoon run dev-fake` swaps the whole camera subsystem, with no code change.
 
 ## Hiding builtin presets
 
-If a builtin preset does not apply to your project (e.g. you never use the simulator), you can remove it from the CLI and Web-IDE dropdowns using the `hidden_run_configurations:` key:
+If a builtin does not apply to your project (you never use the simulator, for example), hide it:
 
 ```yaml
 hidden_run_configurations:
   - simulated
 ```
 
-The hidden preset disappears from both `raccoon run <name>` tab-completion and the Web-IDE run configuration dialog. To restore it, either remove its name from `hidden_run_configurations:` or add a user-defined entry with the same name (which un-hides it automatically).
+It disappears from the CLI and from the WebIDE dropdown. To restore it, remove the name from the list, or add an entry with the same name under `run_configurations:`. Removing a builtin in the WebIDE writes this list for you.
 
-## Run configurations in the Web-IDE
+## Tips
 
-The Web-IDE run configuration dialog reads from the same `raccoon.project.yml` source. When you open a project in the Web-IDE and click the run button, a dropdown shows all active configurations (builtin presets plus user-defined ones). Selecting one sets the run flags in the IDE the same way the CLI would interpret them.
-
-Changes made to configurations in the Web-IDE are written back to `raccoon.project.yml` and are immediately visible to the CLI.
-
-## Example: full project YAML with run configurations
-
-```yaml
-name: ConeBot
-uuid: abc12345-...
-
-robot:
-  drivetrain: diff
-
-run_configurations:
-  competition:
-    description: "Competition run"
-    target: remote
-
-  dev:
-    description: "Fast dev iteration"
-    dev: true
-    no_calibrate: true
-    no_checkpoints: true
-
-  record:
-    description: "Dev with localization recording"
-    dev: true
-    no_calibrate: true
-    no_checkpoints: true
-    record_localization: true
-    record_hz: 10.0
-
-hidden_run_configurations:
-  - simulated
-```
-
-In this project:
-
-```bash
-raccoon run            # uses the builtin "default" config (unchanged)
-raccoon run dev        # uses the overridden "dev" config above
-raccoon run competition
-raccoon run record
-raccoon run simulated  # error: hidden
-```
+- Set `record_localization: true` on your `competition` configuration so every real run records a replay file.
+- Add `no_codegen: true` to a configuration when you know the code has not changed.
+- Each developer on a team can add their own configurations without conflicts, because they are just keys under `run_configurations:`.
 
 ## Related pages
 
-- [raccoon run]({{< ref "/03-raccoon-cli/05-run.md" >}}) — the full run reference including `--no-mXXX` mission skipping
-- [Create your project]({{< ref "/00-getting-started/03-create-a-project.md" >}}) — how run configurations are added to a new project
-- [raccoon-server]({{< ref "/03-raccoon-cli/18-raccoon-server.md" >}}) — the Pi daemon that executes the run
+- [raccoon run]({{< ref "/03-raccoon-cli/05-run.md" >}}): all run flags and `--no-mXXX`
+- [Run Configurations in the WebIDE]({{< ref "/04-web-ide/11-run-configurations.md" >}}): the dialog
+- [Create your project]({{< ref "/00-getting-started/03-create-a-project.md" >}})

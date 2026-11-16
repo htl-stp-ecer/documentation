@@ -1,7 +1,7 @@
 ---
 title: "connect"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-06-18
+date: 2026-11-16
 draft: false
 weight: 1
 description: "Link your laptop to the robot and set up SSH key authentication."

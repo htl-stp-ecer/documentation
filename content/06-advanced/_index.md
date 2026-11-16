@@ -48,7 +48,7 @@ flowchart LR
 | **raccoon-cam** | Camera service with pluggable image processors | `raccoon-cam` |
 | **raccoon-image** | Builds the RaccoonOS SD card image from a bundle of component releases | `raccoon-image` |
 
-Every component is built and released on its own. A **bundle** names the exact version of each, and the transport **contract hash** makes sure they all speak the same wire format. See [Releases]({{< ref "/07-build-and-contribute/releases/_index.md" >}}).
+Every component is built and released on its own. A **bundle** names the exact version of each, and the transport **contract hash** makes sure they all speak the same wire format. See [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
 
 ## In this section
 

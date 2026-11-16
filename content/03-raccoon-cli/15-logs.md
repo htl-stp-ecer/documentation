@@ -1,7 +1,7 @@
 ---
 title: "logs"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-06-18
+date: 2026-11-16
 draft: false
 weight: 15
 description: "How raccoon logs actually works: local vs remote runs, filtering, following, sources, clearing, and project services."

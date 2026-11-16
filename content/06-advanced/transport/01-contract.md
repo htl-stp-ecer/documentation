@@ -143,6 +143,21 @@ The Pi server serves the aggregate at `GET /api/v1/contract` (see [raccoon-serve
 
 A component that refuses to start exits with **78**. systemd units of long-running components set `RestartPreventExitStatus=78`; otherwise a refusing service would be restarted every few seconds and flood the journal.
 
-## For maintainers
+## For transport developers
 
-How the hash is computed, where it is checked in the image build and how a release is made: [Releases]({{< ref "/07-build-and-contribute/releases/_index.md" >}}).
+`scripts/contract.py` in `raccoon-transport` reads the **C++ sources** and writes `contract/contract.json` plus generated constants for C++, Python and Dart. The hash is the first 16 hex characters of the SHA-256 of the canonical JSON.
+
+| Goes into the hash | Does **not** |
+|--------------------|--------------|
+| every message type of `messages/include/raccoon/*_t.hpp`: name, fields **in order** (the wire order), field types | comments, whitespace, default values |
+| every channel name from `Channels.h` (port-indexed ones as a pattern like `raccoon/motor/{port}/done`), sorted | the order channels are declared in |
+| the shared-memory ring magic and `RRB_VERSION` | the transport version number (display only) |
+
+After changing a message struct, a channel or the ring layout, regenerate and commit:
+
+```bash
+python3 scripts/contract.py --write     # regenerate contract.json and the constants
+python3 -m unittest scripts/test_contract.py python/tests/test_contract_check.py
+```
+
+CI runs `contract.py --check`. It fails when a generated file is stale or when the Python or Dart messages no longer match the C++ field order. Merging to `main` in `raccoon-transport` is a release.
