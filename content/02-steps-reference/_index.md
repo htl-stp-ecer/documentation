@@ -25,18 +25,13 @@ New to steps? The [Programming Guide]({{< ref "/01-programming-guide/_index.md" 
 
 {{< dsl-steps >}}
 
----
 
 ## Python and C++ API
 
 Beyond steps, the full Python API (motors, servos, sensors, missions, calibration and more) and the native C++ reference are published with each release:
 
-<a href="/api/autoapi/index.html" class="api-link" target="_blank">Open Python API Reference</a>
-<a href="/api/doxygen/index.html" class="api-link" target="_blank">Open C++ API Reference</a>
-
-> **Local development note:** these two pages are filled from a release artifact (`raccoon-docs-*.zip`) that the CI workflow downloads on each build. They do not exist after a fresh `git clone`, so with a local `hugo server -D` those two links are broken. The step catalog above (`data/dsl_steps.json`) is committed and works locally.
-
----
+- <a href="/api/autoapi/index.html" class="api-link" target="_blank">Open Python API Reference</a>
+- <a href="/api/doxygen/index.html" class="api-link" target="_blank">Open C++ API Reference</a>
 
 ## Where the catalog comes from
 
@@ -44,10 +39,10 @@ The step catalog is not written by hand. Every public step in `raccoon-lib` is a
 
 ```mermaid
 graph LR
-    A[raccoon-lib source<br/>@dsl / @dsl_step annotations] --> B[generate_dsl_catalog.py<br/>AST scanner]
-    B --> C[data/dsl_steps.json<br/>committed to the docs repo]
-    C --> D[Hugo shortcode<br/>dsl-steps]
-    D --> E[Step catalog<br/>searchable]
+    A(raccoon-lib source<br/>@dsl / @dsl_step annotations) --> B(generate_dsl_catalog.py<br/>AST scanner)
+    B --> C(data/dsl_steps.json<br/>committed to the docs repo)
+    C --> D(Hugo shortcode<br/>dsl-steps)
+    D --> E(Step catalog<br/>searchable)
 ```
 
 The catalog is a snapshot of the latest release. If your robot runs an older `raccoon-lib`, some steps may not exist yet. Use `raccoon update` to stay current.
