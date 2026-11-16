@@ -180,8 +180,8 @@ run_configurations:
 CLI flags always win over configuration defaults. This lets you use a configuration as a starting point and override individual settings:
 
 ```bash
-# "dev" config sets --dev and --no-calibrate, but add --no-m0 on top
-raccoon run dev --no-m0
+# "dev" config sets --dev and --no-calibrate, but add --no-m030 on top
+raccoon run dev --no-m030
 
 # "competition" config uses remote target, but force local for testing
 raccoon run competition --local
@@ -255,6 +255,6 @@ raccoon run simulated  # error: hidden
 
 ## Related pages
 
-- [raccoon run]({{< ref "/03-raccoon-cli/03-run.md" >}}) — the full run reference including `--no-mN` mission skipping
+- [raccoon run]({{< ref "/03-raccoon-cli/05-run.md" >}}) — the full run reference including `--no-mXXX` mission skipping
 - [Create your project]({{< ref "/00-getting-started/03-create-a-project.md" >}}) — how run configurations are added to a new project
-- [raccoon-server]({{< ref "/03-raccoon-cli/16-raccoon-server.md" >}}) — the Pi daemon that executes the run
+- [raccoon-server]({{< ref "/03-raccoon-cli/18-raccoon-server.md" >}}) — the Pi daemon that executes the run

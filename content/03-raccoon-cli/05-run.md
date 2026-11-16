@@ -1,9 +1,9 @@
 ---
 title: "run"
-author: "Tobias Madlberger"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 4
+weight: 5
 ---
 
 # raccoon run
@@ -99,23 +99,25 @@ The same selection logic applies whether sync is triggered by `raccoon run` or b
 | `--no-checkpoints` | off | Skip time-checkpoint waiting (wait_for_checkpoint steps return immediately) |
 | `--debug` | off | Enable debug mode: `breakpoint()` steps pause and wait for a button press instead of being a no-op |
 | `--record-localization` | off | Record particle filter state to `.raccoon/runs/<timestamp>/localization.jsonl` for replay in the Web-IDE |
+| `--no-record` | off | Force-disable localization recording. Recording is already off by default, so this only matters to override a run configuration |
 | `--record-hz` | 20 Hz | Downsample rate for localization recording; only effective with `--record-localization` |
+| `--record-sensors` / `--no-record-sensors` | on | Record the raw sensor channels to `.raccoon/runs/<run_id>/sensors.mcap` on the Pi for the duration of the run |
+| `--no-profile` | off | Disable step profiling for this run (profiling is on by default) |
+| `--raw` | off | Local runs: print the program's stdout directly instead of the live log viewer |
 
-## Skipping individual missions with `--no-mN`
+## Skipping individual missions with `--no-mXXX`
 
-During development you often want to skip the slow setup mission and jump straight to testing a specific one. Use `--no-m<index>` flags:
+During development you often want to skip the slow missions and jump straight to testing a specific one. Use `--no-m<prefix>`, where the prefix is the number of the mission, i.e. the three digits after the `M` in its name (`--no-m030`, never `--no-m30`):
 
 ```bash
-# Skip the first mission (order index 0) — typically the setup mission
-raccoon run --no-m0
+# Skip mission M010
+raccoon run --no-m010
 
-# Skip missions at indices 0 and 2 simultaneously
-raccoon run --no-m0 --no-m2
+# Skip M010 and M030 at the same time
+raccoon run --no-m010 --no-m030
 ```
 
-The index is the **order index** of the mission in your project config, zero-based. Mission M010 is index 0, M020 is index 1, and so on. The `LIBSTP_SKIP_MISSIONS` environment variable carries the indices to the runtime.
-
-Skipping missions is entirely a runtime skip — the files are still synced and compiled, so you can re-run without `--no-mN` at any time without a fresh sync.
+The setup and shutdown missions cannot be skipped. Skipping is entirely a runtime skip: the files are still synced and compiled, so you can re-run without `--no-mXXX` at any time without a fresh sync.
 
 ## Run configurations
 
@@ -133,7 +135,7 @@ Pass the configuration name as the first positional argument:
 
 ```bash
 raccoon run dev
-raccoon run dev --no-m0   # combine config with extra flags
+raccoon run dev --no-m010   # combine config with extra flags
 ```
 
 ## Recording localization for replay
@@ -180,6 +182,13 @@ Warning: version mismatch
 
 Things usually still work across minor versions, but run `raccoon update` to eliminate the mismatch.
 
+## Project format check
+
+Before running, raccoon compares the project's `format_version` (in `raccoon.project.yml`) with two numbers:
+
+- **The newest migration the CLI knows.** If your project is behind, raccoon prints a warning and runs anyway. Run [`raccoon migrate`]({{< ref "/03-raccoon-cli/10-migrate.md" >}}) to catch up.
+- **The minimum the installed `raccoon-lib` requires** (`raccoon.MIN_FORMAT_VERSION`). If your project is older than that, the run is refused. Run `raccoon migrate` first.
+
 ## Running individual steps manually
 
 ```bash
@@ -191,7 +200,7 @@ These are rarely needed — `raccoon run` covers both.
 
 ## Related pages
 
-- [sync]({{< ref "/03-raccoon-cli/09-sync.md" >}}) — what the push/pull steps do in detail, including fingerprint verification
+- [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}) — what the push/pull steps do in detail, including fingerprint verification
 - [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) — how to name `dev` vs `competition` mode configurations
-- [checkpoint]({{< ref "/03-raccoon-cli/12-checkpoint.md" >}}) — the automatic pre-run snapshots
-- [logs]({{< ref "/03-raccoon-cli/10-logs.md" >}}) — browsing output from previous runs
+- [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) — the automatic pre-run snapshots
+- [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) — browsing output from previous runs

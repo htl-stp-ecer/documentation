@@ -1,9 +1,9 @@
 ---
 title: "update"
-author: "Tobias Madlberger"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-11-02
 draft: false
-weight: 5
+weight: 9
 description: "How raccoon update brings the laptop project and the robot to the versions of one bundle."
 ---
 
@@ -23,7 +23,7 @@ raccoon does not update packages independently. It fetches a **bundle manifest**
 2. A package that is *newer* than the bundle is "ahead of bundle" and left alone — it has not been tested with the rest.
 3. A bundle that does not name a transport version (and its contract hash) is refused. All components of a bundle must share one transport.
 
-For the version layers (packages, bundle, `format_version`) see [Versioning And Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}).
+The project's own format version is a separate thing, see [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}).
 
 ## What you see
 
@@ -106,6 +106,5 @@ The Pi's bundle file is only rewritten when at least one Pi package is installed
 ## Related pages
 
 - [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})
-- [Versioning And Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}})
-- [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/08-troubleshooting-and-recovery.md" >}})
+- [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}})
 - [Bundles and releases]({{< ref "/07-build-and-contribute/releases/00-bundles-and-create-bundle.md" >}}) (how a bundle is made)

@@ -1,9 +1,9 @@
 ---
 title: "logs"
-author: "OpenAI Codex"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 11
+weight: 15
 description: "How raccoon logs actually works: local vs remote runs, filtering, following, sources, clearing, and project services."
 ---
 
@@ -21,10 +21,6 @@ raccoon manages two completely different categories of logs. Knowing which you n
 | **Service journals** (systemd / journald) | Output from project daemons (e.g. camera service) running on the Pi | `raccoon logs services show <name>` |
 
 Run logs are parsed and indexed by raccoon into numbered "runs" so you can refer to them as `show 1` (most recent), `show 2`, etc. Service logs are read from journald on the Pi and are remote-only.
-
-Source of truth:
-
-- [logs.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/logs.py)
 
 ## Two operating modes
 

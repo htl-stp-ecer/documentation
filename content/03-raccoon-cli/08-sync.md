@@ -1,9 +1,9 @@
 ---
 title: "sync"
-author: "OpenAI Codex"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 10
+weight: 8
 description: "How raccoon sync actually works: backends, verification, sync counters, and failure modes."
 ---
 
@@ -19,10 +19,7 @@ raccoon sync
 
 ```mermaid
 flowchart TD
-    A[raccoon sync] --> B{validate project?}
-    B -- yes --> C[run raccoon validate]
-    B -- no-validate flag --> D
-    C --> D[create git checkpoint if auto_checkpoints on]
+    A[raccoon sync] --> D[create git checkpoint if auto_checkpoints on]
     D --> E{backend?}
     E -- Linux/macOS --> F[rsync over SSH]
     E -- Windows --> G[SFTP via Paramiko]
@@ -38,12 +35,6 @@ flowchart TD
 
 The **fingerprint verification step** is what distinguishes `raccoon sync` from a plain rsync wrapper. The sync counter prevents silent divergence when two machines sync the same project.
 
-Source of truth:
-
-- [sync_cmd.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/sync_cmd.py)
-- [sftp_sync.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/client/sftp_sync.py)
-- [api.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/client/api.py)
-
 ## Default behavior
 
 By default:
@@ -57,7 +48,6 @@ means:
 - current project only
 - push local files to the connected Pi
 - delete extraneous files on the destination
-- validate the project before push
 - verify the result with content fingerprints
 
 ## Direction modes
@@ -85,11 +75,10 @@ The current push flow is:
 2. resolve the project UUID and remote path
 3. auto-connect to the Pi if needed
 4. optionally create a pre-sync git checkpoint
-5. validate the project unless `--no-validate` was used
-6. transfer files with the selected backend
-7. recompute fingerprints on both sides
-8. compare hashes
-9. if hashes match, bump the remote sync counter and persist sync state locally
+5. transfer files with the selected backend
+6. recompute fingerprints on both sides
+7. compare hashes
+8. if hashes match, bump the remote sync counter and persist sync state locally
 
 That final verification step is the important difference from a plain rsync wrapper.
 
@@ -150,15 +139,11 @@ turns that off.
 
 This matters especially on pull. A pull with delete enabled can remove local files that do not exist on the robot.
 
-## Validation before push
+## No validation
 
-Push sync runs project validation by default. That is deliberate: it is cheaper to fail on the laptop than to push broken project state to the Pi.
+`raccoon sync` does not validate the project. To check before pushing, run [`raccoon validate`]({{< ref "/03-raccoon-cli/12-validate.md" >}}) first, or use [`raccoon upload`]({{< ref "/03-raccoon-cli/06-upload.md" >}}), which validates, syncs and checks that the program starts.
 
-Skip only when you know why:
-
-```bash
-raccoon sync --no-validate
-```
+The `--no-validate` flag is still accepted but ignored, so old scripts keep working.
 
 ## Git checkpoints
 
@@ -246,12 +231,6 @@ raccoon sync --no-delete
 
 Preserve extra files on the destination.
 
-```bash
-raccoon sync --no-validate
-```
-
-Skip push validation.
-
 ## Practical failure modes
 
 ### No API token
@@ -313,6 +292,6 @@ So when run behavior feels flaky, `raccoon sync --verbose` is often the fastest 
 
 ## Related pages
 
-- [run]({{< ref "/03-raccoon-cli/03-run.md" >}}) — the full run lifecycle, of which sync is steps 4 and 6
-- [checkpoint]({{< ref "/03-raccoon-cli/12-checkpoint.md" >}}) — the git snapshot created before sync
-- [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/08-troubleshooting-and-recovery.md" >}}) — sync failure recovery playbooks
+- [run]({{< ref "/03-raccoon-cli/05-run.md" >}}) — the full run lifecycle, of which sync is steps 4 and 6
+- [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) — the git snapshot created before sync
+- [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}}) — sync failure recovery playbooks

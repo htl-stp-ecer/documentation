@@ -582,6 +582,22 @@ pre code {
     font-size: 1em;
 }
 
+/* ─── Syntax highlighting (Chroma classes, site palette) ──── */
+.highlight { margin: 0; }
+.chroma .err { color: inherit; background: none; }
+.chroma .c, .chroma .c1, .chroma .cm, .chroma .cs, .chroma .ch, .chroma .cp, .chroma .cpf { color: #8f8272; font-style: italic; }
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kn, .chroma .kp, .chroma .kr, .chroma .kt, .chroma .ow { color: var(--berry); }
+.chroma .nb, .chroma .bp, .chroma .nf, .chroma .fm, .chroma .nc, .chroma .nd, .chroma .ne { color: var(--sky); }
+.chroma .s, .chroma .s1, .chroma .s2, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .sd, .chroma .se, .chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .ss { color: var(--green); }
+.chroma .m, .chroma .mi, .chroma .mf, .chroma .mh, .chroma .mo, .chroma .il, .chroma .mb { color: var(--rust); }
+.chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi, .chroma .vm, .chroma .na, .chroma .nt { color: var(--amber); }
+.chroma .o, .chroma .p { color: var(--dim); }
+
+/* Shell blocks: command and flags, added by /js/shell-highlight.js */
+.sh-cmd  { color: var(--amber); font-weight: 600; }
+.sh-flag { color: var(--sky); }
+.sh-prompt { color: var(--dim); user-select: none; }
+
 p code, li code, td code, th code {
     background: var(--bg-med);
     color: var(--amber);

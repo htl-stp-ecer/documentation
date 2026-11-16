@@ -54,11 +54,6 @@ The runtime geometry implementation is:
 
 Python exposes `WorldMap` as `TableMap`.
 
-Source of truth:
-
-- [WorldMap.hpp](/media/tobias/TobiasSSD/projects/Botball/raccoon/raccoon-lib/modules/libstp-map/include/libstp/map/WorldMap.hpp)
-- [map.cpp](/media/tobias/TobiasSSD/projects/Botball/raccoon/raccoon-lib/modules/libstp-map/bindings/map.cpp)
-
 ## Runtime `.ftmap` format: v1
 
 The current runtime binding validates:

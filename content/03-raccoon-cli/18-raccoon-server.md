@@ -1,14 +1,14 @@
 ---
 title: "raccoon-server (Pi daemon)"
-author: "Raccoon Docs Team"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 17
+weight: 18
 ---
 
 # raccoon-server
 
-`raccoon-server` is the daemon that runs **on the Raspberry Pi (Wombat)**. It exposes a local HTTP/WebSocket API that the laptop-side `raccoon` CLI uses to sync files, execute missions, read encoder positions, and stream logs. Without it running on the Pi, `raccoon run`, `raccoon sync`, and `raccoon lcm` will not work.
+`raccoon-server` is the daemon that runs **on the Raspberry Pi (Wombat)**. It exposes a local HTTP/WebSocket API that the laptop-side `raccoon` CLI uses to sync files, execute missions, read encoder positions, and stream logs. Without it running on the Pi, `raccoon run` and `raccoon sync` will not work.
 
 `raccoon-server` is a separate entry point from `raccoon` — it is only installed and used on the Pi, not on your laptop.
 
@@ -29,10 +29,9 @@ graph LR
     CLI -- run/stop/logs via HTTP --> Server
     Server -- spawns --> Main
     Main -- sensor/motor data --> LCM
-    CLI -- raccoon lcm spy --> LCM
 ```
 
-The server spawns `src/main.py` as a child process and streams its stdout back to the laptop in real time. When you press Ctrl-C, the CLI sends a shutdown signal through the server API — it does not kill the SSH session.
+The server spawns `src/main.py` as a child process and streams its stdout back to the laptop in real time. When you press Ctrl+C, the CLI sends a shutdown signal through the server API — it does not kill the SSH session.
 
 > Note: `raccoon-server` is only relevant if you need to install or manage the daemon manually. When you run `raccoon run` from the laptop, the server is already running (installed by `sudo raccoon-server install` during initial setup) and the CLI talks to it automatically.
 
@@ -153,29 +152,29 @@ On first start, the server generates a random API token and stores it at `~/.rac
 ## Typical Pi setup workflow
 
 1. Flash your Pi image and SSH in:
-   ```bash
-   ssh pi@192.168.4.1
-   ```
+```bash
+ssh pi@192.168.4.1
+```
 
 2. Install raccoon on the Pi (if not already on the image):
-   ```bash
-   pip3 install raccoon-cli
-   ```
+```bash
+pip3 install raccoon-cli
+```
 
 3. Install and start the server as a service:
-   ```bash
-   sudo raccoon-server install
-   ```
+```bash
+sudo raccoon-server install
+```
 
 4. Verify it is running:
-   ```bash
-   raccoon-server status
-   ```
+```bash
+raccoon-server status
+```
 
 5. From your **laptop**, connect:
-   ```bash
-   raccoon connect 192.168.4.1
-   ```
+```bash
+raccoon connect 192.168.4.1
+```
 
 The server starts automatically on every boot after `install`.
 

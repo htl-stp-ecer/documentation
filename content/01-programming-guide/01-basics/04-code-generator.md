@@ -32,7 +32,7 @@ These files are **generated, not written**. Never edit them by hand, because the
 
 ## When it runs
 
-- **Automatically** on every [`raccoon run`]({{< ref "/03-raccoon-cli/03-run.md" >}}), locally on your laptop, before the files are synced to the robot.
+- **Automatically** on every [`raccoon run`]({{< ref "/03-raccoon-cli/05-run.md" >}}), locally on your laptop, before the files are synced to the robot.
 - **Manually** with `raccoon codegen`, for example to get IDE completion right after you edited the YAML.
 
 Code generation needs no connection to the robot. It runs locally on your laptop.
@@ -50,7 +50,7 @@ raccoon codegen --no-validate      # skip the validation before generating
 
 ## Validation first
 
-Before generating, raccoon validates the config (the same checks as [`raccoon validate`]({{< ref "/03-raccoon-cli/15-validate.md" >}})). If the config is inconsistent, codegen stops with an error instead of producing broken code. That includes `Defs.<name>` accesses in your source files that refer to hardware you have not defined.
+Before generating, raccoon validates the config (the same checks as [`raccoon validate`]({{< ref "/03-raccoon-cli/12-validate.md" >}})). If the config is inconsistent, codegen stops with an error instead of producing broken code. That includes `Defs.<name>` accesses in your source files that refer to hardware you have not defined.
 
 ---
 

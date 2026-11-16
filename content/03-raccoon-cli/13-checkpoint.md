@@ -1,6 +1,6 @@
 ---
 title: "checkpoint"
-author: "Raccoon Docs Team"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
 weight: 13

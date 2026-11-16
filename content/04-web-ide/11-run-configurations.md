@@ -131,7 +131,7 @@ run_configurations:
       RACCOON_LOG_LEVEL: debug
       LIBSTP_VERBOSE: "1"
     args:
-      - "--no-m0"   # skip setup mission
+      - "--no-m030"   # skip mission M030
 ```
 
 Builtin presets (`default`, `dev`, `simulated`) do not appear in this section unless you have overridden them. Editing a builtin in the IDE creates a user override entry that shadows the builtin.
@@ -262,7 +262,7 @@ When iterating on a late mission, skip the time-consuming setup mission:
     no_calibrate: true
     no_checkpoints: true
     args:
-      - "--no-m0"  # skip the M000 setup mission
+      - "--no-m030"  # skip mission M030
 ```
 
 ---
@@ -271,7 +271,7 @@ When iterating on a late mission, skip the time-consuming setup mission:
 
 - Use `record_localization: true` on your `competition` config so every real run automatically records a replay file for post-run analysis.
 - The `dev` preset's `no_codegen` equivalent is toggled separately (`no_codegen: true`). Add it to a custom config when you know the code has not changed and want to skip the generation step entirely.
-- `args: ["--no-m0"]` skips the setup mission (mission at order index 0) during development — useful when the setup mission takes a long time and you are iterating on a later mission.
+- `args: ["--no-m030"]` skips mission M030 during development. Useful when a mission takes a long time and you are iterating on another one. The setup and shutdown missions cannot be skipped.
 - Environment variables in `env:` are passed to the raccoon process and therefore visible to the running Python code. Use them for feature flags or logging verbosity without changing source code.
 - Each developer on a team can have their own custom configurations without conflicting, since configurations are just YAML keys under `run_configurations:`.
 

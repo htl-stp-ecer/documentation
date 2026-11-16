@@ -23,6 +23,11 @@ title = 'Raccoon Wiki'
   home = ["HTML", "JSON", "llmstxt", "llmstxtfull"]
 
 [markup]
+  [markup.highlight]
+    noClasses = false
+    guessSyntax = false
+    lineNos = false
+
   [markup.goldmark]
     [markup.goldmark.renderer]
       unsafe = true

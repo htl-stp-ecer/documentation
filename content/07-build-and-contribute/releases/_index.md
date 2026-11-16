@@ -18,4 +18,4 @@ This section is for people who **release** RaccoonOS, not for people who program
 | [Transport contract in CI]({{< ref "/07-build-and-contribute/releases/02-transport-contract-in-ci.md" >}}) | How the hash is computed and changed, the image build gates, the shared check specification |
 | [Example project pins]({{< ref "/07-build-and-contribute/releases/03-example-pins.md" >}}) | How `raccoon-template` gets its `raccoon-cli` / `raccoon-library` pins |
 
-Users: see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}) and [update]({{< ref "/03-raccoon-cli/04-update.md" >}}).
+Users: see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}) and [update]({{< ref "/03-raccoon-cli/09-update.md" >}}).

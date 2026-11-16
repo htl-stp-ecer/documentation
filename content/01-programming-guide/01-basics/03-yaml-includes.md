@@ -36,10 +36,6 @@ Raccoon project configuration is not just split across files for convenience. Th
 
 This matters because tools like calibration steps, IDE routes, and programmatic config updates all rely on the same ownership rules.
 
-Source of truth:
-
-- [project_yaml.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/raccoon-lib/python/raccoon/project_yaml.py)
-
 ## Two tags exist
 
 ### `!include`

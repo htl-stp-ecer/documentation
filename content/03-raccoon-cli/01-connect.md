@@ -1,16 +1,13 @@
 ---
-title: "connect, disconnect & shell"
-author: "Tobias Madlberger"
+title: "connect"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 3
+weight: 1
+description: "Link your laptop to the robot and set up SSH key authentication."
 ---
 
-# raccoon connect, disconnect & shell
-
-These three commands manage the link between your laptop and the robot. `connect` sets it up, `disconnect` drops it, and `shell` opens a terminal on the Pi.
-
-## raccoon connect
+# raccoon connect
 
 ```bash
 raccoon connect <IP>
@@ -19,7 +16,7 @@ raccoon connect <IP> --port 8421 --user pi
 
 Connects raccoon to your Wombat robot and sets up SSH key authentication so that every subsequent command (`run`, `sync`, `codegen`, etc.) works without prompting for a password.
 
-### How SSH key setup works
+## How SSH key setup works
 
 ```mermaid
 sequenceDiagram
@@ -40,7 +37,7 @@ sequenceDiagram
 
 After this one-time handshake, every subsequent `raccoon run`, `raccoon sync`, and `raccoon shell` uses the stored key — no password ever again.
 
-### What it does
+## What it does
 
 1. Checks that the robot's API server is reachable at `<IP>:8421`
 2. Attempts SSH key authentication to retrieve an API access token
@@ -51,7 +48,7 @@ After this one-time handshake, every subsequent `raccoon run`, `raccoon sync`, a
 
 After a successful connect, all other raccoon commands use the saved connection automatically.
 
-### Options
+## Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -60,7 +57,7 @@ After a successful connect, all other raccoon commands use the saved connection 
 | `-u, --user USERNAME` | `pi` | SSH username |
 | `--save / --no-save` | `--save` | Save the connection to project and global config |
 
-### Default credentials
+## Default credentials
 
 The Wombat ships with:
 - **User:** `pi`
@@ -68,7 +65,7 @@ The Wombat ships with:
 
 > **Security note:** Change the default password after your first successful connection.
 
-### SSH key auto-setup
+## SSH key auto-setup
 
 When SSH key authentication is not yet configured, raccoon offers to set it up automatically. The process:
 
@@ -81,26 +78,26 @@ When SSH key authentication is not yet configured, raccoon offers to set it up a
 
 After this one-time setup, raccoon never asks for a password again.
 
-### When to re-run
+## When to re-run
 
 - First time setting up a project on a new machine
 - When the robot's IP address changes (common when switching networks or switching between Access Point and infrastructure mode)
 - When SSH authentication stops working (run `raccoon disconnect` first, then `raccoon connect <IP>` again)
 
-### Examples
+## Examples
 
 ```bash
 # Connect using defaults (port 8421, user pi)
-raccoon connect 192.168.4.1
+raccoon connect wombat.local
 
-# Connect using a custom port and user
-raccoon connect 192.168.4.1 --port 8222 --user robot
+# Connect using a custom user
+raccoon connect wombat.local --user robot
 
 # Connect but do not save to config (useful for one-off checks)
-raccoon connect 192.168.4.1 --no-save
+raccoon connect wombat.local --no-save
 ```
 
-### Transport contract notice
+## Transport contract notice
 
 After connecting, raccoon asks the Pi whether all components match the bundle. If not, it prints one red line (`Runs will be refused; see raccoon doctor`); in dev mode a yellow line. Nothing is checked on your laptop. See [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
 
@@ -112,39 +109,6 @@ raccoon saves the connection in two places:
 - `~/.raccoon/config.yml` globally, which records the Pi as a "known Pi" so `raccoon shell` and `raccoon doctor` also work outside a project.
 
 To change the robot's address, run `raccoon connect <new-IP>`. It overwrites both files.
-
-## raccoon disconnect
-
-```bash
-raccoon disconnect
-```
-
-Removes the active connection and clears the session state. It does **not** delete the saved address from `config/connection.yml` or `~/.raccoon/config.yml`; it only drops the in-memory session.
-
-## raccoon shell
-
-```bash
-raccoon shell
-```
-
-Opens an interactive SSH session on the connected Pi by replacing the current process. You get a normal shell on the Pi, which is useful for looking at logs or running processes.
-
-`raccoon shell` finds the address in this order:
-
-1. The active session, if you ran `raccoon connect` earlier.
-2. `connection.pi_address` in the project's `raccoon.project.yml`.
-3. The first known Pi in `~/.raccoon/config.yml`.
-
-If no address is found it prints an error and exits.
-
-```bash
-raccoon connect 192.168.4.1
-raccoon shell
-pi@raspberrypi:~ $ tail -f /var/log/raccoon/server.log
-pi@raspberrypi:~ $ exit
-```
-
-`raccoon shell` calls `ssh` from your PATH. `raccoon doctor` tells you if it is missing.
 
 ## Troubleshooting
 

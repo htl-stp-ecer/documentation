@@ -1,6 +1,6 @@
 ---
 title: "Raccoon CLI"
-author: "Mario Scholze"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-11-15
 draft: false
 weight: 30
@@ -35,45 +35,45 @@ Code generation and all validation happen on your laptop. The Pi only receives t
 
 | Command | What it does | Page |
 |---------|--------------|------|
-| `raccoon connect <ip>` / `disconnect` / `shell` | Link to the robot, drop it, open an SSH shell | [connect]({{< ref "/03-raccoon-cli/02-connect.md" >}}) |
-| `raccoon run` | Checkpoint, generate code, sync, execute, pull back | [run]({{< ref "/03-raccoon-cli/03-run.md" >}}) |
-| `raccoon sync` | Push or pull files between laptop and robot | [sync]({{< ref "/03-raccoon-cli/09-sync.md" >}}) |
-| `raccoon codegen` | Generate `defs.py`, `defs.pyi` and `robot.py` | [Code Generator]({{< ref "/01-programming-guide/01-basics/04-code-generator.md" >}}) |
-| `raccoon missions` | Create, list, rename, remove and reorder missions | [missions]({{< ref "/03-raccoon-cli/21-missions.md" >}}) |
-| `raccoon calibrate` | Ticks, autotune, servos and step response | [Calibration]({{< ref "/01-programming-guide/03-calibration/_index.md" >}}) |
-| `raccoon logs` | Show, tail, download and clear robot logs | [logs]({{< ref "/03-raccoon-cli/10-logs.md" >}}) |
-| `raccoon checkpoint` | Automatic safety snapshots of your project | [checkpoint]({{< ref "/03-raccoon-cli/12-checkpoint.md" >}}) |
-| `raccoon validate` | Check config, missions and imports | [validate]({{< ref "/03-raccoon-cli/15-validate.md" >}}) |
+| `raccoon connect <ip>` | Link to the robot and set up SSH keys | [connect]({{< ref "/03-raccoon-cli/01-connect.md" >}}) |
+| `raccoon disconnect` | Drop the active connection | [disconnect]({{< ref "/03-raccoon-cli/02-disconnect.md" >}}) |
+| `raccoon shell` | Open an SSH shell on the Pi | [shell]({{< ref "/03-raccoon-cli/03-shell.md" >}}) |
+| `raccoon run` | Checkpoint, generate code, sync, execute, pull back | [run]({{< ref "/03-raccoon-cli/05-run.md" >}}) |
+| `raccoon sync` | Push or pull files between laptop and robot | [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}) |
+| `raccoon codegen` | Generate `defs.py`, `defs.pyi` and `robot.py` | [codegen]({{< ref "/03-raccoon-cli/04-codegen.md" >}}) |
+| `raccoon missions` | Create, list, rename, remove and reorder missions | [missions]({{< ref "/03-raccoon-cli/14-missions.md" >}}) |
+| `raccoon calibrate` | Ticks, autotune, servos and step response | [calibrate]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}) |
+| `raccoon logs` | Show, tail, download and clear robot logs | [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) |
+| `raccoon checkpoint` | Automatic safety snapshots of your project | [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) |
+| `raccoon validate` | Check config, missions and imports | [validate]({{< ref "/03-raccoon-cli/12-validate.md" >}}) |
 | `raccoon doctor` | Health check of tools, connection and versions | [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) |
-| `raccoon update` | Bring laptop and robot to the same bundle | [update]({{< ref "/03-raccoon-cli/04-update.md" >}}) |
-| `raccoon migrate` | Apply project format migrations | [Versioning and Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}) |
-| `raccoon upload` | Full preflight, then push to the robot and confirm it starts | [Command Reference]({{< ref "/03-raccoon-cli/99-command-reference.md" >}}) |
-| `raccoon lcm` | Inspect and record bus traffic | [lcm]({{< ref "/03-raccoon-cli/17-lcm.md" >}}) |
-| `raccoon web` | Start the WebIDE | [WebIDE]({{< ref "/04-web-ide/_index.md" >}}) |
-| `raccoon completion` | Shell tab completion | [completion]({{< ref "/03-raccoon-cli/19-completion.md" >}}) |
+| `raccoon update` | Bring laptop and robot to the same bundle | [update]({{< ref "/03-raccoon-cli/09-update.md" >}}) |
+| `raccoon migrate` | Apply project format migrations | [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}) |
+| `raccoon upload` | Full preflight, then push to the robot and confirm it starts | [upload]({{< ref "/03-raccoon-cli/06-upload.md" >}}) |
+| `raccoon web` | Start the WebIDE | [web]({{< ref "/03-raccoon-cli/16-web.md" >}}) |
 
-All commands support `-h` / `--help`. The complete, generated list of every command and option is the [Command Reference]({{< ref "/03-raccoon-cli/99-command-reference.md" >}}).
+All commands support `-h` / `--help`. Run `raccoon <command> --help` for the complete list of options of any command.
 
 ## Auto-validation
 
-Before most commands, raccoon runs `raccoon validate` against your project to catch config errors before anything is synced or executed. Commands that work without a valid project (`connect`, `disconnect`, `update`, `doctor`, `migrate`, `validate`, `web`) skip it.
+Before `raccoon run`, raccoon runs `raccoon validate` against your project to catch config errors before anything is synced or executed. Other commands do not validate on their own. Run [`raccoon validate`]({{< ref "/03-raccoon-cli/12-validate.md" >}}) yourself, or use [`raccoon upload`]({{< ref "/03-raccoon-cli/06-upload.md" >}}), which validates as its first step.
 
 To skip it for one call, use the global flag:
 
 ```bash
-raccoon --no-validate run
+raccoon run --no-validate
 ```
 
 ## Reading order
 
 New to the CLI? Read in this order:
 
-1. [connect]({{< ref "/03-raccoon-cli/02-connect.md" >}}): SSH key setup and saved connections
-2. [run]({{< ref "/03-raccoon-cli/03-run.md" >}}): the command you use all day
+1. [connect]({{< ref "/03-raccoon-cli/01-connect.md" >}}): SSH key setup and saved connections
+2. [run]({{< ref "/03-raccoon-cli/05-run.md" >}}): the command you use all day
 3. [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}): parameterize `dev` versus `competition` runs
-4. [sync]({{< ref "/03-raccoon-cli/09-sync.md" >}}): what happens under the hood
-5. [checkpoint]({{< ref "/03-raccoon-cli/12-checkpoint.md" >}}): the safety net before every run
+4. [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}): what happens under the hood
+5. [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}): the safety net before every run
 
-For maintenance and problems, jump to [Versioning and Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}), [Troubleshooting and Recovery]({{< ref "/03-raccoon-cli/08-troubleshooting-and-recovery.md" >}}), [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) and [raccoon-server]({{< ref "/03-raccoon-cli/16-raccoon-server.md" >}}) (the daemon on the Pi).
+For maintenance and problems, jump to [update]({{< ref "/03-raccoon-cli/09-update.md" >}}), [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}), [Troubleshooting and Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}}), [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) and [raccoon-server]({{< ref "/03-raccoon-cli/18-raccoon-server.md" >}}) (the daemon on the Pi).
 
 The transport contract check that `connect` and `doctor` report is explained in [Advanced → Transport]({{< ref "/06-advanced/transport/_index.md" >}}).

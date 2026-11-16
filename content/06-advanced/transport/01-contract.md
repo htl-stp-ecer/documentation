@@ -137,7 +137,7 @@ You can also write `dev` into a **single component's entry** in `components` (fo
 | `timestamp`, `pid`, `pid_starttime` | when, and which process (a reused PID does not count as the same process) |
 | `persistent` | `true` for services that keep running |
 
-The Pi server serves the aggregate at `GET /api/v1/contract` (see [raccoon-server]({{< ref "/03-raccoon-cli/16-raccoon-server.md" >}})).
+The Pi server serves the aggregate at `GET /api/v1/contract` (see [raccoon-server]({{< ref "/03-raccoon-cli/18-raccoon-server.md" >}})).
 
 ## Exit code 78
 

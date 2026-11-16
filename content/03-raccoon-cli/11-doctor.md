@@ -1,9 +1,9 @@
 ---
 title: "doctor"
-author: "Raccoon Docs Team"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 12
+weight: 11
 ---
 
 # raccoon doctor
@@ -35,7 +35,7 @@ graph LR
     B -->|All green| F[check format_version: raccoon migrate --dry-run]
 ```
 
-If `raccoon doctor` is fully green and things still fail, the next step is `raccoon migrate --dry-run` to check for project schema drift — that is a different layer entirely. See [Versioning And Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}) for the full picture.
+If `raccoon doctor` is fully green and things still fail, the next step is `raccoon migrate --dry-run` to check for project schema drift — that is a different layer entirely. See [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}).
 
 ## What it checks
 

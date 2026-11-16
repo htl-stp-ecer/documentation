@@ -60,7 +60,7 @@ content/
     01-basics/ 02-driving/ 03-calibration/ 04-servos/ 05-motors/
     06-sensors/ 07-custom-steps/ 08-more-topics/ 09-camera/
   02-steps-reference/        Step catalog, generated from raccoon-lib CI. Do not edit
-  03-raccoon-cli/            Raccoon CLI command reference
+  03-raccoon-cli/            Raccoon CLI, one page per command
   04-web-ide/                Using the WebIDE
   05-bot-ui/                 Using the on-robot UI
   06-advanced/               Architecture, transport, firmware, WebIDE internals

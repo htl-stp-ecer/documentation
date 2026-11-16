@@ -386,7 +386,7 @@ All Python files use lowercase with underscores. No hyphens, no spaces:
 
 ### Mission Numbering
 
-Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`, `M010`, `M999`). `raccoon missions create` requires a three-digit prefix. Tooling and documentation assume this format — using two-digit prefixes like `M00` or `M01` can cause unexpected ordering behavior and should be avoided in new projects.
+Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`, `M010`, `M999`). If you give `raccoon missions create` a prefix, it must have three digits; without one the next free number is used. Tooling and documentation assume this format — using two-digit prefixes like `M00` or `M01` can cause unexpected ordering behavior and should be avoided in new projects.
 
 | Range | Purpose |
 |-------|---------|
@@ -394,7 +394,7 @@ Missions use a **three-digit** zero-padded prefix as a strong convention (`M000`
 | `m010`–`m998` | Main missions |
 | `m999` | Reserved — shutdown mission |
 
-`raccoon missions create M010MyMission` creates (you always give the number; `M000` and `M999` are reserved and a used number is refused) the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
+`raccoon missions create M010MyMission` creates (the number is optional and picked automatically if you leave it out; `M000` and `M999` are reserved and a used number is refused) the file `src/missions/m010_my_mission.py` with class `M010MyMission`. Numbers `0` and `999` are reserved and cannot be used for main missions.
 
 **Inserting missions between existing ones** — you are not limited to decade steps. Non-decade numbers like `M001`, `M025`, or `M027` are valid. The CLI only requires three digits; the gap between `M020` and `M030` is yours to use:
 

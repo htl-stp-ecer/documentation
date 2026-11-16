@@ -1,9 +1,9 @@
 ---
 title: "Troubleshooting And Recovery"
-author: "OpenAI Codex"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 9
+weight: 17
 description: "Source-verified recovery playbooks for raccoon connect, sync, run, update, logs, services, and migrations."
 ---
 
@@ -12,14 +12,6 @@ description: "Source-verified recovery playbooks for raccoon connect, sync, run,
 This page documents the practical failure paths that the current `raccoon-cli` actually supports recovering from.
 
 It is intentionally operational. The question here is not "what does the happy path look like?" The question is "what do you do when the robot, server, project, or versions are already in a bad state?"
-
-Source of truth:
-
-- [update.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/update.py)
-- [doctor.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/doctor.py)
-- [logs.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/logs.py)
-- [migrate.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/commands/migrate.py)
-- [project_services.py](/media/tobias/TobiasSSD/projects/Botball/raccoon/toolchain/raccoon_cli/project_services.py)
 
 ## Repair order principle
 
@@ -373,6 +365,5 @@ That order prevents you from debugging user code on top of a broken platform sta
 ## Related pages
 
 - [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) — full reference for the health check command
-- [Versioning And Upgrades]({{< ref "/03-raccoon-cli/07-versioning-and-upgrades.md" >}}) — bundle manifests, format_version, and migrations explained
-- [logs]({{< ref "/03-raccoon-cli/10-logs.md" >}}) — browsing run logs and service journals
-- [checkpoint]({{< ref "/03-raccoon-cli/12-checkpoint.md" >}}) — rolling back to a pre-run state
+- [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) — browsing run logs and service journals
+- [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) — rolling back to a pre-run state

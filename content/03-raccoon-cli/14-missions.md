@@ -1,9 +1,9 @@
 ---
 title: "missions"
-author: "Tobias Madlberger"
+author: "Mario Scholze"
 date: 2026-11-02
 draft: false
-weight: 22
+weight: 14
 description: "Create, list, rename, remove and reorder the missions of a project."
 ---
 
@@ -20,10 +20,14 @@ A mission `M010DriveToPoleMission` lives in `src/missions/m010_drive_to_pole_mis
 ## create
 
 ```bash
-raccoon missions create M010DriveToPole
+raccoon missions create DriveToPole              # gets the next free number
+raccoon missions create Drive Collect M500Wave   # several at once
+raccoon missions create M010DriveToPole          # explicit number
 ```
 
-The `Mxxx` prefix is **always required**, so you decide the position. `M000` and `M999` are reserved, and a number that is already used is refused.
+The `Mxxx` prefix is **optional**. Without one, the mission gets the next multiple of 10 above the highest existing number (`M010`, `M020`, ... up to `M990`). After `M990` the command asks for an explicit prefix, for example `M995Name`. With a prefix you choose the position yourself.
+
+A prefix must have exactly three digits (`M030`, not `M30`). `M000` and `M999` are reserved for setup and shutdown, and a number that is already used is refused. All names are checked before anything is created. A trailing `Mission` in the name is added to the class automatically.
 
 ## list
 

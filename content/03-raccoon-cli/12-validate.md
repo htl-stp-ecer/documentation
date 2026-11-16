@@ -1,9 +1,9 @@
 ---
 title: "validate"
-author: "Raccoon Docs Team"
+author: "Tobias Madlberger, Mario Scholze"
 date: 2026-06-18
 draft: false
-weight: 16
+weight: 12
 ---
 
 # raccoon validate
@@ -16,11 +16,7 @@ Checks that your project's configuration and source files are internally consist
 
 ## When validation runs
 
-`raccoon validate` runs automatically before every command except the exempt list below. You rarely need to call it explicitly — it is already protecting you on every `raccoon run` and `raccoon sync`. The explicit command is useful when you want to check consistency without triggering a run.
-
-```
-exempt (no auto-validation): validate, create, connect, disconnect, update, doctor, migrate, web
-```
+`raccoon validate` runs automatically before `raccoon run`. `raccoon upload` validates as its first step, and `raccoon codegen` runs its own validation. Other commands, including `sync`, do not validate. Call `raccoon validate` yourself when you want to check consistency without triggering a run.
 
 ## Why it exists
 
@@ -31,11 +27,15 @@ As a project grows — missions are added, renamed, moved, or deleted — it is 
 ```bash
 raccoon validate                     # full validation including Python compile
 raccoon validate --no-python-compile # skip bytecode compile (faster)
+raccoon validate --no-defs-check     # skip the Defs.<name> check
+raccoon validate --no-codegen-check  # skip the in-memory code generation check
 ```
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-python-compile` | flag | off | Skip Python syntax check. All other checks still run. Useful when your environment does not match the robot's Python version. |
+| `--no-defs-check` | flag | off | Skip checking `Defs.<name>` accesses in your source files against the hardware defined in the config. |
+| `--no-codegen-check` | flag | off | Skip the in-memory code generation check. |
 
 ## What it checks
 
@@ -77,15 +77,9 @@ The naming convention the checker enforces is:
 
 ## Automatic pre-command validation
 
-`raccoon validate` does not only run when you call it explicitly. The CLI automatically runs a validation pass **before every command**, unless that command is in the exempt list.
+The CLI automatically runs a validation pass before `raccoon run`.
 
-The exempt commands (no auto-validation) are:
-
-```
-validate, create, connect, disconnect, update, doctor, migrate, web
-```
-
-If the project has validation errors, the auto-validation prints the issues and aborts with exit code 1 **before** the requested command runs. This prevents you from syncing a broken project to the Pi.
+If the project has validation errors, the auto-validation prints the issues and aborts with exit code 1 **before** the run starts. This prevents you from running a broken project.
 
 ### Bypassing auto-validation
 
@@ -93,8 +87,6 @@ To skip the automatic pre-command validation for a single invocation, use the gl
 
 ```bash
 raccoon --no-validate run          # run without validating first
-raccoon --no-validate sync         # sync without validating first
-raccoon --no-validate codegen      # regenerate code without validating
 ```
 
 `--no-validate` is a flag on the top-level `raccoon` command, not on the subcommand. It must appear before the subcommand name.
