@@ -14,7 +14,7 @@ The Settings screen is a grid of seven tiles. Four of them (Network, System, Dis
 |------|-------|
 | **Network** | [Connection mode, Wi-Fi, hotspot, Ethernet](#network) |
 | **System** | [Hostname, keyboard layout, reboot, shutdown](#system) |
-| **Display** | [Color theme, rotation, overview panel, screensaver, touch calibration, hide UI](#display) |
+| **Display** | [Color theme, overview panel, screenshots, screensaver, rotation, touch calibration, hide UI](#display) |
 | **Personality** | [The robot's face](#personality) |
 | **Logs** | [Output of earlier program runs](#logs) |
 | **Versions** | [Installed component versions](#app-status) |
@@ -28,7 +28,7 @@ Settings live in two different places. This matters when something does not surv
 
 | Kept by | Settings | Survive a reboot? |
 |---------|----------|-------------------|
-| **BotUI** (its own preferences on the robot) | Color theme, overview panel position, screensaver on/off, touch calibration, remembered screen rotation | Yes |
+| **BotUI** (its own preferences on the robot) | Color theme, overview panel position, screensaver on/off, screenshot mode, touch calibration, remembered screen rotation | Yes |
 | **The operating system** | Hostname, keyboard layout, Wi-Fi networks and hotspot, service autostart, screen rotation (in the `flutter-ui` service) | Yes |
 
 None of this touches your project's configuration (`raccoon.project.yml`, `robot.yml`, calibration files). Those belong to the project and are managed with the [raccoon CLI]({{< ref "/03-raccoon-cli/_index.md" >}}).
@@ -117,9 +117,10 @@ Give every robot its own **hostname**, especially when several robots share a ne
 | Tile | What it does |
 |------|--------------|
 | **Color Theme** | [Changes the colors of all tiles](#color-theme) |
-| **Rotate** | [Turns the screen](#rotate) |
 | **Overview** | Cycles the [overview panel]({{< ref "/05-bot-ui/00-dashboard.md#overview-panel" >}}) between left, right and off. The label shows the current state, and in portrait mode it says Top / Bottom. |
-| **Screensaver** | Turns the [screensaver]({{< ref "/05-bot-ui/00-dashboard.md#screensaver" >}}) on or off. The tile reads **Screensaver On** (cyan) or **Screensaver Off** (grey). |
+| **Screenshots** | Tap to cycle when the [screenshot triple-click]({{< ref "/05-bot-ui/08-screenshots.md" >}}) is allowed: **Screenshots: Always** (green), **Screenshots: Idle Only** (green) or **Screenshots: Never** (grey). |
+| **Screensaver** | Turns the [screensaver]({{< ref "/05-bot-ui/00-dashboard.md#screensaver" >}}) on or off. The tile reads **Screensaver On** (orange) or **Screensaver Off** (grey). |
+| **Rotate** | [Turns the screen](#rotate) |
 | **Calibrate** | [Calibrates the touchscreen](#calibrate) |
 | **Hide UI** | [Stops BotUI](#hide-ui) |
 

@@ -106,6 +106,7 @@ Navigation is a stack: every screen has a back arrow in the top bar, and the top
 | [Dynamic Screens]({{< ref "/05-bot-ui/05-dynamic-screens.md" >}}) | Screens your program shows on the display, and the answers it gets back |
 | [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}) | Stop a program, restart the UI, reboot, reset the STM32, games |
 | [System Popups]({{< ref "/05-bot-ui/07-system-popups.md" >}}) | Low battery, hardware shutdown, version mismatch, error and Ethernet dialogs |
+| [Screenshots]({{< ref "/05-bot-ui/08-screenshots.md" >}}) | Triple-click the built-in button to save a screenshot |
 
 ## Installing and Building BotUI
 
