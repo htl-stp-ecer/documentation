@@ -14,16 +14,74 @@ A backend is the source behind the camera service. The service reads the backend
 ## Selecting a backend
 
 ```python
-from raccoon_cam import set_backend, get_backend
+from raccoon_cam import set_backend
 from raccoon_cam.backends import UsbCameraBackend
 
 set_backend(UsbCameraBackend, {"resolution": (160, 120)})   # the class itself, plus options
-get_backend()                                               # the selected class
 ```
 
-The second argument holds the backend's options and is optional. `set_backend` raises `TypeError` if you pass something that is not a `CamBackend` subclass, and `ValueError` if `name`, `allow_processors` or `provides_detections` is not set. If you never call it, `get_backend()` returns `UsbCameraBackend`, and your program does not tell the service to change anything.
+The second argument holds the backend's options and is optional. `set_backend` raises `TypeError` if you pass something that is not a `CamBackend` subclass, and `ValueError` if `name`, `allow_processors` or `provides_detections` is not set, or if the options do not fit the backend (see [Options](#options)).
+
+There is no default backend. Which one runs is decided in this order:
+
+1. The backend your program declares with `set_backend`. It applies while your program holds the camera.
+2. The backend chosen on the robot: in the UI under **Sensors & Actors → Camera → Configure backend**. It is kept on the robot and applies to every program that does not declare its own.
+3. The service's own configuration (`RACCOON_CAM_BACKEND`, see [Service and client](/01-programming-guide/09-camera/03-service-and-client/)).
+
+If none of them names a backend, `start_camera()` fails with a message that says so.
 
 The selection is only a declaration. The client sends it to the service on `start`, and the service remembers it and uses it when the camera opens. If the camera is already open with a different backend, the service switches. Asking for the backend and options it already runs does not restart the camera.
+
+## Options
+
+A backend declares what it can be configured with as a list of `Option`s. The same list checks the configuration (an unknown name, a wrong type or a value out of range raises `ValueError` that names the option) and is what the UI reads to show a form, so you declare an option once.
+
+```python
+from raccoon_cam import CamBackend, Option
+
+
+class MyCamera(CamBackend):
+    name = "my-camera"
+    allow_processors = True
+    provides_detections = False
+    description = "A camera of my own"        # shown in the UI; default: the first line of the docstring
+    options = (
+        Option("device", "str", "/dev/video2", description="Device path"),
+        Option("fps", "int", 15, min=1, max=60, unit="fps"),
+        Option("mode", "choice", "fast", choices=("fast", "sharp")),
+        Option("flip", "bool", False),
+        Option("resolution", "size", (320, 240), unit="px"),
+    )
+
+    def configure(self, cfg):
+        values = self.validate_config(cfg)   # raises ValueError for a wrong option; typed values
+```
+
+| `Option(...)` | Meaning |
+|---|---|
+| `name`, `type` | `type` is `int`, `float`, `str`, `bool`, `choice` or `size` (`[width, height]`) |
+| `default` | Shown in the UI and used when the option is left out |
+| `required` | The UI asks for it, and a configuration without it is refused |
+| `min`, `max` | Bounds of `int` and `float` |
+| `choices` | The values of a `choice` |
+| `length` | Fixed length of a `str` (the codec is four characters) |
+| `description`, `unit` | Shown next to the field |
+
+`MyCamera.validate_config(cfg)` returns the values as their types or raises `ValueError`. `MyCamera.describe()` returns everything a UI needs as plain JSON types, and imports nothing slow. A backend without `options` accepts any configuration, as before. A `CamProcessor` declares `options` in the same way.
+
+## Backends from your project in the UI
+
+The robot's server lists the backends of your projects next to the built-in ones. It does not run your code to find them: it reads the source of each project (`src/`) and picks every class that inherits from `CamBackend`, directly or through another class of the project. A class whose name starts with `_` is skipped. Only then, when you open a backend in the UI, a separate process imports it to read its `options`. The UI shows `Built-In · usb` or `Project (<name>) · <backend>`.
+
+So for your backend to show up: inherit from `CamBackend` (not from a copy of it), put it in `src/`, and give it `options`. A backend with an error on import still shows up in the list and the UI shows the error when you select it.
+
+You can try what the UI sees without it:
+
+```bash
+python3 -m raccoon_cam.describe --builtin                              # the built-in backends as JSON
+python3 -m raccoon_cam.describe src.cam.mine:Mine --project-dir ~/my-project
+python3 -m raccoon_cam.describe src.cam.mine:Mine --project-dir ~/my-project --validate '{"fps": 30}'
+```
 
 ## USB camera backend
 
@@ -39,8 +97,8 @@ It needs OpenCV (`cv2`), see [Dependencies of a backend](#dependencies-of-a-back
 | `resolution` | `(320, 240)` | Requested `(width, height)` |
 | `fps` | `15` | Requested frame rate, also used to throttle capture |
 | `codec` | `"MJPG"` | Four-character code |
-| `retry_delay` | `1.0` | Seconds between open attempts. `start_camera(delay=...)` overrides it |
-| `max_read_failures` | `30` | Failed reads in a row before the device is reopened |
+| `retry_delay` | `1.0` | Seconds between open attempts, at least `0.01`. `start_camera(delay=...)` overrides it |
+| `max_read_failures` | `30` | Failed reads in a row before the device is reopened, at least `1` |
 
 An unknown option raises `ValueError`, so a typo does not pass silently. The first failed open and then every tenth attempt are reported to the sink as errors, not every attempt.
 
@@ -59,8 +117,8 @@ set_backend(ReplayBackend, {"source": "recordings/field.mov", "fps": 15})
 | Option | Default | Meaning |
 |---|---|---|
 | `source` | required | A video file, a folder of images (played in file name order) or one image that repeats |
-| `fps` | the video's own rate, `15` for images | Playback rate |
-| `loop` | `True` | Start again at the end. With `False` the backend stops delivering after the last frame and its state becomes `finished` |
+| `fps` | the video's own rate, `15` for images | Playback rate, at least `0.01` |
+| `loop` | `True` (true or false only) | Start again at the end. With `False` the backend stops delivering after the last frame and its state becomes `finished` |
 | `resolution` | unchanged | `(width, height)` to scale every frame to |
 
 A source that does not exist, a video that cannot be opened and a folder without images are reported with `sink.failed` at once. The retries of `start_camera` do not apply, because trying again would not help. An unknown option raises `ValueError`. An image in a folder that cannot be read is skipped.
@@ -127,6 +185,7 @@ class MyAiCamera(CamBackend):
 | `name`, `allow_processors`, `provides_detections` | **yes** | Flags, `None` until you set them |
 | `start(sink)` | **yes** | Open the device and begin pushing. Must not block: use your own thread or the device's callback |
 | `stop()` | **yes** | Stop and release the device. Safe to call more than once |
+| `options`, `description` | no | The [options](#options) the backend can be configured with, for checking and for the UI |
 | `configure(cfg)` | no | Backend options, called before `start` |
 | `status()` | no | A dict for the status channel |
 | `handle_command(cmd, data)` | no | Backend-level commands, for example exposure. Return a dict, or `None` if unknown |

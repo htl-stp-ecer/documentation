@@ -17,11 +17,11 @@ The `CamService` is one process that runs a backend and the processors and publi
 python3 -m raccoon_cam.service
 ```
 
-Without options it runs the USB camera backend. You can set options as flags or as environment variables, which is easier in a unit file:
+Without options it starts without a backend: a program selects one with `set_backend`, or you choose one in the UI (see [Backends](/01-programming-guide/09-camera/02-backends/#selecting-a-backend)). You can set options as flags or as environment variables, which is easier in a unit file:
 
 | Flag | Environment | Meaning |
 |---|---|---|
-| `--backend` | `RACCOON_CAM_BACKEND` | `module:Class` of the backend. Default: the USB camera |
+| `--backend` | `RACCOON_CAM_BACKEND` | `module:Class` of the backend. Default: none. A backend chosen in the UI takes precedence |
 | `--backend-cfg` | `RACCOON_CAM_BACKEND_CFG` | JSON with the backend's options |
 | `--project-dir` | `RACCOON_CAM_PROJECT_DIR` | Added to `sys.path`, so processors and backends from your project can be imported |
 | `--stream-fps` | `RACCOON_CAM_STREAM_FPS` | Rate of the frame stream for the UI. `0` is off, which is the default |
@@ -75,7 +75,7 @@ stop_camera()               # closes the camera right away
 
 ### Retries and failure
 
-`start_camera(retries=10, delay=1.0, timeout=None, exclusive=True)` tries to open the camera `retries` times, `delay` seconds apart (`retries=None` tries forever). The numbers go to the backend. The USB backend counts failed opens until the first one succeeds. Once the camera has opened, it reconnects forever, so a loose cable during a run does not end the program.
+`start_camera(retries=10, delay=1.0, timeout=10.0, exclusive=True)` tries to open the camera `retries` times, `delay` seconds apart (`retries=None` tries forever), and waits at most `timeout` seconds in total, for the service to answer and for the first data. The numbers go to the backend. The USB backend counts failed opens until the first one succeeds. Once the camera has opened, it reconnects forever, so a loose cable during a run does not end the program.
 
 `start_camera()` waits until the camera delivers its first data. A camera that works is returned. If it cannot be opened, you get a `FailedCamera` instead. It is falsy, so you can check it:
 
@@ -99,7 +99,7 @@ If the camera works, `on_fail` returns it and the handler does not run. If not, 
 cam = start_camera().on_fail(lambda err: FakeCamClient())
 ```
 
-A handler that returns nothing makes `cam` `None`. A handler that calls `sys.exit` stops the program. `CamStartTimeout`, a `TimeoutError`, is the error when no data arrives within `timeout` (default `retries * delay + 5` seconds) or when the service does not answer.
+A handler that returns nothing makes `cam` `None`. A handler that calls `sys.exit` stops the program. `CamStartTimeout`, a `TimeoutError`, is the error when no data arrives within `timeout` or when the service does not answer. The first start after a boot can take several seconds, because OpenCV is slow to load on a Raspberry Pi 3; raise `timeout` if you see it there.
 
 With a `CamClient` of your own, `client.start(...)` raises `CamStartError` directly, and `client.start(wait_ready=False)` returns at once and fails on the first use, at `wait()` or at `on_fail`.
 
@@ -107,7 +107,7 @@ Calling `start_camera()` again after a failure tries again.
 
 ### start
 
-`start_camera()` and `CamClient.start(retries=10, delay=1.0, timeout=None, exclusive=True, wait_ready=True)` do the following. Both wait for the camera. On failure `start_camera` returns a `FailedCamera` and `CamClient.start` raises.
+`start_camera()` and `CamClient.start(retries=10, delay=1.0, timeout=10.0, exclusive=True, wait_ready=True)` do the following. Both wait for the camera. On failure `start_camera` returns a `FailedCamera` and `CamClient.start` raises.
 
 1. Waits for the service's status. If none arrives it fails with "Is raccoon-cam running?".
 2. Sends the declared backend, if you called `set_backend`, and every declared processor.
@@ -124,7 +124,7 @@ If the service itself restarts, the client notices the new instance and sends it
 The service runs all the time, but the camera is only open while at least one client holds a lease. A lease is a claim that the client renews every two seconds while it lives.
 
 - `start_camera()` takes a lease and opens the camera.
-- `stop_camera()` (or `client.stop()`) releases it. If it was the last lease, the service closes the camera immediately and forgets the backend and processors your program declared. The service goes back to the default backend with no processors.
+- `stop_camera()` (or `client.stop()`) releases it. If it was the last lease, the service closes the camera immediately and forgets the backend and processors your program declared. The service goes back to its configured backend (the one chosen in the UI, otherwise none) with no processors.
 - When your program exits, the client releases the lease on its own.
 - If the program dies without releasing (a crash or a kill), the lease runs out after 6 seconds and the service closes the camera.
 
@@ -199,6 +199,11 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 | `backend_command` | `command`, `data` | The backend's result |
 | `pause`, `resume` | | |
 | `stream` | `fps`, `quality` | The settings now in effect |
+| `list_backends` | | The built-in backends with their options |
+| `describe` | `path` | One backend (`module:Class`) with its options |
+| `validate_config` | `path`, `cfg` | The configuration as typed values, or an error that names the option |
+
+A command may carry `"reliable_reply": false`. Without it the service repeats its answer until the client acknowledges it, which a client that never acknowledges (a UI) cannot do; with it the answer is sent once.
 
 ### Status
 
@@ -217,3 +222,9 @@ The status is a JSON object with these fields.
 | `processors` | Per processor: `path`, `calls`, `failures`, `disabled`, `avg_ms`, `last_ms`, `last_error` |
 | `frames` | `received`, `processed`, `dropped` |
 | `streaming` | `fps`, `quality` |
+| `selected` | The backend that runs or is declared: `path` and `cfg`, or `null` |
+| `configured` | The backend chosen on the robot or in the unit: `path` and `cfg`, or `null` |
+
+### The backend chosen on the robot
+
+The UI saves its choice in `backend.json` in the service's state directory (`/var/lib/raccoon-cam`, `RACCOON_CAM_STATE_DIR` overrides it). The service reads it at start and notices a change by itself: if the camera is open, it restarts with the new backend and keeps its leases. A saved backend that cannot be loaded (the project was deleted, the options no longer fit) is logged as a warning and the service starts without one instead of failing. Deleting the file, or **Reset** in the UI, goes back to the unit's `RACCOON_CAM_BACKEND`.

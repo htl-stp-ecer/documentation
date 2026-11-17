@@ -50,7 +50,7 @@ The first screen is a grid of category tiles. The tile for a category with exact
 | **Motor** | Ports 0–3, each a motor screen |
 | **Servo** | Ports 0–3, each a servo screen |
 | **IMU** | Gyro, Accel, Magneto, Orientation, Heading |
-| **Camera** | The live camera picture |
+| **Camera** | The camera menu: backend settings and the live picture |
 | **System** | CPU, RAM, disk, temperatures, battery, uptime |
 | **Calib Board** | [Calibration Board]({{< ref "/05-bot-ui/04-calibration-board.md" >}}); always shown, grey while no board is connected |
 
@@ -106,9 +106,11 @@ Tap a card for more: **CPU**, **RAM** and **Battery** open a graph of that value
 
 ## Camera
 
-The **Camera** tile shows the live picture from `raccoon-cam` and draws the detections of the active detector (such as colored blobs) on top of it. The bottom of the screen shows the frame size, the frames per second, and the number of detections. Until the first frame arrives it shows "Waiting for camera frames…" and the channel it listens on, which is the first thing to check when the picture stays empty.
+The **Camera** tile opens the camera menu. At the top are two buttons, **Configure backend** and **Configure processor** (processors cannot be configured here yet). Below is the live picture from `raccoon-cam`, with the detections of the active detector drawn on top. The menu holds the camera open while you are in it and gives it back when you leave, so a robot program that uses the camera at the same time keeps working. If no backend has been chosen yet, the picture area says so.
 
-BotUI only displays the picture. The camera is configured with the [raccoon-lib camera API]({{< ref "/01-programming-guide/09-camera/04-status.md" >}}) and `raccoon-cam.service` is managed under [Settings → Services]({{< ref "/05-bot-ui/03-settings.md#services" >}}).
+**Configure backend** opens a screen with a dropdown on top. It lists the built-in backends (`Built-In · usb`) and the backends in your projects (`Project (<name>) · <backend>`). Choosing one shows a form with a field for each option the backend declares (numbers, text, switches, choices, an image size); defaults are filled in, and an option's description is the hint of its field. **Save** checks the values with the backend and keeps them on the robot for every program; a wrong value is reported in a message with the reason. **Reset** removes the choice. A program can still pick its own backend with `set_backend`, which overrides this only while it runs. How to make your own backend appear in the dropdown is described in [Backends]({{< ref "/01-programming-guide/09-camera/02-backends.md#backends-from-your-project-in-the-ui" >}}).
+
+The camera is otherwise configured with the [raccoon-lib camera API]({{< ref "/01-programming-guide/09-camera/04-status.md" >}}) and `raccoon-cam.service` is managed under [Settings → Services]({{< ref "/05-bot-ui/03-settings.md#services" >}}).
 
 ## Motor Screen
 

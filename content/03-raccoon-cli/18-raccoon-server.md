@@ -47,6 +47,18 @@ At start the server runs the [transport contract check]({{< ref "/06-advanced/tr
 
 The CLI (`doctor`, `connect`, `run`) and the WebIDE read this endpoint; neither looks at the files itself.
 
+## Camera backend endpoints
+
+The server lists and configures the backends of the [camera service]({{< ref "/01-programming-guide/09-camera/02-backends.md" >}}) for the UI. Changing something needs the [API token](#api-token); reading does not. The server only reads project source with `ast` (it never imports your code) and asks `python -m raccoon_cam.describe` in a separate process for the options. Without `raccoon-cam` installed these answer **503**; a wrong class or configuration answers **400** with the reason in `detail`.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/camera/backends` | The built-in backends and those found in the projects. Per backend: `path`, `name`, `description`, `origin` (`{"kind": "builtin"}` or `{"kind": "project", "project": "<name>"}`), `project_id` |
+| `GET /api/v1/camera/backends/describe?path=&project_id=` | One backend with its `options` |
+| `GET /api/v1/camera/config` | The backend chosen on the robot, or `{"backend": null}` |
+| `PUT /api/v1/camera/config` | Body `{"path", "cfg", "project_id"}`. Checks `cfg` against the backend's options, then saves it. The camera service applies it by itself |
+| `DELETE /api/v1/camera/config` | Forgets the choice |
+
 ## Commands
 
 ### `raccoon-server start` — run in the foreground

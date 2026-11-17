@@ -36,6 +36,7 @@ The processor never touches the camera or the transport. It receives an image an
 | Method | Required | When it is called |
 |---|---|---|
 | `configure(cfg)` | no | Once, before the first frame. `cfg` is the dict you declared |
+| `options`, `description` | no | Declare the options like a backend does ([Options](/01-programming-guide/09-camera/02-backends/#options)). For now only the declaration exists; the UI does not configure processors yet |
 | `process(frame)` | **yes** | For every new frame. Must return a `list[Detection]` |
 | `handle_command(cmd, data)` | no | When a command is addressed to this processor, for example `calibrate`. Return a result dict, or `None` for an unknown command |
 | `close()` | no | On shutdown or when the processor is replaced |
