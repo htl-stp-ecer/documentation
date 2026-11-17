@@ -118,6 +118,7 @@ To test your own transport build on the robot, set `contract_hash` in `/etc/racc
 - The components still start, run their check and write status files, but a difference is only a **warning**.
 - There is no hash to compare against, so `raccoon doctor` instead warns when the *running* components report different hashes.
 - It is visible everywhere: a line in `raccoon doctor`, a yellow warning line at every `raccoon run`, the bundle's values, including `dev`, on the BotUI's Versions page.
+- The result is decided again on every `raccoon run` and `raccoon doctor` from what each component reports about itself (its own hash and version) and the bundle as it is now. Changing the bundle takes effect immediately; no component has to be restarted.
 - You are responsible that every component was rebuilt against your transport (C++ links it statically).
 - No workflow ever writes `dev`, and **no image is ever built from a bundle with `dev`**. The next normal `raccoon update` replaces it with the release bundle's hash.
 
