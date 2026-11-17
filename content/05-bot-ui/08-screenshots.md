@@ -44,10 +44,13 @@ The choice is kept after a reboot.
 
 ## Where the Files Are
 
-The images are saved as PNG in `/home/pi/screenshots/`. The file name is the date and time: `YYYY-MM-DD_HH-MM-SS.png`. The folder is created on the first screenshot. BotUI never deletes old screenshots.
+The images are saved as PNG in `/home/pi/screenshots/`. The file name is the date and time: `YYYY-MM-DD_HH-MM-SS.png`. The folder is created on the first screenshot. BotUI never deletes old screenshots by itsself.
+To view them in BotUI, navigate to `Settings → Screenshots`.
 
 To copy them to your computer:
 
 ```bash
-scp "pi@<robot>:screenshots/*.png" .
+scp -r pi@<robot>:/home/pi/screenshots .
 ```
+
+The files will be copied into a new folder called `screenshots` in the current working directory.
