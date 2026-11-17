@@ -18,9 +18,9 @@ Everything on the robot — the Python library that runs your missions, the STM3
 | **Contract** | Everything components rely on when they exchange data: the layout of every message type, every channel name, the shared-memory ring layout |
 | **Contract hash** | A 16-character fingerprint of the contract (for example `93ac36836810c9fe`). Same contract, same hash, in C++, Python and Dart |
 | **Bundle file** | `/etc/raccoon-bundle.json` on the robot, written by the image or by `raccoon update`. It names the hash every component must have, and the version of every component |
-| **Status file** | The result of one component's start check, in `/run/raccoon/<component>.json`. Errors never travel over the transport, because it may be the thing that is broken |
+| **Status file** | What one component reports about itself, in `/run/raccoon/<component>.json`: its own hash and version, and the result of its start check. Errors never travel over the transport, because it may be the thing that is broken |
 
-The **bundle is the source of truth**: components never ask each other. Each one compares its own compiled-in hash and its own version with the bundle file, once, when it starts. Nothing is added to the publish/subscribe path.
+The **bundle is the source of truth**: components never ask each other. Each one compares its own compiled-in hash and its own version with the bundle file when it starts, and refuses to start on a mismatch. The Pi server compares what every component reports in its status file with the bundle file **again every time** it answers `raccoon doctor` or a run request, so a changed bundle counts immediately and no component has to be restarted. Nothing is added to the publish/subscribe path.
 
 ## What is checked
 
@@ -97,7 +97,7 @@ stm32-data-reader: transport contract mismatch: stm32-data-reader 58 uses contra
 (transport v69); update or reflash so all components match
 ```
 
-Calibration commands are refused the same way. A stale status file of a *run-scoped* process (`raccoon-lib` from an earlier run) never blocks, otherwise a run could not start again after you fixed the cause; a *service* that refused (reader, BotUI, server) keeps blocking until it starts again.
+Calibration commands are refused the same way. A stale status file of a *run-scoped* process (`raccoon-lib` from an earlier run) never blocks, otherwise a run could not start again after you fixed the cause; a *service* that refused (reader, BotUI, server) keeps blocking for as long as its hash or version does not match the bundle.
 
 ### `raccoon connect`
 
@@ -118,7 +118,7 @@ To test your own transport build on the robot, set `contract_hash` in `/etc/racc
 - The components still start, run their check and write status files, but a difference is only a **warning**.
 - There is no hash to compare against, so `raccoon doctor` instead warns when the *running* components report different hashes.
 - It is visible everywhere: a line in `raccoon doctor`, a yellow warning line at every `raccoon run`, the bundle's values, including `dev`, on the BotUI's Versions page.
-- The result is decided again on every `raccoon run` and `raccoon doctor` from what each component reports about itself (its own hash and version) and the bundle as it is now. Changing the bundle takes effect immediately; no component has to be restarted.
+- Setting or removing `dev` takes effect at the next `raccoon run` or `raccoon doctor`; no component has to be restarted.
 - You are responsible that every component was rebuilt against your transport (C++ links it statically).
 - No workflow ever writes `dev`, and **no image is ever built from a bundle with `dev`**. The next normal `raccoon update` replaces it with the release bundle's hash.
 
