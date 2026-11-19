@@ -15,6 +15,8 @@ description: "Connect your laptop to the Wombat and keep both sides on the same 
 raccoon connect my-robot.local     # replace "my-robot" with the hostname you set previously
 ```
 
+> **For Windows Users:** Per default, Windows doesn't support mDNS properly. Instead of `my-robot.local`, you must use the robot's IP address instead.
+
 `raccoon connect` first tries to log in with your SSH key. If the Wombat does not accept a key yet, it asks for the password **once**:
 
 - **User:** `pi` (change it with `--user`)
