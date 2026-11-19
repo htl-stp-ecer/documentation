@@ -1,0 +1,456 @@
+---
+title: "Drive System"
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-19
+draft: false
+weight: 10
+---
+
+# Drive System
+
+The drive system translates high-level velocity commands ("go forward at 0.2 m/s") into individual motor speeds. It handles PID control, feedforward compensation, and kinematics — all at 100 Hz.
+
+You rarely interact with the drive system directly: the [driving steps]({{< ref "/01-programming-guide/02-driving/_index.md" >}}) call it for you. This page explains how it works under the hood, the low-level `ChassisVelocity` API for custom steps, and how to tune the system when your robot is not driving straight or overshoots targets.
+
+## Concept: From Command to Wheels
+
+When you call `drive_forward(50)`, a chain of layers converts that intent into physical motor commands:
+
+```mermaid
+flowchart TD
+    A["drive_forward / strafe / drive_angle\n(mission code)"]
+    B["Motion profile\n(trapezoidal velocity)"]
+    C["PID + feedforward\n(track desired velocity)"]
+    D["Inverse kinematics\n(chassis → wheel speeds)"]
+    E["STM32 firmware\n(per-wheel velocity PIDs)"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E -.->|"encoder feedback"| C
+
+    style A fill:#42A5F5,color:#fff
+    style B fill:#66BB6A,color:#fff
+    style C fill:#AB47BC,color:#fff
+    style D fill:#FF7043,color:#fff
+    style E fill:#37474F,color:#fff
+```
+
+On a real Wombat the Pi-side PID is bypassed — the STM32 runs its own inner velocity loop. On a mock/simulator the Pi-side PID is active. Either way, your step code stays the same. See [Motion Flow and Kinematics]({{< ref "/06-advanced/06-motion-and-localization/02-motion-flow-and-kinematics.md" >}}) for the full control-stack breakdown.
+
+## Architecture
+
+```mermaid
+graph LR
+    subgraph "Motion Layer"
+        MP["Motion Profile<br/><small>Trapezoidal velocity</small>"]
+    end
+
+    subgraph "Drive Controller"
+        CV["Desired Velocity<br/><small>vx, vy, wz</small>"]
+        PID["PID + Feedforward<br/><small>Per-axis correction</small>"]
+    end
+
+    subgraph "Kinematics"
+        IK["Inverse Kinematics<br/><small>Chassis → Wheels</small>"]
+        FK["Forward Kinematics<br/><small>Wheels → Chassis</small>"]
+    end
+
+    subgraph "HAL"
+        M1["Motor 0"]
+        M2["Motor 1"]
+        M3["Motor 2"]
+        M4["Motor 3"]
+    end
+
+    MP --> CV
+    CV --> PID
+    PID --> IK
+    IK --> M1
+    IK --> M2
+    IK --> M3
+    IK --> M4
+    M1 -.-> FK
+    M2 -.-> FK
+    M3 -.-> FK
+    M4 -.-> FK
+    FK -.->|"actual velocity"| PID
+
+    style MP fill:#42A5F5,color:#fff
+    style PID fill:#66BB6A,color:#fff
+    style IK fill:#AB47BC,color:#fff
+    style FK fill:#AB47BC,color:#fff
+```
+
+## Velocity Control
+
+The drive controller operates on three axes:
+
+| Axis | Symbol | Unit | Direction |
+|------|--------|------|-----------|
+| Forward | `vx` | m/s | Positive = forward |
+| Lateral | `vy` | m/s | Positive = right |
+| Angular | `wz` | rad/s | Positive = counter-clockwise |
+
+Each axis has its own PID controller and feedforward term:
+
+```python
+vel_config = ChassisVelocityControlConfig(
+    vx=AxisVelocityControlConfig(
+        pid=PidGains(kp=0.001, ki=0.86, kd=0.0002),
+        ff=Feedforward(kS=0.0, kV=1.0, kA=0.0),
+    ),
+    vy=AxisVelocityControlConfig(
+        pid=PidGains(kp=0.0, ki=0.0, kd=0.0),
+        ff=Feedforward(kS=0.0, kV=1.0, kA=0.0),
+    ),
+    wz=AxisVelocityControlConfig(
+        pid=PidGains(kp=0.0, ki=0.0, kd=0.0),
+        ff=Feedforward(kS=0.0, kV=1.0, kA=0.0),
+    ),
+)
+```
+
+### PID Gains
+
+- **kp** (proportional): Corrects based on current error. Higher = more aggressive correction.
+- **ki** (integral): Corrects for accumulated error over time. Eliminates steady-state offset.
+- **kd** (derivative): Dampens oscillation. Reacts to rate of change of error.
+
+### Feedforward
+
+Feedforward predicts what motor command is needed *before* the error happens:
+
+- **kS** (static friction): Minimum voltage to overcome friction. Applied whenever the robot is moving.
+- **kV** (velocity): Scales velocity command to motor voltage. Usually 1.0.
+- **kA** (acceleration): Compensates for inertia during acceleration.
+
+For most robots, `kV=1.0` with zero PID is a reasonable starting point. Add PID only if the robot doesn't track the target velocity accurately.
+
+## Kinematics
+
+Kinematics defines the relationship between chassis velocity and wheel speeds.
+
+The overview on this page is enough for tuning and basic setup. For the full control/data flow, forward and inverse formulas, and the exact role of `Drive`, `IKinematics`, and `MotorAdapter`, see [Motion Flow and Kinematics]({{< ref "/06-advanced/06-motion-and-localization/02-motion-flow-and-kinematics.md" >}}).
+
+### Differential Drive
+
+Two motors, one on each side:
+
+```python
+from raccoon import DifferentialKinematics
+
+kinematics = DifferentialKinematics(
+    left_motor=defs.front_left_motor,
+    right_motor=defs.front_right_motor,
+    wheel_radius=0.0345,     # meters
+    wheelbase=0.16,          # distance between wheel centers, meters
+)
+```
+
+- Both wheels forward → robot drives forward
+- Left faster than right → robot turns right
+- Wheels opposite directions → robot spins in place
+- **Cannot strafe sideways**
+
+Inverse kinematics:
+
+```text
+w_left  = (vx - wz * wheelbase / 2) / wheel_radius
+w_right = (vx + wz * wheelbase / 2) / wheel_radius
+```
+
+Forward kinematics:
+
+```text
+vx = (w_left + w_right) * wheel_radius / 2
+wz = (w_right - w_left) * wheel_radius / wheelbase
+vy = 0
+```
+
+### Mecanum Drive
+
+Four mecanum wheels that enable omnidirectional movement:
+
+```python
+from raccoon import MecanumKinematics
+
+kinematics = MecanumKinematics(
+    front_left_motor=defs.front_left_motor,
+    front_right_motor=defs.front_right_motor,
+    back_left_motor=defs.rear_left_motor,
+    back_right_motor=defs.rear_right_motor,
+    track_width=0.2,        # side-to-side distance, meters
+    wheel_radius=0.0375,    # meters
+    wheelbase=0.125,        # front-to-back distance, meters
+)
+```
+
+Wheel spin patterns for common motions:
+
+| Motion | FL | FR | BL | BR |
+|--------|----|----|----|----|
+| Drive forward | forward | forward | forward | forward |
+| Strafe right (`vy > 0`) | forward | backward | backward | forward |
+| Spin CCW | backward | forward | backward | forward |
+| **Full omnidirectional movement** | | | | |
+
+For strafing right, front-left and back-right spin forward; front-right and back-left spin backward. This produces a net rightward translation with no rotation.
+
+`MecanumKinematics` accepts an optional `velocity_command_gain` parameter (a per-axis gain for efficiency compensation, calibrated by `auto_tune()`):
+
+```python
+kinematics = MecanumKinematics(
+    ...
+    velocity_command_gain=(1.0, 1.0, 1.0),  # (vx, vy, wz) scaling
+)
+```
+
+The mecanum model defines:
+
+```text
+L = (wheelbase + track_width) / 2
+```
+
+Inverse kinematics:
+
+```text
+w_fl = (vx + vy - L * wz) / wheel_radius
+w_fr = (vx - vy + L * wz) / wheel_radius
+w_bl = (vx - vy - L * wz) / wheel_radius
+w_br = (vx + vy + L * wz) / wheel_radius
+```
+
+Forward kinematics:
+
+```text
+vx = (w_fl + w_fr + w_bl + w_br) * wheel_radius / 4
+vy = (w_fl - w_fr - w_bl + w_br) * wheel_radius / 4
+wz = (-w_fl + w_fr - w_bl + w_br) * wheel_radius / (4 * L)
+```
+
+### Sign conventions and wheel ordering
+
+The kinematics layer uses the same chassis-space convention as the underlying library:
+
+- `vx` = forward in m/s
+- `vy` = right in m/s
+- `wz` = counter-clockwise in rad/s
+
+For mecanum, wheel ordering is:
+
+1. front-left
+2. front-right
+3. back-left
+4. back-right
+
+Those conventions are assumed consistently by the kinematics models, drive layer, and odometry.
+
+### Measuring Wheel Radius and Wheelbase
+
+**Wheel radius**: Measure the wheel diameter with calipers and divide by 2. Convert to meters.
+
+**Wheelbase** (differential): Measure the distance between the center of the left wheel contact patch and the center of the right wheel contact patch. Convert to meters.
+
+**Track width** (mecanum): Distance between left and right wheel centers. **Wheelbase** (mecanum): Distance between front and rear wheel centers.
+
+Getting these values wrong will cause the robot to over- or under-turn and drive inaccurate distances.
+
+## Low-Level Drive API (`ChassisVelocity`)
+
+In normal mission code you never need to touch the drive API directly — step builders handle it. But when writing a custom `MotionStep` (for example a heading-hold controller), you can command the drive layer directly:
+
+```python
+from raccoon.foundation import ChassisVelocity
+from raccoon.step.motion.motion_step import MotionStep
+
+class HoldHeading(MotionStep):
+    def on_start(self, robot):
+        from raccoon.robot.heading_reference import HeadingReferenceService
+        self._service = robot.get_service(HeadingReferenceService)
+        self._max_w = robot.motion_pid_config.angular.max_velocity
+
+    def on_update(self, robot, dt):
+        error_deg = self._service.compute_turn(self._target_deg)
+        import math
+        w = self._kp * math.radians(error_deg)
+        w = max(-self._max_w, min(self._max_w, w))
+        robot.drive.set_velocity(ChassisVelocity(0, 0, w))  # vx, vy, wz
+        robot.drive.update(dt)
+        return False  # never finishes — use inside parallel()
+```
+
+The three key methods on `robot.drive`:
+
+| Method | Description |
+|--------|-------------|
+| `robot.drive.set_velocity(ChassisVelocity(vx, vy, wz))` | Set desired body-frame velocity (m/s, m/s, rad/s) |
+| `robot.drive.update(dt)` | Advance the controller by `dt` seconds — must be called every `on_update` tick |
+| `robot.drive.hard_stop()` | Immediately command zero velocity |
+
+`ChassisVelocity(vx, vy, wz)` uses the same axes as the rest of the system: `vx` = forward, `vy` = right, `wz` = counter-clockwise. This is the complete production-code pattern from the conebot's `HoldHeading` step — the only place in competition code where the low-level drive API is called directly.
+
+## Motion PID Config
+
+The motion PID controls *how accurately the robot follows planned trajectories* (distance and heading). This is separate from the velocity PID above.
+
+```python
+motion_pid_config = UnifiedMotionPidConfig(
+    # Library defaults — replace with your robot's tuned values
+    distance=PidConfig(
+        kp=2.0, ki=0.0, kd=0.5,       # library defaults
+        integral_max=10.0,
+        integral_deadband=0.01,
+        derivative_lpf_alpha=0.3,
+        output_min=-10.0, output_max=10.0,
+    ),
+
+    heading=PidConfig(
+        kp=2.0, ki=0.0, kd=0.3,       # library defaults
+        integral_max=10.0,
+        integral_deadband=0.01,
+        derivative_lpf_alpha=0.3,
+        output_min=-10.0, output_max=10.0,
+    ),
+
+    # Maximum velocities and accelerations (set by auto_tune / characterize_drive)
+    linear=AxisConstraints(
+        max_velocity=0.2368,       # m/s (your robot's top speed)
+        acceleration=0.2798,       # m/s²
+        deceleration=2.0532,       # m/s² (can be higher than accel)
+    ),
+    angular=AxisConstraints(
+        max_velocity=2.9424,       # rad/s
+        acceleration=7.6122,       # rad/s²
+        deceleration=16.1491,      # rad/s²
+    ),
+    lateral=AxisConstraints(       # Only for mecanum
+        max_velocity=0.2209,
+        acceleration=0.6485,
+        deceleration=0.4498,
+    ),
+
+    # Tolerances: when to consider "arrived"
+    # Library defaults: 10 mm distance, ~2° angle
+    distance_tolerance_m=0.01,    # 10 mm (library default)
+    angle_tolerance_rad=0.035,    # ~2 degrees (library default)
+    velocity_ff=1.0,
+)
+```
+
+> **Defaults vs. tuned values:** The library's built-in defaults are `distance_tolerance_m=0.01` (10 mm) and `angle_tolerance_rad=0.035` (~2°), with PID gains `kp=2.0, kd=0.5` (distance) and `kp=2.0, kd=0.3` (heading). The values in your `raccoon.project.yml` are specific to your robot and are written there by `auto_tune()`. Do not copy hardcoded values from one robot's config to another — run `auto_tune()` on each robot instead.
+
+### Axis Constraints
+
+`AxisConstraints` define the robot's physical limits. The motion planner uses these to create trapezoidal velocity profiles:
+
+{{< figure src="/images/trapezoidal-velocity-profile.svg" alt="Trapezoidal velocity profile showing acceleration, cruise, and deceleration phases" >}}
+
+- `max_velocity`: The fastest the robot will ever go. Set this conservatively — it's the speed at `speed=1.0`.
+- `acceleration`: How quickly the robot ramps up to max velocity.
+- `deceleration`: How quickly the robot slows down. Can be higher than acceleration (braking is usually faster).
+
+These values are measured automatically by `auto_tune()`.
+
+## Auto-Tuning
+
+LibSTP includes automatic tuning steps that measure your robot's actual performance and set the PID gains, axis constraints, and tolerances.
+
+### `auto_tune()` — Full Pipeline
+
+`auto_tune()` runs the complete calibration pipeline in sequence:
+
+```python
+# In your setup mission:
+auto_tune()
+```
+
+The full signature has roughly 20 parameters:
+
+```python
+auto_tune(
+    # Which axes to tune (auto-detected by default)
+    vel_axes=None,
+    characterize_axes=None,
+    motion_axes=None,
+
+    # Toggle individual phases (all True by default unless noted)
+    tune_bemf_velocity=True,      # per-motor ticks_to_rad vs. calibration board
+    tune_vel_lpf=True,            # IIR velocity filter alpha
+    tune_static_friction=True,    # kS per motor
+    tune_firmware_pid=True,       # STM32 MAV-mode inner velocity PID
+    tune_encoder_cal=False,       # IMU encoder cal (superseded by bemf, disabled)
+    tune_characterize=True,       # max velocity / accel / decel per axis
+    tune_velocity=True,           # chassis velocity-command gain
+    tune_motion=True,             # distance/heading PID via real trials
+    tune_tolerances=True,         # distance/angle tolerances from residuals
+
+    # BEMF sweep parameters
+    pwm_min_percent=30,
+    pwm_max_percent=90,
+    pwm_steps=6,
+    sweeps=2,
+
+    # Characterization parameters
+    characterize_trials=3,
+    characterize_power_percent=100,
+
+    # Persistence and confirmation
+    persist=True,         # write results to raccoon.project.yml
+    step_confirm=True,    # pause for button press before each phase
+)
+```
+
+**Key `auto_tune()` facts:**
+
+- `persist=True` (default) writes all tuned values to `raccoon.project.yml`. This modifies your project configuration file, which is intentional — the values are loaded on every subsequent run.
+- `step_confirm=True` (default) pauses before each phase and asks for a button press. This gives you time to position the robot correctly between phases.
+- The BEMF velocity phase (`tune_bemf_velocity`) requires a **calibration board** connected and providing ground-truth position — this is the phase that benefits most from accurate positioning.
+- Run `auto_tune()` on a flat surface with at least 1 m clearance in every direction.
+
+### Individual Tuning Phases
+
+You can run phases individually when you only need to re-tune one aspect:
+
+```python
+from raccoon.step.motion import (
+    auto_tune_vel_lpf,
+    auto_tune_static_friction,
+    auto_tune_bemf_velocity,
+    auto_tune_firmware_pid,
+    auto_tune_velocity,
+    auto_tune_motion,
+)
+
+# Re-run only the velocity LPF (e.g., after changing motors)
+auto_tune_vel_lpf()
+
+# Re-run only the static friction measurement
+auto_tune_static_friction()
+
+# Re-run only the motion PID on selected axes
+auto_tune_motion(axes=["linear", "angular"])
+```
+
+All individual phase factories accept `persist=True` (default), which writes their results to `raccoon.project.yml` just like the full `auto_tune()` pipeline.
+
+## Common Tuning Issues
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Robot curves when it should drive straight | Unequal wheel calibration or `inverted` flag wrong | Re-run `raccoon calibrate ticks`, check motor `inverted` |
+| Robot overshoots target distance | `deceleration` too low or `distance.kp` too high | Increase deceleration, reduce kp |
+| Robot oscillates at target | `distance.kp` too high or `distance.kd` too low | Reduce kp, increase kd |
+| Turns over/undershoot | `wheelbase` measurement wrong or `heading.kp` wrong | Re-measure wheelbase, tune heading PID |
+| Robot is sluggish | `max_velocity` too low or `acceleration` too low | Increase values or re-run characterization |
+| Robot jerks when starting | `kS` (static friction feedforward) too low | Increase kS |
+| SpeedMode motions don't stop | Distance/angle goal used while SpeedMode is active | Add `.until(condition)` or call `set_speed_mode(False)` first |
+
+## Related Pages
+
+- [Sensors]({{< ref "/01-programming-guide/04-sensors/_index.md" >}}) — stop conditions that terminate drive steps
+- [Odometry]({{< ref "/06-advanced/06-motion-and-localization/03-odometry.md" >}}) — how heading reference and pose tracking work
+- [Motion Flow and Kinematics]({{< ref "/06-advanced/06-motion-and-localization/02-motion-flow-and-kinematics.md" >}}) — full control-stack breakdown
+- [Smooth Path and Spline Motion]({{< ref "/01-programming-guide/02-driving/07-smooth-path.md" >}}) — velocity-continuous multi-segment paths with `heading=` per segment
+- [Localization and Resync]({{< ref "/06-advanced/06-motion-and-localization/05-localization-and-resync.md" >}}) — correcting drift at known landmarks

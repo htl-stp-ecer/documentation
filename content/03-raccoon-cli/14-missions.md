@@ -1,7 +1,7 @@
 ---
 title: "missions"
 author: "Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 14
 description: "Create, list, rename, remove and reorder the missions of a project."
@@ -64,5 +64,5 @@ Renumbers `M000`, `M010`, `M020` ... and moves the files in two phases so nothin
 
 ## Related pages
 
-- [Missions]({{< ref "/01-programming-guide/01-basics/06-missions.md" >}})
-- [Project structure]({{< ref "/01-programming-guide/01-basics/01-project-structure.md" >}})
+- [Missions]({{< ref "/01-programming-guide/01-basics/07-missions.md" >}})
+- [Project structure]({{< ref "/01-programming-guide/01-basics/02-project-structure.md" >}})

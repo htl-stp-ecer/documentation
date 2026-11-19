@@ -1,7 +1,7 @@
 ---
 title: "Configure your Hardware"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 50
 description: "Describe your motors, servos, sensors and drivetrain dimensions in the project's YAML files."
@@ -22,7 +22,7 @@ The generated `src/hardware/` files are rebuilt from the YAML on every `raccoon 
 
 You shouldn't edit most values in `robot.yml`, as those are automatically adjusted by autotune.
 
-→ See [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) for the full YAML reference.
+→ See [Robot Definition]({{< ref "/01-programming-guide/01-basics/06-robot-definition.md" >}}) for the full YAML reference.
 
 ## Measure your robot's dimensions
 

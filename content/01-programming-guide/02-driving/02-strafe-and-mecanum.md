@@ -1,7 +1,7 @@
 ---
 title: "Strafe and Mecanum"
 author: "Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 20
 description: "Sideways and diagonal driving on mecanum and omni robots: strafe_left, strafe_right, strafe arcs and drive_angle."
@@ -31,7 +31,7 @@ seq([
 |-----------|-------------|
 | `cm` | Distance in cm. Leave it out if you use `until` |
 | `speed` | Fraction of the maximum speed, 0.0 to 1.0 (default `1.0`) |
-| `until` | A [stop condition]({{< ref "/01-programming-guide/02-driving/03-stop-conditions.md" >}}), also available as `.until(...)` |
+| `until` | A [stop condition]({{< ref "/01-programming-guide/02-driving/03-until-conditions.md" >}}), also available as `.until(...)` |
 | `heading` | Hold an absolute heading while strafing (see below) |
 
 The IMU keeps the heading while the robot moves sideways.
@@ -49,7 +49,7 @@ seq([
 ])
 ```
 
-`heading=` needs a heading reference, see [Absolute Heading]({{< ref "/01-programming-guide/02-driving/04-absolute-heading.md" >}}). The drive system page recommends it for drives longer than about 50 cm.
+`heading=` needs a heading reference, see [Absolute Heading]({{< ref "/01-programming-guide/02-driving/04-absolute-heading.md" >}}). Use it for drives longer than about 50 cm.
 
 ---
 
@@ -83,5 +83,6 @@ drive_angle(130).until(on_black(Defs.front.left))       # backward-left until th
 
 ## Related pages
 
-- [Drive System]({{< ref "/01-programming-guide/02-driving/01-drive-system.md" >}}): kinematics, velocity control and the full parameter tables.
-- [Smooth Path and Spline Motion]({{< ref "/01-programming-guide/02-driving/05-smooth-path.md" >}}): omni robots can curve while rotating to a target heading.
+- [Drive, Turn and Arc]({{< ref "/01-programming-guide/02-driving/01-drive-turn-arc.md" >}}): `drive_forward`, `turn_left`, arcs and speed mode.
+- [Drive System]({{< ref "/06-advanced/06-motion-and-localization/01-drive-system.md" >}}): kinematics and velocity control.
+- [Smooth Path and Spline Motion]({{< ref "/01-programming-guide/02-driving/07-smooth-path.md" >}}): omni robots can curve while rotating to a target heading.

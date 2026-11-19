@@ -1,7 +1,7 @@
 ---
 title: "calibrate"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 7
 description: "Measure encoder ticks, tune the motor PID, set servo positions and record motor step responses."
@@ -16,7 +16,7 @@ raccoon calibrate servos
 raccoon calibrate step-response --local
 ```
 
-`raccoon calibrate` has one subcommand per calibration phase. Run one phase at a time. For what the values mean and when to recalibrate, see [Calibration]({{< ref "/01-programming-guide/03-calibration/_index.md" >}}).
+`raccoon calibrate` has one subcommand per calibration phase. Run one phase at a time. For what the values mean and when to recalibrate, see [Calibration]({{< ref "/01-programming-guide/05-calibration/_index.md" >}}).
 
 ## Where it runs
 

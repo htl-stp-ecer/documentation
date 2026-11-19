@@ -1,0 +1,238 @@
+---
+title: "Competition Ready"
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-19
+draft: false
+weight: 50
+---
+
+# Competition Ready
+
+At some point your robot stops being a development toy and has to survive on a real table, in front of real judges, with no laptop tethered to it. Competition mode is different from running from the WebIDE or with `raccoon run`: the robot has to start on a **light signal**, it has to **stop itself after 120 seconds** without anyone pressing a key, and it has to do it reliably whether the Wi-Fi works or not.
+
+This page walks you through the three things you need to turn your development robot into a competition robot:
+
+1. **Wait-for-light** — starting the robot from the competition start lamp
+2. **`shutdown_in`** — the automatic emergency stop timer
+3. **The shutdown mission** — the safe cleanup that runs when time is up
+
+Each of these is opt-in. Without them, your robot still works — it just won't be legal at competition.
+
+## The Competition Flow
+
+Before touching any config, it helps to understand what the framework does on your behalf when everything is wired up correctly. This is what happens from the moment the robot boots at the table to the moment the match ends:
+
+```mermaid
+graph TD
+    Boot["Robot boots"] --> Setup["setup_mission runs<br/><small>servos home, calibration</small>"]
+    Setup --> Gate{"wait_for_light_sensor<br/>defined?"}
+    Gate -->|Yes| WFL["wait_for_light gate<br/><small>warmup → test → armed</small>"]
+    Gate -->|No| Button["Wait for button press"]
+    WFL --> Clock["T=0: mission clock starts"]
+    Button --> Clock
+    Clock --> Main["Main missions run<br/><small>in list order</small>"]
+    Main --> Timer{"shutdown_in<br/>reached?"}
+    Timer -->|Yes, timer fires| Cancel["Current mission cancelled"]
+    Timer -->|No, missions finish| Done["Missions complete"]
+    Cancel --> Shutdown["shutdown_mission runs<br/><small>arms up, servos off</small>"]
+    Done --> Shutdown
+    Shutdown --> Stop["Robot idle"]
+
+    style Setup fill:#4CAF50,color:#fff
+    style WFL fill:#FFA726,color:#fff
+    style Clock fill:#42A5F5,color:#fff
+    style Main fill:#66BB6A,color:#fff
+    style Shutdown fill:#EF5350,color:#fff
+```
+
+The three highlighted stages — the **wait-for-light gate**, the **`shutdown_in` timer**, and the **shutdown mission** — are the pieces you explicitly enable. Everything else (running the setup mission, starting the mission clock, executing missions in order) happens automatically.
+
+## Wait for Light
+
+The robot starts when the lamp over the table turns on. Mounting and declaring the sensor, test mode and tuning are on [Wait for Light]({{< ref "/01-programming-guide/01-basics/11-wait-for-light.md" >}}). Once `wait_for_light_sensor` is declared, the runtime inserts the gate for you.
+
+## The `shutdown_in` Timer
+
+Every Botball match has a hard time limit. If your robot is still driving when the clock hits zero, you can knock over your own scoring, hit the partner robot, or damage the game elements. The rules require the robot to stop on its own.
+
+The framework enforces this with a single config value: `shutdown_in`.
+
+### Enabling It
+
+`shutdown_in` lives in `config/robot.yml`:
+
+```yaml
+shutdown_in: 120      # seconds
+```
+
+That's all you need. The framework arms a timer the moment the mission clock starts (after the wait-for-light gate fires) and when the timer expires, **it cancels whatever mission is currently running and jumps straight to the shutdown mission**. The mission code doesn't need to check the clock — the cancellation happens automatically at the next `await` point, cleanly, without leaving motors spinning.
+
+### Choosing a Value
+
+For standard Botball matches, `120` is the right number — it matches the 2-minute match length. Some tournaments run shorter or longer matches; check your specific event's rules.
+
+| Value | Meaning |
+|-------|---------|
+| `120` | Standard Botball match length (2 minutes) |
+| `60` | Short-format or timed practice runs |
+| `0` | **Disabled** — the robot runs until missions finish or you power it off. Only use during development. |
+
+Setting `shutdown_in: 0` is useful when you're debugging a long-running mission on your bench and don't want the timer to kill it mid-test. **Never leave it at 0 when you travel to competition** — a forgotten zero is the kind of mistake that ends a match with a disqualification.
+
+### Why It's Cooperative, Not Forcible
+
+The shutdown timer relies on the single-threaded asyncio model (see **[Advanced Topics → No Threads]({{< ref "/06-advanced/08-runtime-and-tooling/01-async-and-services.md" >}})**). When the timer fires, the framework cancels the running mission's asyncio task. Because every step yields control at its `await` points, the cancellation propagates within a few milliseconds — no motor is left spinning, no half-finished operation corrupts state.
+
+This is **why you must never use `time.sleep()` or block the event loop** in custom steps. If a step doesn't yield, the cancellation can't propagate, and the shutdown timer can't actually stop the robot. The 120-second timer depends on cooperative scheduling to work at all. A single synchronous `time.sleep(5)` in your code means 5 seconds of the shutdown timer being unable to fire.
+
+## The Shutdown Mission
+
+When the timer fires, the framework hands control to a special mission — the **shutdown mission**. Its job is to leave the robot in a safe state: arms up, claws off motors, no limbs sticking into other robots' paths.
+
+### Writing One
+
+A shutdown mission is just a regular `Mission` subclass with a short, safe sequence:
+
+```python
+from raccoon import *
+from src.hardware.defs import Defs
+
+
+class M999ShutdownMission(Mission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # Lift anything that could snag another robot
+            Defs.arm.up(),
+            Defs.claw.open(),
+
+            # Release all servo holding torque
+            fully_disable_servos(),
+        ])
+```
+
+Rules of thumb for shutdown missions:
+
+- **Keep it short.** There's no hard time limit after the main timer expires, but long shutdown missions are a code smell — if you need 30 seconds of recovery, something is wrong with your main mission.
+- **No driving.** Do not add `drive_forward()` or similar to the shutdown mission. If the main timer fires while you're mid-drive, the last thing you want is *more* driving.
+- **No sensor waits.** Don't use `wait_for_digital()` or any blocking condition — if the sensor never fires, the shutdown mission hangs forever.
+- **`fully_disable_servos()` at the end.** This removes holding torque so servos don't burn out if the robot sits there waiting for someone to retrieve it.
+
+### Registering It
+
+In `config/missions.yml`:
+
+```yaml
+- M000SetupMission: setup
+- M999ShutdownMission: shutdown
+- M001DriveToConeMission
+- M002CollectConeMission
+```
+
+> **Naming convention:** The project scaffold generates missions with **3-digit zero-padded prefixes** — `M000`, `M001`, `M999` — not 2-digit. Match this convention so that class names, file names, and config entries stay consistent. The framework locates shutdown missions by the `shutdown` role tag, so the class name itself doesn't matter, but diverging from the scaffold convention confuses tooling.
+
+The tag `shutdown` is what makes it a shutdown mission. Only one shutdown mission is allowed per robot — if you list multiple, the last one wins. If you don't list one at all, **no shutdown cleanup runs when the timer fires** — the current mission is simply cancelled and the robot goes idle with whatever state the cancellation left it in. This is usually fine (the cancellation already stops motors), but you won't get the "arms up" safety.
+
+## The Competition-Ready Checklist
+
+Before you travel, walk through this list once. Every item here is something we've seen teams forget at the table.
+
+### Hardware Config
+
+- [ ] `wait_for_light_sensor` is defined in `config/hardware.yml` with the **exact** name.
+- [ ] The sensor is physically mounted **facing down** and isn't shadowed by any moving part.
+- [ ] The sensor is not in the `sensors=[...]` list of `collect_ir_set`, see [Wait for Light]({{< ref "/01-programming-guide/01-basics/11-wait-for-light.md" >}}).
+- [ ] `button` is defined and physically reachable for the test-mode → armed transition.
+
+### Robot Config
+
+- [ ] `shutdown_in: 120` in `config/robot.yml` (or your event's match length).
+- [ ] `shutdown_in` is **not** `0`.
+
+### Missions
+
+- [ ] A setup mission (e.g. `M000SetupMission: setup`) is listed first in `config/missions.yml`.
+- [ ] A shutdown mission (e.g. `M999ShutdownMission: shutdown`) is listed.
+- [ ] The shutdown mission has no drive steps, no sensor waits, and ends with `fully_disable_servos()`.
+- [ ] Main missions are listed in the order you want them to execute.
+
+### Testing on the Bench
+
+- [ ] Run the full program from `raccoon run`. The setup mission finishes, then the UI enters warmup → test mode.
+- [ ] Cover and uncover the light sensor (or shine a flashlight above it). The test counter should tick up on every trigger. If it doesn't, fix the sensor position or lower `drop_fraction`.
+- [ ] Press the button. The UI should transition to "armed".
+- [ ] Simulate the start light (flashlight works). The main missions should start immediately.
+- [ ] Let the program run to completion. Verify the shutdown mission runs after the main missions finish.
+- [ ] Now run it again, but this time set `shutdown_in: 10` temporarily and confirm the shutdown mission fires when the timer expires mid-mission. **Put it back to 120 before traveling.**
+
+### At the Table
+
+- [ ] Power on the robot. Setup mission runs.
+- [ ] Test mode activates. Test the light detection from the actual starting position, with the actual lamp — **not** with a flashlight. Ambient lighting at the venue is different from your workshop.
+- [ ] Confirm at least 2–3 successful test triggers before arming.
+- [ ] Press the button to arm. Do not touch the robot again.
+- [ ] Match starts. The robot runs. 120 seconds later, the shutdown mission fires and the robot safes itself.
+
+## Development-Mode Patterns
+
+These patterns are used during development and PID tuning — not at competition. They let you skip or extend the normal startup gate without permanently changing mission code.
+
+### Extending `pre_start_gate` Without Losing the Light Wait
+
+The default `pre_start_gate` on a `SetupMission` runs the built-in wait-for-light gate. If you need to run your own calibration steps _before_ the light wait, override `pre_start_gate` and call `robot._pre_start_gate()` at the end:
+
+```python
+class M000SetupMission(SetupMission):
+    def sequence(self) -> Sequential:
+        return seq([
+            # ... servo homing, calibration ...
+        ])
+
+    async def pre_start_gate(self, robot) -> None:
+        # Your custom gate first — e.g. a calibration confirmation screen
+        await calibration_gate().run_step(robot)
+        # Then the standard wait-for-light — do NOT skip this at competition
+        await robot._pre_start_gate()
+```
+
+This is the correct pattern for adding pre-start behavior without losing the light-sensor wait. The docs for `SetupMission` show how to skip the gate entirely; this shows how to **extend** it. (Adapted from real competition projects including packingbot and drumbot.)
+
+### Bypassing the Gate for Tuning Runs
+
+During PID tuning you often want the robot to start immediately without waiting for a light signal. Patch the method at the class level in `main.py` rather than modifying mission code:
+
+```python
+# src/main.py — tuning mode only, REMOVE before competition
+from raccoon.robot.api import GenericRobot
+
+async def _skip_pre_start_gate(self) -> None:
+    self.info("DEBUG: skipping pre-start gate (tuning run)")
+
+GenericRobot._pre_start_gate = _skip_pre_start_gate
+
+def main():
+    Robot().start()
+```
+
+Patching the class (not the instance) means it takes effect even though `Robot()` is constructed after the patch.
+
+### Overriding `shutdown_in` at Runtime for Long Tuning Sessions
+
+`robot.shutdown_in` can be overridden after construction but before `robot.start()`. This is useful when the standard 120-second match timer would kill a long auto-tune run:
+
+```python
+def main():
+    robot = Robot()
+    robot.shutdown_in = 900   # 15 minutes — for tuning only
+    robot.start()
+```
+
+The override is safe because `shutdown_in` is read by `robot.start()`, not at construction time.
+
+> **Before competition:** Remove the `_pre_start_gate` patch and restore `shutdown_in` to 120. These are not flags you want to forget. Consider using a run configuration (see `config/run-configurations.yml`) to keep tuning overrides separate from competition code.
+
+## Related Topics
+
+- **[Wait for Light algorithm]({{< ref "/01-programming-guide/01-basics/11-wait-for-light.md" >}})** — the Kalman filter, warmup, test mode, and armed state in detail.
+- **[Advanced Topics → Async Execution Model]({{< ref "/06-advanced/08-runtime-and-tooling/01-async-and-services.md" >}})** — why the `shutdown_in` timer depends on cooperative scheduling.
+- **[Synchronizing Two Robots]({{< ref "/06-advanced/08-runtime-and-tooling/04-synchronizing-robots.md" >}})** — the mission clock that `shutdown_in` counts against is the same clock that `wait_for_checkpoint()` uses.
+- **[robot.yml Reference → `shutdown_in`]({{< ref "/06-advanced/06-motion-and-localization/06-robot-yml.md" >}})** — the full config schema entry.

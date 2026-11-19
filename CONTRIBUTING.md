@@ -57,16 +57,16 @@ Each top-level folder under `content/` is a section. The numeric prefix controls
 | Section | Covers |
 |---------|--------|
 | `00-getting-started/` | From a flashed SD card to a running robot, one page per step |
-| `01-programming-guide/` | Learning path for `raccoon-lib`: `01-basics/`, `02-driving/`, `03-calibration/`, `04-servos/`, `05-motors/`, `06-sensors/`, `07-custom-steps/`, `08-more-topics/`, `09-camera/` |
+| `01-programming-guide/` | Learning path for `raccoon-lib`: `01-basics/`, `02-driving/`, `03-actors/` (servos and motors), `04-sensors/`, `05-calibration/`, `06-camera/`, `07-custom-steps/` |
 | `02-steps-reference/` | The step catalog. Generated from `raccoon-lib`, do not edit by hand |
 | `03-raccoon-cli/` | One page per `raccoon` CLI command |
 | `04-web-ide/` | Using the WebIDE |
 | `05-bot-ui/` | Using the on-robot UI |
-| `06-advanced/` | How RaccoonOS works inside: architecture, `transport/`, `firmware/`, `web-ide-internals/` |
+| `06-advanced/` | How RaccoonOS works inside: architecture, `transport/`, `firmware/`, `web-ide-internals/`, motion and localization, arms and table maps, runtime and tooling |
 | `07-build-and-contribute/` | Building, releases, CI, contributing |
 | `contributors/` | Contributor listing |
 
-Sections inside a section (for example `01-programming-guide/02-driving/`) need their own `_index.md`. The sidebar shows two levels: section, then sub-section, then pages.
+Sections inside a section (for example `01-programming-guide/02-driving/`) need their own `_index.md`. The sidebar nests sub-sections to any depth (for example `01-programming-guide/03-actors/01-servos/`).
 
 If your page doesn't fit anywhere, open an issue first and discuss where it belongs.
 
@@ -75,7 +75,7 @@ If your page doesn't fit anywhere, open an issue first and discuss where it belo
 ## Creating a page
 
 ```bash
-hugo new 01-programming-guide/08-more-topics/my-topic.md
+hugo new 01-programming-guide/01-basics/my-topic.md
 ```
 
 Fill in the front matter:

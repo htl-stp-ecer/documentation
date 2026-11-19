@@ -57,13 +57,13 @@ Output lands in `public/`.
 content/
   00-getting-started/        From a flashed SD card to a running robot
   01-programming-guide/      Learning path for raccoon-lib
-    01-basics/ 02-driving/ 03-calibration/ 04-servos/ 05-motors/
-    06-sensors/ 07-custom-steps/ 08-more-topics/ 09-camera/
+    01-basics/ 02-driving/ 03-actors/ 04-sensors/
+    05-calibration/ 06-camera/ 07-custom-steps/
   02-steps-reference/        Step catalog, generated from raccoon-lib CI. Do not edit
   03-raccoon-cli/            Raccoon CLI, one page per command
   04-web-ide/                Using the WebIDE
   05-bot-ui/                 Using the on-robot UI
-  06-advanced/               Architecture, transport, firmware, WebIDE internals
+  06-advanced/               Architecture, transport, firmware, WebIDE internals, motion and localization
   07-build-and-contribute/   Build system, releases, CI, contributing
   contributors/              Contributor listing
 ```
@@ -75,7 +75,7 @@ Section folders use numeric prefixes to control sidebar order. Pages use `weight
 ## Adding a page
 
 ```bash
-hugo new 01-programming-guide/08-more-topics/my-new-topic.md
+hugo new 01-programming-guide/01-basics/my-new-topic.md
 ```
 
 Edit the generated front matter:

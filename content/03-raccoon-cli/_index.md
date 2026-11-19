@@ -1,7 +1,7 @@
 ---
 title: "Raccoon CLI"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 30
 description: "The raccoon command line tool: connect to the robot, generate code, sync and run your project, inspect logs and keep versions in line."
@@ -70,7 +70,7 @@ New to the CLI? Read in this order:
 
 1. [connect]({{< ref "/03-raccoon-cli/01-connect.md" >}}): SSH key setup and saved connections
 2. [run]({{< ref "/03-raccoon-cli/05-run.md" >}}): the command you use all day
-3. [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}): parameterize `dev` versus `competition` runs
+3. [Run Configurations]({{< ref "/01-programming-guide/01-basics/04-run-configurations.md" >}}): parameterize `dev` versus `competition` runs
 4. [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}): what happens under the hood
 5. [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}): the safety net before every run
 

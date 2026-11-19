@@ -1,7 +1,7 @@
 ---
 title: "Run Configurations"
-author: "Raccoon Docs Team"
-date: 2026-11-16
+author: "Raccoon Docs Team, Mario Scholze"
+date: 2026-11-19
 draft: false
 weight: 14
 description: "The Run Configurations dialog of the WebIDE: select, edit, duplicate and remove configurations."
@@ -9,7 +9,7 @@ description: "The Run Configurations dialog of the WebIDE: select, edit, duplica
 
 # Run Configurations
 
-The WebIDE and the `raccoon run` command share the same run configurations, stored in `raccoon.project.yml`. What a configuration is, the builtin presets, all fields and the YAML format are explained in [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}). This page covers the dialog.
+The WebIDE and the `raccoon run` command share the same run configurations, stored in `raccoon.project.yml`. What a configuration is, the builtin presets, all fields and the YAML format are explained in [Run Configurations]({{< ref "/01-programming-guide/01-basics/04-run-configurations.md" >}}). This page covers the dialog.
 
 You select a configuration in the navbar dropdown before pressing Run, see [Running a Mission]({{< ref "/04-web-ide/07-running-a-mission.md" >}}). The `simulated` preset is selected when you first open a project, and it is the only place where it runs the simulator.
 

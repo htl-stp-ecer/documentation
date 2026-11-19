@@ -1,10 +1,10 @@
 ---
 title: "Getting Started"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 1
-description: "From a flashed SD card to a robot that drives: set up, connect, configure and run your first mission."
+description: "From a flashed SD card to a robot that drives: set up, connect, configure, run a test mission and write your first program."
 ---
 
 # Getting Started
@@ -20,7 +20,7 @@ flowchart TD
     C --> D([Connect to and update the robot])
     D --> E([Configure your hardware])
     E --> F([Run the program])
-    F --> G([Write missions])
+    F --> G([Your first program])
     G --> F
 
     click A "/00-getting-started/01-flash-the-sd-card/"
@@ -29,7 +29,7 @@ flowchart TD
     click D "/00-getting-started/04-connect-and-update/"
     click E "/00-getting-started/05-configure-your-hardware/"
     click F "/00-getting-started/06-run-the-program/"
-    click G "/01-programming-guide/01-basics/06-missions/"
+    click G "/00-getting-started/07-your-first-program/"
 
     style A stroke:#853585
     style F stroke:#27ae60
@@ -55,6 +55,7 @@ The loop at the end is your normal development cycle: write code, run it on the 
 4. [Connect to and update the robot](/00-getting-started/04-connect-and-update/)
 5. [Configure your hardware](/00-getting-started/05-configure-your-hardware/)
 6. [Run the program](/00-getting-started/06-run-the-program/)
+7. [Your first program](/00-getting-started/07-your-first-program/)
 
 ## What comes next
 
@@ -62,10 +63,10 @@ Your robot is running. Here's where to go from here:
 
 | Topic | Where |
 |-------|-------|
-| Make it drive accurately | [Calibration]({{< ref "/01-programming-guide/03-calibration/01-calibration.md" >}}) |
-| Add sensors, servos, and other hardware | [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) — edit `raccoon.project.yml` |
-| Writing real missions | [Missions]({{< ref "/01-programming-guide/01-basics/06-missions.md" >}}) |
-| Stop conditions, chaining, timing | [Stop Conditions]({{< ref "/01-programming-guide/02-driving/03-stop-conditions.md" >}}) |
+| Make it drive accurately | [Calibration]({{< ref "/01-programming-guide/05-calibration/_index.md" >}}) |
+| Add sensors, servos, and other hardware | [Robot Definition]({{< ref "/01-programming-guide/01-basics/06-robot-definition.md" >}}) — edit `raccoon.project.yml` |
+| Writing real missions | [Missions]({{< ref "/01-programming-guide/01-basics/07-missions.md" >}}) |
+| Stop conditions, chaining, timing | [Until Conditions]({{< ref "/01-programming-guide/02-driving/03-until-conditions.md" >}}) |
 | Sensors, servos, drive system | [Programming Guide]({{< ref "/01-programming-guide/_index.md" >}}) |
 | Configure sensor positions visually | [WebIDE]({{< ref "/04-web-ide/_index.md" >}}) — run with `raccoon web` |
 | All CLI commands explained | [raccoon-cli reference]({{< ref "/03-raccoon-cli/_index.md" >}}) |
