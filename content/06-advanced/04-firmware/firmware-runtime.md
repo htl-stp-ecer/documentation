@@ -1,7 +1,7 @@
 ---
 title: "Firmware Runtime & Scheduling"
-author: "Raccoon Docs Team"
-date: 2026-06-18
+author: "Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 2
 ---
@@ -219,7 +219,7 @@ The function computes `pidDt` from `microSeconds` (actual elapsed time since the
 | `MOT_MODE_PASSIV_BRAKE` | 1 | Short brake (D0=D1=1, duty=0) |
 | `MOT_MODE_PWM` | 2 | Open-loop: apply `motorTarget` directly as duty |
 | `MOT_MODE_MAV` | 3 | Velocity PID: setpoint = `motorTarget`, feedback = BEMF |
-| `MOT_MODE_MTP` | 4 | Position control: sqrt decel profile → velocity PID |
+| `MOT_MODE_MTP` | 4 | Position control: trapezoid profile → velocity PID, then holds the goal |
 | `MOT_MODE_CHASSIS` | 5 | Body-frame velocity → per-wheel setpoint via `fwd_matrix` → velocity PID |
 
 Motor control mode per channel is packed into `rxBuffer.motorControlMode` as 3 bits per channel (bits 0–2 = motor 0, bits 3–5 = motor 1, etc.).
@@ -303,7 +303,7 @@ The `main()` function executes the following steps before entering the super-loo
 
 **Consequence:** Keep log lines short. The heartbeat (`printf` every 5 s) is acceptable. Adding per-loop `printf` calls will degrade IMU update latency and odometry freshness. Never add `printf` inside the motor mode handlers (which run inside the ADC ISR) without extreme care — those functions run in interrupt context.
 
-**`cal_save_to_flash()` was the most dangerous blocking call.** It previously blocked the super-loop for minutes by running a Flash erase inside the loop. It is now a no-op — the calibration save is intentionally disabled (see `flash_cal.c` for the full rationale). If Flash persistence is re-enabled in the future, it must use the interrupt-driven erase/program path (`HAL_FLASH_Program_IT`, `HAL_FLASHEx_Erase_IT`) to avoid stalling the loop.
+**`cal_save_to_flash()` must stay a no-op.** A polling-mode flash erase blocks the super-loop for minutes. See [IMU calibration is not persisted]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md#imu-calibration-is-not-persisted" >}}).
 
 **`spi2_wait_idle()`** is called before any write to `txBuffer` from the super-loop. It spins on `SPI2->SR & SPI_SR_BSY` with a DWT cycle-count timeout. If SPI2 is stuck it returns `false` and the update is skipped rather than blocking. The timeout is `SPI2_WAIT_TIMEOUT_CYCLES` cycles.
 
@@ -384,8 +384,8 @@ The critical constraint: **nothing in the super-loop may write to `txBuffer` whi
 
 ## Related pages
 
-- [Architecture Overview](/06-advanced/firmware/architecture/) — two-processor rationale and full component map
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — `TxBuffer`/`RxBuffer` wire format, DMA circular mode, `TRANSFER_VERSION 21`
-- [Motor Control](/06-advanced/firmware/motor-control/) — BEMF signal chain, PID internals, MTP profile, and the `update_motor()` function called from the ADC2 callback
-- [Sensor Reading](/06-advanced/firmware/sensors/) — ADC1 oversampling and VDDA correction details
-- [IMU Stack](/06-advanced/firmware/imu/) — how `readImu()` interacts with the super-loop and MPL fusion pipeline
+- [Architecture Overview](/06-advanced/04-firmware/architecture/) — two-processor rationale and full component map
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — `TxBuffer`/`RxBuffer` wire format, DMA circular mode, `TRANSFER_VERSION 21`
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — BEMF signal chain, PID internals, MTP profile, and the `update_motor()` function called from the ADC2 callback
+- [Sensor Reading](/06-advanced/04-firmware/sensors/) — ADC1 oversampling and VDDA correction details
+- [IMU Stack](/06-advanced/04-firmware/imu/) — how `readImu()` interacts with the super-loop and MPL fusion pipeline

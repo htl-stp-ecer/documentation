@@ -1,7 +1,7 @@
 ---
 title: "SPI Communication Protocol"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 3
 ---
@@ -174,15 +174,15 @@ Actual sizes (computed from `pi_buffer.h` with `__attribute__ ((packed))`):
 
 | Struct | Bytes |
 |--------|-------|
-| `TxBuffer` | 168 |
+| `TxBuffer` | 167 |
 | `RxBuffer` | 277 |
 | Wire frame | **277** |
 
-Every SPI transaction is 277 bytes in each direction regardless of how many fields are actively used. The trailing 109 bytes of the STM32's TX frame are always zero-padded.
+Every SPI transaction is 277 bytes in each direction regardless of how many fields are actively used. The trailing 110 bytes of the STM32's TX frame are always zero-padded.
 
 ---
 
-## `TxBuffer` — STM32 → Pi (168 bytes)
+## `TxBuffer` — STM32 → Pi (167 bytes)
 
 The naming is from the STM32's perspective: this is what it *transmits*. The Pi calls its local copy `ctx.rx`.
 
@@ -191,35 +191,34 @@ classDiagram
     class TxBuffer {
         +uint8 transferVersion       [0]   = 21
         +uint32 updateTime           [1-4] µs timestamp
-        +MotorData motor             [5-37]
-        +int16 analogSensor[6]       [38-49]
-        +int16 batteryVoltage        [50-51]
-        +uint16 digitalSensors       [52-53]
-        +ImuData imu                 [54-143]
-        +OdometryData odometry       [144-167]
+        +MotorData motor             [5-36]
+        +int16 analogSensor[6]       [37-48]
+        +int16 batteryVoltage        [49-50]
+        +uint16 digitalSensors       [51-52]
+        +ImuData imu                 [53-142]
+        +OdometryData odometry       [143-166]
     }
     class MotorData {
         +int32 bemf[4]               [5-20]  filtered BEMF ticks
         +int32 position[4]           [21-36] integrated position
-        +uint8 done                  [37]    bitmask
     }
     class ImuData {
-        +SensorData gyro             [54-66]  rad/s, accuracy
-        +SensorData accel            [67-79]  m/s², accuracy
-        +SensorData compass          [80-92]  µT, accuracy
-        +SensorData linearAccel      [93-105] m/s², accuracy
-        +SensorData accelVelocity    [106-118]
-        +QuaternionData dmpQuat      [119-135] w,x,y,z + accuracy
-        +float heading               [136-139] rad, mag-corrected
-        +float temperature           [140-143] °C
+        +SensorData gyro             [53-65]  rad/s, accuracy
+        +SensorData accel            [66-78]  m/s², accuracy
+        +SensorData compass          [79-91]  µT, accuracy
+        +SensorData linearAccel      [92-104] m/s², accuracy
+        +SensorData accelVelocity    [105-117]
+        +QuaternionData dmpQuat      [118-134] w,x,y,z + accuracy
+        +float heading               [135-138] rad, mag-corrected
+        +float temperature           [139-142] °C
     }
     class OdometryData {
-        +float pos_x                 [144-147] m, world frame
-        +float pos_y                 [148-151] m, world frame
-        +float heading               [152-155] rad, CCW-positive
-        +float vx                    [156-159] m/s, body frame
-        +float vy                    [160-163] m/s, body frame
-        +float wz                    [164-167] rad/s, body frame
+        +float pos_x                 [143-146] m, world frame
+        +float pos_y                 [147-150] m, world frame
+        +float heading               [151-154] rad, CCW-positive
+        +float vx                    [155-158] m/s, body frame
+        +float vy                    [159-162] m/s, body frame
+        +float wz                    [163-166] rad/s, body frame
     }
     TxBuffer *-- MotorData
     TxBuffer *-- ImuData
@@ -234,24 +233,23 @@ classDiagram
 | 1 | 4 | `updateTime` | `uint32_t` | µs since boot (`microSeconds` timer), stamped in `HAL_SPI_TxRxCpltCallback` |
 | 5 | 16 | `motor.bemf[4]` | `int32_t[4]` | Offset-corrected, dead-zone-applied, IIR-filtered BEMF ticks per motor |
 | 21 | 16 | `motor.position[4]` | `int32_t[4]` | dt-weighted integrated position in BEMF ticks |
-| 37 | 1 | `motor.done` | `uint8_t` | Bit N = motor N reached goal (MTP done threshold = 40 ticks) |
-| 38 | 12 | `analogSensor[6]` | `int16_t[6]` | 12-bit ADC counts on sensor ports 0–5 |
-| 50 | 2 | `batteryVoltage` | `int16_t` | Raw 12-bit ADC; Pi converts: `V = adc × 3.3 × 11 / 4096` (11× divider) |
-| 52 | 2 | `digitalSensors` | `uint16_t` | Bits 0–9 = digital ports, bit 10 = built-in button; read in callback |
-| 54 | 13 | `imu.gyro` | `SensorData` | `{float[3] data, int8 accuracy}` — rad/s, BNO080 accuracy 0–3 |
-| 67 | 13 | `imu.accel` | `SensorData` | m/s² |
-| 80 | 13 | `imu.compass` | `SensorData` | µT |
-| 93 | 13 | `imu.linearAccel` | `SensorData` | m/s², gravity-compensated |
-| 106 | 13 | `imu.accelVelocity` | `SensorData` | integrated accel velocity |
-| 119 | 17 | `imu.dmpQuat` | `QuaternionData` | `{float[4] {w,x,y,z}, int8 accuracy}` — DMP 6-axis (gyro+accel) |
-| 136 | 4 | `imu.heading` | `float` | Mag-corrected heading when calibrated, otherwise gyro-only |
-| 140 | 4 | `imu.temperature` | `float` | °C |
-| 144 | 4 | `odometry.pos_x` | `float` | Metres, world frame, STM32-computed from BEMF + kinematics |
-| 148 | 4 | `odometry.pos_y` | `float` | Metres, world frame |
-| 152 | 4 | `odometry.heading` | `float` | Radians, CCW-positive (ENU) |
-| 156 | 4 | `odometry.vx` | `float` | m/s, body frame |
-| 160 | 4 | `odometry.vy` | `float` | m/s, body frame |
-| 164 | 4 | `odometry.wz` | `float` | rad/s, body frame |
+| 37 | 12 | `analogSensor[6]` | `int16_t[6]` | 12-bit ADC counts on sensor ports 0–5 |
+| 49 | 2 | `batteryVoltage` | `int16_t` | Raw 12-bit ADC; Pi converts: `V = adc × 3.3 × 11 / 4096` (11× divider) |
+| 51 | 2 | `digitalSensors` | `uint16_t` | Bits 0–9 = digital ports, bit 10 = built-in button; read in callback |
+| 53 | 13 | `imu.gyro` | `SensorData` | `{float[3] data, int8 accuracy}` — rad/s, accuracy 0–3 |
+| 66 | 13 | `imu.accel` | `SensorData` | m/s² |
+| 79 | 13 | `imu.compass` | `SensorData` | µT |
+| 92 | 13 | `imu.linearAccel` | `SensorData` | m/s², gravity-compensated |
+| 105 | 13 | `imu.accelVelocity` | `SensorData` | integrated accel velocity |
+| 118 | 17 | `imu.dmpQuat` | `QuaternionData` | `{float[4] {w,x,y,z}, int8 accuracy}` — DMP 6-axis (gyro+accel) |
+| 135 | 4 | `imu.heading` | `float` | Mag-corrected heading when calibrated, otherwise gyro-only |
+| 139 | 4 | `imu.temperature` | `float` | °C |
+| 143 | 4 | `odometry.pos_x` | `float` | Metres, world frame, STM32-computed from BEMF + kinematics |
+| 147 | 4 | `odometry.pos_y` | `float` | Metres, world frame |
+| 151 | 4 | `odometry.heading` | `float` | Radians, CCW-positive (ENU) |
+| 155 | 4 | `odometry.vx` | `float` | m/s, body frame |
+| 159 | 4 | `odometry.vy` | `float` | m/s, body frame |
+| 163 | 4 | `odometry.wz` | `float` | rad/s, body frame |
 
 ### MotorData detail
 
@@ -259,7 +257,7 @@ classDiagram
 
 `motor.position[N]` is the time-weighted integral: each BEMF cycle adds `corrected_bemf × dt_s` rather than a fixed-weight tick. This keeps position units physically consistent across variable BEMF cycle rates.
 
-`motor.done` is a sticky bitmask. Bit N is set when `|position[N] - goalPosition[N]| < 40` ticks (MTP_DONE_THRESHOLD). It stays set until the motor's goal position or mode changes.
+There is no `done` field. MTP keeps holding its goal, so the Pi decides that a goal is reached from `motor.position[N]` and the goal it sent.
 
 ### `updateTime` as liveness signal
 
@@ -337,7 +335,7 @@ ctx.tx.motorControlMode = (ctx.tx.motorControlMode & ~mask) | ((uint16_t)mode <<
 
 ### `chassisVelocity[3]` — on-MCU chassis velocity loop
 
-`chassisVelocity` sits at byte offset 24 of RxBuffer, between `motorTarget` and `motorGoalPosition`. It is easy to miscount, and older decoders that only handle up to `motorTarget` will misalign every subsequent field.
+`chassisVelocity` sits at byte offset 24 of RxBuffer, between `motorTarget` and `motorGoalPosition`. It is easy to miscount, and a decoder that stops at `motorTarget` misaligns every subsequent field.
 
 When all four motors are in `MOT_MODE_CHASSIS` (value `0b101`):
 
@@ -395,7 +393,7 @@ There are no Pi-side software position offsets. The zero happens in STM32 firmwa
 
 Gains are in **dt-explicit per-second units**. The firmware `pid_update(float dt)` multiplies `Ki` by `dt`, so gains are physically consistent regardless of BEMF cadence. Triggered by `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (velocity PID) or `PI_BUFFER_UPDATE_MOTOR_PID_POS` (position PID).
 
-To update gains at runtime: write `motorPidSettings`, set the appropriate update flag, and call `spi_force_update()`. From LCM, publish a `vector3f_t` (`x=Kp, y=Ki, z=Kd`) to `raccoon/motor/N/pid_cmd`.
+To update gains at runtime: write `motorPidSettings`, set the appropriate update flag, and call `spi_force_update()`. Over the transport, publish a `vector3f_t` (`x=Kp, y=Ki, z=Kd`) to `raccoon/motor/N/pid_cmd`.
 
 ### `KinematicsConfig` — geometry and calibration (128 bytes at offset 148)
 
@@ -565,7 +563,7 @@ This ensures motors are stopped even if the Pi crashes mid-command without re-se
 
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — TIM6 ISR, interrupt priorities, SPI2 DMA circular mode, `spi2_wait_idle()` guard
-- [Motor Control](/06-advanced/firmware/motor-control/) — BEMF signal chain, PID implementation, MTP/MAV/Chassis mode
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — from SPI TxBuffer through the transport to Python consumer
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — `SpiReal` unpack logic, `DeviceController`, `CommandSubscriber` timestamp deduplication
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — TIM6 ISR, interrupt priorities, SPI2 DMA circular mode, `spi2_wait_idle()` guard
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — BEMF signal chain, PID implementation, MTP/MAV/Chassis mode
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — from SPI TxBuffer through the transport to Python consumer
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `SpiReal` unpack logic, `DeviceController`, `CommandSubscriber` timestamp deduplication

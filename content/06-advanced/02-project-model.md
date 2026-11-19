@@ -1,65 +1,18 @@
 ---
-title: "Architecture & Project Model"
-author: "Tobias Madlberger"
-date: 2026-06-18
-draft: false
+title: "Project Model"
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 weight: 15
+draft: false
 ---
 
-# Architecture & Project Model
+# Project Model
 
-This page explains how `raccoon` is structured as a framework and how a project maps onto the running robot. Read this before diving into individual features — the mental model pays for itself many times over.
-
----
-
-## The Layered Stack
-
-```mermaid
-graph TB
-    subgraph "You Write This"
-        M["Mission code (Python)"]
-        S["Step DSL — drive_forward, servo, on_black, ..."]
-    end
-
-    subgraph "raccoon handles this"
-        MC["Motion Controller\ntrapezoidal velocity profiles"]
-        DR["Drive + Velocity PID\nper-axis PID + feedforward"]
-        KI["Kinematics\nDifferential or Mecanum"]
-        OD["Odometry\nplatform-managed (lazy @property)"]
-        HAL["HAL — Motor / Servo / IR / IMU\nabstract interfaces"]
-    end
-
-    subgraph "Platform"
-        WOM["Wombat Driver\ntransport IPC to STM32 firmware"]
-        MOCK["Mock Driver\nfor testing without hardware"]
-    end
-
-    M --> S
-    S --> MC
-    MC --> DR
-    DR --> KI
-    KI --> HAL
-    DR --> HAL
-    OD --> HAL
-    HAL --> WOM
-    HAL --> MOCK
-
-    style M fill:#4CAF50,color:#fff
-    style S fill:#66BB6A,color:#fff
-    style MC fill:#42A5F5,color:#fff
-    style DR fill:#42A5F5,color:#fff
-    style KI fill:#42A5F5,color:#fff
-    style OD fill:#42A5F5,color:#fff
-    style HAL fill:#AB47BC,color:#fff
-    style WOM fill:#FF7043,color:#fff
-    style MOCK fill:#FF7043,color:#fff
-```
-
-You spend 90% of your time in the top two layers. The layers below run automatically at 100 Hz during every drive step; you interact with them only when tuning PIDs or writing advanced custom steps.
+This page explains how a project maps onto the running robot: what is generated, what you write, and what happens from `raccoon run` to the first movement. The layers of the library itself are on [Library Architecture]({{< ref "/06-advanced/01-architecture.md" >}}). Read this before diving into individual features — the mental model pays for itself many times over.
 
 ---
 
-## The Project Model
+## Generated and handwritten files
 
 Every raccoon project has the same structure. The key mental model is:
 
@@ -129,7 +82,7 @@ sequenceDiagram
     Robot->>Robot: disable all motors
 ```
 
-The probe step (`Platform.probe()`) verifies that the STM32 firmware and IMU are reachable before any motors move. It fails fast so you find hardware problems immediately, not mid-mission.
+The probe step (`Platform.probe()`) verifies that the STM32 bridge and the IMU are reachable before any mission code runs, and raises `ProbeFailedError` if one is not. It fails fast so you find hardware problems immediately, not mid-mission. For offline development and headless tests, `LIBSTP_SKIP_PROBE=1` skips the probe.
 
 ---
 
@@ -152,7 +105,7 @@ class Defs:
     analog_sensors = [front_right_ir]   # REQUIRED for IR calibration
 ```
 
-> **`analog_sensors` is required.** The `RobotDefinitionsProtocol` mandates it. Without it, `calibrate()` silently skips IR sensor calibration.
+> **`analog_sensors` is required.** The `RobotDefinitionsProtocol` mandates it. If it is missing, the calibration steps raise an `AttributeError`; if it holds no IR sensors, they log a warning and skip the calibration.
 
 ### `Robot` — Integration Layer
 
@@ -224,13 +177,14 @@ stateDiagram-v2
 Key rules:
 - **Setup mission** must subclass `SetupMission` (not `Mission`). If you get `TypeError: setup_mission must be a SetupMission`, this is why.
 - **`shutdown_in`** is a last-resort safety timer (required by Botball rules). Your missions should complete well before it fires.
-- **`time_budget`** on a `Mission` subclass adds a per-mission watchdog. When it fires, the shutdown mission runs and subsequent missions are skipped.
+- **`time_budget`** on a `Mission` subclass adds a per-mission watchdog. When it fires, the main missions are cancelled, the shutdown mission runs and subsequent missions are skipped.
+- The shutdown mission always runs, also after an error in the setup or a main mission. The error is re-raised afterwards, so the process exits non-zero.
 
 ---
 
 ## Import Convention
 
-Always use `from raccoon import *` in mission and step files. The older `from libstp import *` is a compatibility shim that will be removed:
+Always use `from raccoon import *` in mission and step files. `from libstp import *` is a deprecated compatibility shim that will be removed:
 
 ```python
 # Correct — use this in all new code

@@ -15,5 +15,5 @@ The WebIDE starts with `raccoon web`. Its backend lives in `raccoon-cli` (`racco
 
 | Page | What it covers |
 |------|----------------|
-| [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) | The three tiers, how a flowchart edit becomes Python, running and debugging a mission, key source locations |
-| [Advanced Internals]({{< ref "/06-advanced/web-ide-internals/01-advanced-internals.md" >}}) | The two backends (local and on the robot), URL handling, run configurations, simulation modes, localization replay, table map format, panel layout |
+| [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) | The three tiers, how a flowchart edit becomes Python, running and debugging a mission, key source locations |
+| [Advanced Internals]({{< ref "/06-advanced/05-web-ide-internals/01-advanced-internals.md" >}}) | The two backends (local and on the robot), URL handling, run configurations, simulation modes, localization replay, table map format, panel layout |

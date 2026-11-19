@@ -1,7 +1,7 @@
 ---
 title: "Pi Bridge Internals"
-author: "Raccoon Docs Team"
-date: 2026-06-18
+author: "Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 5
 ---
@@ -130,8 +130,8 @@ class ISpi {
 The concrete implementation is selected at compile time with `USE_SPI_MOCK`:
 
 ```bash
-# Production (cross-compiled for the Pi)
-./build.sh
+# Production (cross-compiled for the Pi, in Docker)
+python3 build.py
 
 # Host development (runs on any Linux x86_64 machine)
 cmake .. -DUSE_SPI_MOCK=ON -DCMAKE_BUILD_TYPE=Debug
@@ -145,7 +145,7 @@ cmake .. -DUSE_SPI_MOCK=ON -DCMAKE_BUILD_TYPE=Debug
 
 - **Battery voltage:** raw `int16_t` ADC count → volts via `count × 3.3 × 11 / 4096`, then 5% EMA filtered (`alpha = 0.05`).
 - **Analog values:** copied as raw `int16_t` counts; no physical unit conversion in the SPI layer.
-- **Motor telemetry:** `bemf[4]`, `position[4]`, and the `done` bitmask unpacked per motor.
+- **Motor telemetry:** `bemf[4]` and `position[4]` unpacked per motor.
 - **Odometry:** `pos_x`, `pos_y`, `heading`, `vx`, `vy`, `wz` copied directly from `OdometryData`.
 - **IMU:** all fields from `ImuData` (gyro, accel, compass, linearAccel, accelVelocity, dmpQuat, heading, temperature and per-sensor accuracy).
 
@@ -161,7 +161,7 @@ Write operations (motor modes, servo positions, PID gains, kinematics config, fe
 - **Battery:** slow linear drain from 12.3 V to 10.5 V, then reset (with 2 Hz ripple).
 - **Analog:** per-port deterministic base value (800, 900, ... 1300 ADC counts) with sinusoidal wobble.
 - **Digital:** rotating single-bit pattern across the 16-bit field.
-- **Motor BEMF/position:** toy proportional model — BEMF = `target / 4`, position = `target`. All motors report `done = true`.
+- **Motor BEMF/position:** toy proportional model — BEMF = `target / 4`, position = `target`.
 
 Motor and servo write calls update an internal `motors_[4]` / `servos_[4]` array with no SPI interaction, so the round-trip from command to feedback is instantaneous in mock mode.
 
@@ -240,7 +240,6 @@ IMU accuracy channels (gyro, accel, compass, quaternion) use a change-detector i
 | `raccoon/bemf/N/value` | `scalar_i32_t` | dedup only | yes |
 | `raccoon/motor/N/power` | `scalar_i32_t` | dedup only | yes |
 | `raccoon/motor/N/position` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/motor/N/done` | `scalar_i32_t` | dedup only | yes |
 | `raccoon/servo/N/mode` | `scalar_i8_t` | dedup only | yes |
 | `raccoon/servo/N/position` | `scalar_f_t` | dedup only | yes |
 | `raccoon/odometry/pos_x` | `scalar_f_t` | 50 Hz, no eps | yes |
@@ -272,10 +271,6 @@ Every handler calls `isTimestampNewer(channel, command.timestamp)` before acting
 
 `onMotorPowerCommand()` converts the Python API's percent range (−100 to +100) to the STM32's duty range (−400 to +400) with `duty = percent × 4`. Zero maps to zero — it means open-loop off, not velocity-PID hold.
 
-### Relative position moves
-
-`onMotorRelativeCommand()` is the only handler that reads state before writing. It calls `deviceController_->getMotorPosition(port)` to fetch the current BEMF tick counter, adds the commanded delta (encoded in `vector3f_t.y`), and issues an absolute MTP command. The speed limit is `vector3f_t.x`.
-
 ### BEMF enable/disable
 
 `onBemfEnabledCommand()` calls `deviceController_->setBemfEnabled()`, which toggles the `FEATURE_BEMF_DISABLE` bit in `featureFlags_` and pushes the byte to `RxBuffer.featureFlags` via `spi_->setFeatureFlags()`. It then calls `dataPublisher_->publishBemfEnabled()` to post an ACK on the retained `raccoon/feature/bemf_enabled` channel so the UI and raccoon-lib see the confirmed state.
@@ -288,32 +283,9 @@ When BEMF is disabled, the MAV (velocity PID) mode is rejected with a `std::runt
 
 ## MotorWatchdog
 
-`MotorWatchdog` (`src/wombat/services/MotorWatchdog.cpp`, `include/wombat/services/MotorWatchdog.h`) provides hardware-enforced motor safety independent of user code correctness.
+`MotorWatchdog` (`src/wombat/services/MotorWatchdog.cpp`) is a member of `Application`. `CommandSubscriber` calls `feed()` for every heartbeat on `raccoon/system/heartbeat_cmd`, and `Application` calls `update()` on every main loop tick. If no heartbeat arrives for 500 ms after the first one, it calls `DeviceController::setShutdown(true)` and publishes `shutdown_status` `0x07`. Three consecutive on-time heartbeats clear the shutdown again. A user clearing the shutdown in BotUI calls `resetAfterManualClear()` through `CommandSubscriber::onShutdownCommand()`.
 
-**Concept:** raccoon-lib publishes a heartbeat message to `raccoon/system/heartbeat_cmd` (carrying the sender's PID as `scalar_i32_t.value`) while a mission is running. If heartbeats stop arriving — because the Python process hung, crashed, or exited — the watchdog fires a hardware shutdown within one timeout window.
-
-**Parameters:**
-- Timeout: **500 ms** (default, set in `MotorWatchdog` constructor)
-- Recovery feeds required: **3** consecutive heartbeats, each arriving within the timeout window
-
-**State machine:**
-
-```mermaid
-stateDiagram-v2
-    [*] --> Dormant : boot (no heartbeat yet)
-    Dormant --> Armed : first feed() call
-    Armed --> Armed : feed() within timeout
-    Armed --> Fired : timeout elapsed\nsetShutdown(true)\npublish shutdown_status 0x07
-    Fired --> Fired : feed() but count < 3
-    Fired --> Armed : 3 consecutive feeds\nsetShutdown(false)\npublish shutdown_status 0x00
-    Armed --> Dormant : user clears shutdown\n(resetAfterManualClear)
-```
-
-The watchdog is **dormant** until the first heartbeat arrives. This allows the robot to sit powered and idle (e.g. waiting for the start light) without triggering a spurious shutdown. Once armed, a 500 ms gap triggers the shutdown. Recovery requires exactly 3 consecutive heartbeats each within 500 ms of the previous; a gap during recovery resets the count.
-
-On fire: `DeviceController::setShutdown(true)` is called, which sets `SHUTDOWN_MOTOR_FLAG | SHUTDOWN_SERVO_FLAG` in `RxBuffer.systemShutdown` and zeroes all motor and servo state. `DataPublisher::publishShutdownStatus(0x07)` broadcasts the bitmask (bit 0 = servo, bit 1 = motor, bit 2 = watchdog source) on the retained `raccoon/system/shutdown_status` channel.
-
-A user clearing the shutdown via BotUI calls `commandSubscriber_->onShutdownCommand()` with `value=0`, which also calls `watchdog_.resetAfterManualClear()` so the watchdog drops back to Dormant and can re-arm on the next heartbeat.
+The state machine, the parameters, the bitmask and the manual clear are described once, in [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md#motorwatchdog-pi-side-hardware-safety" >}}). The firmware side (`SHUTDOWN_MOTOR` check at the top of `update_motor()`) is in [Motor Control]({{< ref "/06-advanced/04-firmware/motor-control.md" >}}).
 
 ## LcmBroker
 
@@ -333,89 +305,22 @@ If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000
 
 Every subscriber callback is wrapped in a lambda that records start and elapsed microseconds into a `ChannelTimingStats` struct keyed by channel name. This powers the per-channel performance report and is the source of the "share" percentage shown in the logs.
 
-## raccoon_ring shared memory transport
+## The transport underneath
 
-All bridge ↔ client communication goes through `raccoon_ring`, a minimal single-producer multi-consumer shared memory ring buffer implemented in `raccoon-transport/cpp/include/raccoon/raccoon_ring.h`.
+All communication between the bridge and its clients goes through `raccoon::Transport` from `raccoon-transport`: one shared-memory ring file per channel under `/dev/shm`, a futex wake on every publish, and a single spin thread per process that waits on all subscribed channels with `futex_waitv`. The ring layout, the SeqLock, retain, reliable delivery and the contract check are described on the [Transport]({{< ref "/06-advanced/03-transport.md" >}}) page and are not repeated here.
 
-### Why raccoon_ring
+What matters for the bridge:
 
-The project previously used iceoryx2 for IPC. Under production load (the reader publishing on ~100 channels), new iceoryx2 nodes failed at `NodeBuilder::create()` and frame delivery became unreliable. raccoon_ring was written to replace it with a deliberately simple design that has no service daemon, no per-channel handshake, and no global state.
-
-### Layout
-
-```mermaid
-graph LR
-    subgraph File["/dev/shm/raccoon_ring_raccoon_2Fmotor_2F0_2Fpower"]
-        H["ring_hdr_t\n(magic=0x52435242,\nversion=3,\nslot_count=64,\nmax_payload=2048,\nproducer_seq,\nwake_seq,\nwaiter_count)"]
-        S0["slot_t #0\n(seq_lock, payload[2048])"]
-        S1["slot_t #1"]
-        SD["..."]
-        S63["slot_t #63"]
-    end
-```
-
-Each channel maps to exactly one file under `/dev/shm/`. Forward slashes in the channel name are URL-encoded to `_2F` so the filename stays a flat file (no subdirectories). For example, `raccoon/motor/0/power` becomes `/dev/shm/raccoon_ring_raccoon_2Fmotor_2F0_2Fpower`.
-
-Default sizing: **64 slots × 2 KiB payload** per channel, totalling ~130 KiB of SHM per channel. Large channels (screen render, camera frames) can be opened with a bigger `max_payload`.
-
-### Write path (producer)
-
-```mermaid
-sequenceDiagram
-    participant Bridge as stm32-data-reader (publisher)
-    participant File as SHM ring file
-
-    Bridge->>File: rrb_writer_create("raccoon/motor/0/power", 64, 2048)
-    Note over File: Create /dev/shm file if not exists,\nmmap, write ring_hdr_t
-    loop Each DataPublisher.publishRetained() call
-        Bridge->>File: rrb_writer_publish(writer, encoded_lcm, len)
-        Note over File: slot = producer_seq % 64\nslot.seq_lock = 0 (writing)\ncopy payload\nslot.seq_lock = producer_seq\nbump producer_seq\nbump wake_seq + FUTEX_WAKE if waiter_count > 0
-    end
-```
-
-The SeqLock on each slot ensures readers detect in-progress writes: a slot is marked `seq = 0` (being written) then stamped with the sequence number after the copy. A reader that sees `seq = 0` after copying the payload knows it raced the producer and must retry or skip.
-
-### Read path (subscriber)
-
-```mermaid
-sequenceDiagram
-    participant Client as raccoon-lib / BotUI (subscriber)
-    participant File as SHM ring file
-
-    Client->>File: rrb_reader_open("raccoon/motor/0/power")
-    Note over Client: lazy attach — no blocking even if file doesn't exist yet
-    loop Each spinOnce() tick
-        Client->>File: rrb_reader_recv(reader, buf, 2048, &len)
-        alt New frame available
-            File-->>Client: return 0, copy payload
-            Client->>Client: decode the message, dispatch callback
-        else No new frame
-            File-->>Client: return 1
-        end
-    end
-```
-
-For retained channels, `rrb_reader_seek_to_latest()` is called on new subscriptions. This positions the reader's cursor at `producer_seq % slot_count`, so the first `rrb_reader_recv()` immediately returns the most recent frame rather than waiting for the next publish.
-
-### Event-driven receive
-
-`rrb_reader_recv_wait_many()` parks a thread across multiple channels simultaneously using the kernel's `futex_waitv` syscall (Linux 5.16+). The Transport uses this in its `spinOnce()` path to avoid busy-polling: it sleeps until any producer publishes, or until an internal control word changes (used to wake the spin thread when subscriber lists change). This is how the bridge achieves ~1 ms p50 inbound command latency without burning CPU.
-
-**Producer wake optimization:** The `waiter_count` field in the ring header is incremented by readers before parking and decremented on wake. The producer checks `waiter_count > 0` before issuing `FUTEX_WAKE`. At typical sensor publish rates (~200 Hz across telemetry channels), most publishes find zero parked waiters and skip the syscall entirely, cutting CPU overhead significantly.
-
-### Producer restart transparency
-
-When `stm32-data-reader` restarts, it calls `rrb_writer_create()` on the existing SHM files. The writer reinitializes the header (bumping `producer_seq` to start a new epoch) and continues writing. Existing reader processes detect the `producer_seq` reset and resync automatically — they see the new producer's frames without any reconnection or file deletion. This is why `stm32_data_reader.service` can be restarted without requiring BotUI or raccoon-lib to restart too.
-
-### Namespace isolation
-
-The service unit sets `PrivateTmp=false` explicitly. If this were omitted and another security option (like `ProtectSystem=strict` or `PrivateTmp=true`) created a mount namespace for the service, the `/dev/shm` files would be invisible to all other processes on the host. `PrivateTmp=false` ensures the ring files are in the global `/dev/shm/` visible to raccoon-lib, BotUI, and any diagnostic tool.
+- **Restarts are safe.** When `stm32-data-reader` restarts it calls `rrb_writer_create()` on the existing files, which re-initialises the header in place. Subscribers resync without a restart of BotUI or raccoon-lib. This is why the unit must never wipe `/dev/shm`.
+- **`PrivateTmp=false` is mandatory.** The unit sets it explicitly. Any option that creates a mount namespace (`PrivateTmp=true`, `ProtectSystem=`, `ProtectHome=`) would hide the ring files from every other process, see [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md" >}}).
+- **One publisher per channel.** The bridge is the only publisher of the sensor channels and the only subscriber of the command channels it owns.
+- **Delivery options per call.** `publish`, `publishForce` and `publishRetained` on `LcmBroker` (see [DataPublisher](#datapublisher)) map to the transport's dedup and retain options. Handlers run inside `processMessages()` on the main loop thread.
 
 ## Related pages
 
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — end-to-end latency from sensor to Python, including timing budget
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — the `TxBuffer`/`RxBuffer` wire format (`TRANSFER_VERSION 21`)
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — the STM32 side of the SPI link: circular DMA, `HAL_SPI_TxRxCpltCallback`, `updateFlags` dispatch
-- [Robot Services and systemd](/06-advanced/firmware/robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology
-- [Motor Control](/06-advanced/firmware/motor-control/) — what happens on the STM32 side after commands arrive
-- [IMU Stack](/06-advanced/firmware/imu/) — how `ImuData` fields published on `raccoon/gyro/*`, `raccoon/imu/*` channels are produced
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — end-to-end latency from sensor to Python, including timing budget
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — the `TxBuffer`/`RxBuffer` wire format (`TRANSFER_VERSION 21`)
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — the STM32 side of the SPI link: circular DMA, `HAL_SPI_TxRxCpltCallback`, `updateFlags` dispatch
+- [Robot Services and systemd](/06-advanced/04-firmware/robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — what happens on the STM32 side after commands arrive
+- [IMU Stack](/06-advanced/04-firmware/imu/) — how `ImuData` fields published on `raccoon/gyro/*`, `raccoon/imu/*` channels are produced

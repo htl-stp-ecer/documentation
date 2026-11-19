@@ -1,7 +1,7 @@
 ---
 title: "Robot Services And systemd"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 9
 description: "Systemd unit topology, PrivateTmp and SHM constraints, MotorWatchdog safety service, SystemMonitor, UartMonitor, and flash-based calibration storage."
@@ -18,14 +18,12 @@ The service layer has three tiers. Platform services (always on, independent of 
 ```mermaid
 graph TD
     NW["network.target"]
-    LCM["lcm-loopback-multicast.service\n(oneshot: multicast on lo)"]
     READER["stm32_data_reader.service\n(SPI bridge — always on)"]
     UI["flutter-ui.service\n(BotUI touchscreen)"]
     PROJ["raccoon-project-&lt;id&gt;-&lt;name&gt;.service\n(project-declared daemon, e.g. vision)"]
     MISSION["raccoon run\n(transient mission process)"]
 
-    NW -->|After| LCM
-    LCM -->|Requires+After| READER
+    NW -->|After| READER
     NW -->|After| UI
 
     READER -- "/dev/shm/raccoon_ring_*\n(SHM channels)" --> PROJ
@@ -33,7 +31,6 @@ graph TD
     PROJ -- "transport detections channel" --> MISSION
 
     style READER fill:#1a4a7a,color:#fff
-    style LCM fill:#2a5a3a,color:#fff
     style MISSION fill:#4a2a7a,color:#fff
 ```
 
@@ -42,7 +39,6 @@ graph TD
 Sources of truth in the repository:
 
 - `stm32-data-reader/systemd/stm32_data_reader.service`
-- `stm32-data-reader/systemd/lcm-loopback-multicast.service`
 - `botui/systemd/flutter-ui.service`
 - `stm32-data-reader/src/wombat/Application.cpp`
 - `stm32-data-reader/include/wombat/services/MotorWatchdog.h`
@@ -53,45 +49,22 @@ Sources of truth in the repository:
 
 ---
 
-## `lcm-loopback-multicast.service`
-
-This is a `oneshot` networking helper. It runs once at boot and stays "active" via `RemainAfterExit=yes`. The unit executes exactly two commands:
-
-```ini
-ExecStart=/sbin/ip link set lo multicast on
-ExecStart=/sbin/ip route replace 224.0.0.0/4 dev lo
-```
-
-The transport no longer sends messages over the network: it uses shared-memory ring files under `/dev/shm`. This unit is a leftover from the earlier multicast transport, and it is still installed and still required by the reader unit, so keep it enabled. `stm32_data_reader.service` declares `Requires=lcm-loopback-multicast.service` and `After=lcm-loopback-multicast.service`, so systemd guarantees the route exists before the reader starts.
-
-The unit declares `After=network.target` but has no ordering relationship with `flutter-ui.service`.
-
-```bash
-# Verify it ran successfully:
-systemctl status lcm-loopback-multicast.service
-```
-
-If this unit is in a failed state, fix it before investigating any application-level transport issues.
-
----
-
 ## `stm32_data_reader.service`
 
 ### What it is
 
-This is the Pi-side bridge process. It owns the SPI connection to the STM32 and is the single publisher of all hardware state to the LCM transport ring. Every Python mission process, the BotUI, and all project daemons consume data it puts on `/dev/shm/raccoon_ring_*` files.
+This is the Pi-side bridge process. It owns the SPI connection to the STM32 and is the single publisher of all hardware state to the transport. Every Python mission process, the BotUI, and all project daemons consume data it puts on `/dev/shm/raccoon_ring_*` files.
 
 ### Unit characteristics
 
 | Property | Value |
 |---|---|
 | `User` / `Group` | `pi` / `pi` |
-| `WorkingDirectory` | `/home/pi/stm32_data_reader` |
-| `ExecStart` | `/home/pi/stm32_data_reader/stm32_data_reader` |
+| `WorkingDirectory` | `/var/lib/stm32-data-reader` (the packaged unit; the source unit in the repo says `/home/pi/stm32_data_reader`) |
+| `ExecStart` | `/usr/bin/stm32_data_reader` |
 | `Restart` | `always` |
 | `RestartSec` | `5` (seconds) |
-| `RestartPreventExitStatus` | `78` (the reader refused to start because of the [transport contract check]({{< ref "/06-advanced/transport/01-contract.md" >}}); restarting cannot fix that) |
-| `Requires` + `After` | `lcm-loopback-multicast.service` |
+| `RestartPreventExitStatus` | `78` (the reader refused to start because of the [transport contract check]({{< ref "/06-advanced/03-transport.md" >}}); restarting cannot fix that) |
 | `NoNewPrivileges` | `true` |
 | `PrivateTmp` | `false` (explicit — see below) |
 | `ProtectSystem` | not set |
@@ -132,21 +105,13 @@ Because the reader is the single publisher of all hardware state, a refused read
 
 ### Startup sequence
 
-The application initialises services in a specific order to capture early boot output and verify protocol compatibility:
-
-1. Logger, transport broker, SPI abstraction, DeviceController, DataPublisher, SystemMonitor, CommandSubscriber
-2. UartMonitor initialised before STM32 reset so UART boot output is captured
-3. `spi_reset_stm32()` — triggers hardware reset, sleeps 1 s
-4. `uartMonitor_->drainFor(2000 ms)` — captures IMU self-test and `[IMU] step:` boot log
-5. DeviceController initialises (opens SPI fd)
-6. `spi_probe_version()` — reads `transferVersion` from STM32; must equal `TRANSFER_VERSION 21`; mismatch logs a warning and triggers firmware reflash on the next `deploy.sh`
-7. CommandSubscriber subscribes to all transport command channels
+The reader starts the UART monitor before it resets the STM32 so the boot output is captured, then opens SPI, probes `TRANSFER_VERSION` (21; a mismatch triggers a firmware reflash) and subscribes to the command channels. The steps are listed in [Pi Bridge Internals]({{< ref "/06-advanced/04-firmware/pi-bridge-internals.md#initialization-sequence" >}}), the version probe and reflash in [Build and Flash]({{< ref "/06-advanced/04-firmware/build-flash.md#startup-sequence-and-version-check" >}}).
 
 ### Runtime log level override
 
 ```bash
 # One-shot override in the shell:
-WOMBAT_LOG_LEVEL=debug /home/pi/stm32_data_reader/stm32_data_reader
+WOMBAT_LOG_LEVEL=debug /usr/bin/stm32_data_reader
 
 # Persistent override via drop-in:
 # /etc/systemd/system/stm32_data_reader.service.d/override.conf
@@ -310,7 +275,7 @@ The channel name is `raccoon/cpu/temp/value` (from `raccoon::Channels::CPU_TEMPE
 
 ### What it is
 
-`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error lines additionally reach the `raccoon/errors` transport channel (via the logger's LCM broker sink), which means STM32 faults appear in the BotUI error feed without any extra tooling.
+`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error lines additionally reach the `raccoon/errors` transport channel (via the logger's `LcmBroker` sink), which means STM32 faults appear in the BotUI error feed without any extra tooling.
 
 ### Initialization details
 
@@ -350,7 +315,7 @@ The authoritative liveness signal is `txBuffer.updateTime` checked by `checkStm3
 
 ```
 [stp] hb #42 t=210s conv=5829 st=2 bemfMot=3 adc=[1024,987]
-      modes=[3,3,0,0] pos=[1200,−830,0,0] bemf=[12,−8,0,0] done=0
+      modes=[3,3,0,0] pos=[1200,−830,0,0] bemf=[12,−8,0,0]
 ```
 
 Fields (from `main.c`):
@@ -363,7 +328,6 @@ Fields (from `main.c`):
 - `modes=[m0,m1,m2,m3]` — motor control mode (0=OFF, 1=PASSIVE_BRAKE, 2=PWM, 3=MAV, 4=MTP, 5=CHASSIS)
 - `pos=[p0..p3]` — motor position in BEMF ticks
 - `bemf=[b0..b3]` — filtered BEMF readings
-- `done=bitmask` — bit N set when motor N reached its position goal
 
 ### Configuration
 
@@ -377,101 +341,13 @@ Setting `uart.enabled = false` in the reader configuration skips `UartMonitor` c
 
 ---
 
-## Flash-based calibration storage: design, layout, and current status
+## IMU calibration is not persisted
 
-### What was persisted
+The STM32 does not store the IMU calibration across boots. `cal_save_to_flash()`, `cal_load_from_flash()` and `cal_has_saved_data()` in `flash_cal.c` are deliberate no-ops, so every boot starts the IMU without stored biases. The MPL runs `inv_enable_in_use_auto_calibration()` and `inv_enable_fast_nomot()` and converges to usable gyroscope, accelerometer and compass biases within two to three minutes of normal motion. The robot re-calibrates in `M000SetupMission` anyway, so a cold start is not a problem.
 
-The STM32 MPL (Motion Processing Library) maintains internal bias estimates for gyroscope, accelerometer, and magnetometer via `inv_enable_in_use_auto_calibration()`. The flash storage API persisted a serialised snapshot of this MPL state so the IMU could start with previously-computed biases on the next boot rather than re-converging from zero.
+The save path stays disabled because a polling-mode flash erase blocks the main loop for minutes. During that time the UART goes silent and servo commands are not applied, because the PWM update runs in the main loop. The Pi-side `checkStm32Heartbeat()` logs a warning when the heartbeat stops for 12 s.
 
-### Flash layout (from `flash_cal.h`)
-
-```
-STM32F427VI flash memory — 2 MB, dual-bank (DB1M=1)
-Bank 1: 0x08000000 – 0x080FFFFF  (firmware, executing)
-Bank 2: 0x08100000 – 0x081FFFFF  (calibration + data)
-
-Calibration occupies sector 12 (first 16 KiB of Bank 2):
-  0x08100000  [4 bytes]  CAL_FLASH_MAGIC = 0xCA1BDA7A  ("CALBDATA")
-  0x08100004  [4 bytes]  CAL_VERSION = 2
-                           v2: 6-axis DMP quaternion + MPL compass calibration
-  0x08100008  [4 bytes]  data_len  (number of MPL state bytes following)
-  0x0810000C  [≤4096 B]  MPL calibration state blob
-
-#define CAL_FLASH_SECTOR  12
-#define CAL_FLASH_ADDR    0x08100000U
-#define CAL_FLASH_MAGIC   0xCA1BDA7AU
-#define CAL_VERSION       2
-#define CAL_MAX_SIZE      4096
-```
-
-`CAL_VERSION` guards against loading stale data after IMU configuration changes (e.g., switching from 6-axis to 9-axis fusion). A version mismatch causes `cal_load_from_flash()` to reject the stored data silently.
-
-The dual-bank layout (DB1M option byte = 1, factory default on 2 MB STM32F427VI) allows Bank 2 to be erased while the CPU fetches instructions from Bank 1. Without DB1M, any flash erase stalls the entire core.
-
-### Auto-save triggers in imu.c
-
-The old implementation triggered `cal_save_to_flash()` in two situations, both still present in the call graph (the calls are now no-ops):
-
-1. **Accuracy improvement** (`imu.c`): whenever any sensor's accuracy value (`gyro.accuracy`, `accel.accuracy`, `compass.accuracy`) exceeded the previously recorded best, `cal_needs_save` was set. The actual save was deferred until `imu_timestamp >= next_cal_save_ms` — initially `CAL_SAVE_INTERVAL_MS = 30,000 ms` after boot, then every `CAL_PERIODIC_SAVE_MS = 300,000 ms` (5 minutes) thereafter.
-
-2. **Pi-triggered save** (`main.c`): the Pi can set `PI_BUFFER_UPDATE_SAVE_IMU_CAL (0x08)` in `rxBuffer.updates`; the firmware's main loop handles this flag and calls `cal_save_to_flash()`. The BotUI or a toolchain command can request this explicitly.
-
-### Save and load flow (original design, now no-ops)
-
-```mermaid
-flowchart TD
-    subgraph imu_c["imu.c — readImu() hot path"]
-        A["inv_execute_on_data()\nimu_read_from_mpl()"] --> B{"accuracy\nimproved?"}
-        B -- yes --> C["cal_needs_save = 1\nupdate best_* trackers"]
-        B -- no --> D["continue"]
-        C --> E{"imu_timestamp\n>= next_cal_save_ms?"}
-        E -- no --> D
-        E -- yes --> F["cal_needs_save = 0\nnext_cal_save_ms += 300 000 ms\ncal_save_to_flash()"]
-    end
-
-    subgraph main_c["main.c — main loop"]
-        G{"PI_BUFFER_UPDATE\n_SAVE_IMU_CAL\nflag set?"} -- yes --> H["cal_save_to_flash()"]
-    end
-
-    subgraph flash_cal_c["flash_cal.c — cal_save_to_flash()"]
-        F --> I["[DISABLED]\nReturns INV_SUCCESS immediately\n(was: erase sector 12, write magic+version+len+MPL blob)"]
-        H --> I
-    end
-
-    subgraph imu_setup_c["imu_setup.c — setupImu()"]
-        J["inv_init_mpl()\nenable features"] --> K["cal_load_from_flash()"]
-        K -- "INV_SUCCESS\n(flash has valid data)" --> L["[DISABLED]\nReturns INV_ERROR_CALIBRATION_LOAD\n(was: inv_load_mpl_states())"]
-        K -- "INV_ERROR_CALIBRATION_LOAD" --> M["'starting fresh'\nIMU re-calibrates from motion"]
-        L --> N["inv_start_mpl()"]
-        M --> N
-    end
-```
-
-### Why it was disabled — and why that was the right call
-
-The previous implementation used polling-mode flash operations (`HAL_FLASH_Program` / `HAL_FLASHEx_Erase`). On the actual STM32F427VI parts used in the robot:
-
-- Erasing a 16 KiB sector freezes the main loop for multiple minutes in practice — heartbeat counter `hb #N` froze, UART went silent for up to 9 minutes wallclock time
-- SPI/DMA ISRs continued normally during the erase (they run from SRAM), so sensor data kept flowing to the Pi
-- However, the PWM update path (servo `update_servo_cmd()` in the main loop) was not running, so servo position commands received over SPI were not applied — servos appeared to stop responding
-
-The current state of the three public functions:
-
-```c
-inv_error_t cal_save_to_flash(void) { return INV_SUCCESS; }
-inv_error_t cal_load_from_flash(void) { return INV_ERROR_CALIBRATION_LOAD; }
-int cal_has_saved_data(void) { return 0; }
-```
-
-These are deliberate no-ops. The IMU runs `inv_enable_in_use_auto_calibration()` and `inv_enable_fast_nomot()` on every boot and converges to a usable bias within 2–3 minutes of normal motion. Persisting that across boots only mattered if a cold-start IMU needed to be accurate in the first seconds — which is not required because the robot always re-calibrates during `M000SetupMission` anyway.
-
-### If flash persistence is ever reinstated
-
-The source comment documents the correct approach:
-
-> Use `HAL_FLASH_Program_IT` / `HAL_FLASHEx_Erase_IT` (interrupt-mode variants), drive them from a low-priority background task that yields between sectors, and ensure SysTick + PWM-update timers remain in a higher NVIC priority group than the flash IRQ. Do not use the polling variants.
-
-The UART silence during a save is what caused the Pi-side `checkStm32Heartbeat()` to log warnings (those warnings still exist, with the 12 s threshold chosen to absorb the historical flash-write window). Reinstating flash persistence without interrupt-mode writes would reproduce the servo-freeze bug.
+The Pi can still set `PI_BUFFER_UPDATE_SAVE_IMU_CAL (0x08)` in `rxBuffer.updates`. The firmware accepts the flag, calls `cal_save_to_flash()` and does nothing else. If you re-enable flash persistence, use the interrupt-mode variants (`HAL_FLASH_Program_IT`, `HAL_FLASHEx_Erase_IT`) from a low-priority background task, with SysTick and the PWM update timers at a higher NVIC priority than the flash interrupt.
 
 ---
 
@@ -558,7 +434,7 @@ flowchart TD
     A1 --> A2{Healthy?}
     A2 -- no --> A3["Check logs:\njournalctl -u stm32_data_reader\nLook for SPI version mismatch\nor health-check fatal"]
     A2 -- yes --> Q2{Transport\nbroken locally?}
-    Q2 -- yes --> B1["systemctl status\nlcm-loopback-multicast.service"]
+    Q2 -- yes --> B1["ls -l /dev/shm/raccoon_ring_*\nraccoon doctor (contract check)"]
     Q1 -- no --> Q3{Robot stopped\nunexpectedly?}
     Q3 -- yes --> C1["Check raccoon/system/shutdown_status\nbitmask 0x07 = watchdog fired\nbitmask 0x01/0x02 = user shutdown"]
     C1 --> C2{Watchdog?}
@@ -596,7 +472,7 @@ That separation makes the platform debuggable: a robot can fail partially and be
 
 ## Related pages
 
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — deep dive into `Application` lifecycle, `MotorWatchdog` state machine, `raccoon_ring` SHM transport, and `PrivateTmp` constraints
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — how `stm32_data_reader.service` fits into the full sensor data path
-- [Build and Flash](/06-advanced/firmware/build-flash/) — how to build and deploy the `stm32-data-reader` binary
-- [Architecture Overview](/06-advanced/firmware/architecture/) — the full responsibility split between STM32 and Pi
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — deep dive into `Application` lifecycle, `MotorWatchdog` state machine, `raccoon_ring` SHM transport, and `PrivateTmp` constraints
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — how `stm32_data_reader.service` fits into the full sensor data path
+- [Build and Flash](/06-advanced/04-firmware/build-flash/) — how to build and deploy the `stm32-data-reader` binary
+- [Architecture Overview](/06-advanced/04-firmware/architecture/) — the full responsibility split between STM32 and Pi

@@ -1,7 +1,7 @@
 ---
 title: "Sensor Reading"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 7
 ---
@@ -387,9 +387,9 @@ The analog port raw values (`txBuffer.analogSensor[0..5]`) and battery voltage (
 
 ---
 
-## IMU (MPU-9250 / AK8963)
+## IMU
 
-The IMU is documented separately. See the [IMU section](#imu-mpu-9250--ak8963) below for the DMP-based fusion pipeline, calibration storage, and SPI3 configuration. The key interactions with the sensor layer are:
+The IMU (MPU-9250 with AK8963 magnetometer on SPI3) has its own page: [IMU Stack]({{< ref "/06-advanced/04-firmware/imu.md" >}}). The only interactions with the sensor layer described here are:
 
 - `imu.c` calls `spi2_wait_idle()` before writing to `txBuffer.imu` to avoid tearing
 - IMU data does **not** use the ADC or the filter module
@@ -418,138 +418,10 @@ Understanding interrupt priorities is essential to understanding why the sensor 
 
 ---
 
-## IMU (MPU-9250 / AK8963)
-
-The IMU is an InvenSense MPU-9250, which integrates a 3-axis gyroscope, 3-axis accelerometer, and a 3-axis AK8963 magnetometer. It is connected to the STM32 via SPI3 (PC10 SCK, PC11 MISO, PC12 MOSI, PE2 CS0).
-
-The firmware uses the InvenSense **eMPL** (embedded Motion Processing Library) and the MPU-9250 DMP (Digital Motion Processor) to perform sensor fusion on-chip. The DMP outputs a 6-axis quaternion (gyro + accelerometer, no magnetometer) at 50 Hz.
-
-### Self-Test and Bias Calibration
-
-On startup, `runImuSelfTest()` calls `mpu_run_6500_self_test()` to run the factory self-test routine. If the gyro and accelerometer pass (result bits 0 and 1 set), the function extracts the measured factory biases and pushes them into the hardware offset registers (`mpu_set_gyro_bias_reg`, `mpu_set_accel_bias_6500_reg`). This eliminates the static offset that every IMU chip has from manufacturing variation.
-
-Note: the magnetometer self-test is not performed. The InvenSense library was originally written for I²C; the SPI HAL shim (`mpu9250_hal.c`) maps the library's `hal_i2c_write`/`hal_i2c_read` calls to the SPI driver. The AK8963 is on an auxiliary I²C bus inside the MPU-9250 package and is accessed through the MPU-9250's I²C master mode regardless of whether the STM32→MPU-9250 bus is I²C or SPI.
-
-### MPL Configuration
-
-The MPL is initialised with:
-
-| Feature | Setting |
-|---|---|
-| Quaternion | Enabled (6-axis, DMP) |
-| 9-axis fusion | Disabled (commented out) |
-| Gyro temperature compensation | Enabled |
-| Fast no-motion detection | Enabled |
-| In-use auto-calibration | Enabled |
-| Heading from gyro | Enabled |
-| Sample rate | 50 Hz (20 ms period) |
-| Compass rate | 10 Hz (100 ms period) |
-| Gyro FSR | ±2000 dps (configured in `mpu9250_config.h`) |
-| Accel FSR | ±2 g |
-| Low-pass filter | 42 Hz |
-
-The DMP is loaded with the firmware from InvenSense (`dmp_load_motion_driver_firmware()`), then configured to output 6-axis LP quaternion, raw accelerometer, and calibrated gyro at 50 Hz.
-
-### Orientation Matrices
-
-The IMU chip axes may not align with the robot body frame. The orientation matrix remaps chip axes to board axes. The default matrices in `mpu9250_config.h` are:
-
-```c
-// Gyro/accel: chip X = +E, chip Y = −N, chip Z = +D
-#define IMU_GYRO_ORIENTATION_MATRIX  { 0, 1, 0,  -1, 0, 0,  0, 0, -1 }
-
-// Compass
-#define IMU_COMPASS_ORIENTATION_MATRIX { 1, 0, 0,  0, -1, 0,  0, 0, 1 }
-```
-
-The Pi can override these at runtime by setting new 3×3 signed-char matrices in `rxBuffer.imuGyroOrientation` and `rxBuffer.imuCompassOrientation` with the `PI_BUFFER_UPDATE_IMU_ORIENTATION` flag. The firmware calls `updateImuOrientation()` which re-applies the matrices to the MPL via `inv_set_gyro_orientation_and_scale` and `dmp_set_orientation`.
-
-### Data Acquisition Loop
-
-`readImu()` is called on every main-loop iteration. It checks whether 20 ms have elapsed since the last gyro read and 100 ms since the last compass read, then:
-
-1. Reads raw data from the DMP FIFO (`dmp_read_fifo`), which gives gyro, accelerometer, and quaternion data as integer arrays.
-2. Pushes data into the MPL (`inv_build_gyro`, `inv_build_accel`, `inv_build_quat`).
-3. Reads the magnetometer separately via `mpu_get_compass_reg` and stores raw counts (compass is not fed into the MPL fusion in the current build).
-4. Calls `inv_execute_on_data()` to run the MPL fusion step.
-5. Calls `read_from_mpl()` to extract fused outputs.
-
-`read_from_mpl()` computes:
-- **Quaternion** (w, x, y, z) via `inv_get_quaternion_set`
-- **Rotation matrix** from quaternion (for body→world transform)
-- **Gyro vector** in world frame (body gyro rotated by quaternion)
-- **Accelerometer vector** in world frame (scaled to m/s² by × 9.80665)
-- **Linear acceleration** (gravity removed) via `inv_get_linear_accel`
-- **Velocity** from integrated linear acceleration (experimental — decays with factor 0.998 per cycle to limit drift)
-- **Heading** in degrees derived from the quaternion: `atan2(q1*q2 - q0*q3, q0^2 + q2^2 - 0.5)` (uses q30 fixed-point intermediate values)
-
-When new data is available and the SPI bus is not busy, `txBuffer.imu` is updated atomically from the local `imu` struct.
-
-*Figure — IMU data acquisition loop: DMP FIFO → MPL fusion → `txBuffer.imu`.*
-
-```mermaid
-flowchart TD
-    MPU["MPU-9250\nSPI3 master\nPC10/11/12, PE2 CS0"]
-
-    MPU -->|"gyro + accel + DMP 6-axis quat\n50 Hz (every 20 ms)"| FIFO["DMP FIFO\ndmp_read_fifo()"]
-    MPU -->|"AK8963 via aux I²C\n10 Hz (every 100 ms)"| MAG["magnetometer\nmpu_get_compass_reg()"]
-
-    FIFO -->|"INV_XYZ_GYRO"| BG["inv_build_gyro()"]
-    FIFO -->|"INV_XYZ_ACCEL"| BA["inv_build_accel()"]
-    FIFO -->|"INV_WXYZ_QUAT"| BQ["inv_build_quat()\nstore imu.dmpQuat"]
-    MAG --> BC["inv_build_compass()"]
-
-    BG --> EXEC["inv_execute_on_data()\neMPL fusion step"]
-    BA --> EXEC
-    BQ --> EXEC
-    BC --> EXEC
-
-    EXEC --> MPL["imu_read_from_mpl()"]
-
-    MPL --> Q6["inv_get_6axis_quaternion()\n→ rot_mat (body→world)"]
-    MPL --> GY["inv_get_sensor_type_gyro()\n× rot_mat → imu.gyro"]
-    MPL --> AC["inv_get_sensor_type_accel()\n× rot_mat × 9.80665 → imu.accel"]
-    MPL --> LA["inv_get_linear_accel()\ngravity removed → imu.linearAccel\n+ velocity integration × 0.998 decay"]
-    MPL --> HD["heading = atan2(q1·q2 − q0·q3,\nq0²+q2²−0.5) → imu.heading"]
-
-    Q6 --> STRUCT["imu struct\n(ImuData)"]
-    GY --> STRUCT
-    AC --> STRUCT
-    LA --> STRUCT
-    HD --> STRUCT
-
-    STRUCT -->|"spi2_wait_idle() check"| TX["txBuffer.imu\n(atomic copy)"]
-    TX -->|"SPI2 TxRxCplt DMA"| PI["Pi DeviceController\n→ DataPublisher → transport"]
-```
-
-### Flash-based IMU Calibration Storage
-
-The SPI protocol includes a `PI_BUFFER_UPDATE_SAVE_IMU_CAL` update flag (bitmask `0x08`). When the Pi sets this flag in the `RxBuffer.updates` field, the STM32 main loop calls `cal_save_to_flash()`.
-
-**Current behaviour: `cal_save_to_flash()` is a no-op.** It returns `INV_SUCCESS` immediately without writing anything to Flash. The reason is a confirmed hardware issue: on the STM32F427VI used in the Wombat, erasing and reprogramming Flash sector 12 (Bank 2) blocks the firmware main loop for multiple minutes in practice — PWM registers stop updating and servos freeze. The comment in `flash_cal.c` explains this in detail.
-
-IMU calibration is therefore ephemeral: the MPL `inv_enable_in_use_auto_calibration` feature re-runs on every boot and converges within 2–3 minutes of normal motion. The robot re-calibrates during `M000SetupMission` anyway, so cold-start accuracy in the first seconds is not a concern.
-
-The API is preserved so that:
-
-- Pi-side code can call `save_imu_calibration()` without checking a capability flag.
-- `cal_load_from_flash()` returns `INV_ERROR_CALIBRATION_LOAD` so the startup code takes the "starting fresh" branch.
-- `cal_has_saved_data()` always returns `0`.
-
-If this feature is reinstated in the future, the note in `flash_cal.c` recommends using the HAL interrupt-based Flash programming variants and a low-priority background task.
-
-### SPI3 Configuration
-
-SPI3 is configured as master at startup with prescaler 64 (giving ~1.4 MHz), then changed to prescaler 256 during the IMU initialisation to stay within the MPU-9250's configuration register speed limit. After DMP load it can run faster, but the `changeSPIBaudRatePrescaler` call to restore a higher rate is commented out in the current code.
-
-The SPI3 DMA (DMA1 stream 0/5) runs in normal (not circular) mode — each transaction is explicitly started by the MPU-9250 driver and completes with an interrupt.
-
----
-
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — ADC architecture, TIM6 ISR analog refresh, ADC2 BEMF orchestration, and interrupt priorities
-- [IMU Stack](/06-advanced/firmware/imu/) — full MPU-9250 hardware layer, DMP firmware, eMPL fusion pipeline, orientation matrices, and calibration persistence design
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — how sensor values travel from `txBuffer` to `analog.read()` and `imu.heading()`
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — the full `TxBuffer` layout and all `raccoon/` channel names
-- [Architecture Overview](/06-advanced/firmware/architecture/) — interrupt priorities and why ADC1 must start before TIM6
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — ADC architecture, TIM6 ISR analog refresh, ADC2 BEMF orchestration, and interrupt priorities
+- [IMU Stack]({{< ref "/06-advanced/04-firmware/imu.md" >}}) — MPU-9250 hardware layer, DMP, eMPL fusion pipeline, orientation matrices and calibration
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — how sensor values travel from `txBuffer` to `analog.read()` and `imu.heading()`
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — the full `TxBuffer` layout and all `raccoon/` channel names
+- [Architecture Overview](/06-advanced/04-firmware/architecture/) — interrupt priorities and why ADC1 must start before TIM6

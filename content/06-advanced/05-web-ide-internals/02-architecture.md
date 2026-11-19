@@ -180,4 +180,4 @@ Custom steps decorated with `@dsl` appear automatically in the Step Library. Una
 - [Interface Overview]({{< ref "/04-web-ide/01-interface-overview.md" >}}) — panel layout and controls
 - [Running a Mission]({{< ref "/04-web-ide/07-running-a-mission.md" >}}) — run/debug flow in detail
 - [Run Configurations]({{< ref "/04-web-ide/11-run-configurations.md" >}}) — how to configure targets and flags
-- [Advanced Internals]({{< ref "/06-advanced/web-ide-internals/01-advanced-internals.md" >}}) — backend routing, map format, replay
+- [Advanced Internals]({{< ref "/06-advanced/05-web-ide-internals/01-advanced-internals.md" >}}) — backend routing, map format, replay

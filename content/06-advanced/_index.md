@@ -1,7 +1,7 @@
 ---
 title: "Advanced"
 author: "Mario Scholze"
-date: 2026-11-15
+date: 2026-11-18
 draft: false
 weight: 60
 description: "How RaccoonOS works inside: the platform architecture, the library layers, the STM32 firmware and Pi bridge, the transport and the WebIDE internals."
@@ -48,15 +48,15 @@ flowchart LR
 | **raccoon-cam** | Camera service with pluggable image processors | `raccoon-cam` |
 | **raccoon-image** | Builds the RaccoonOS SD card image from a bundle of component releases | `raccoon-image` |
 
-Every component is built and released on its own. A **bundle** names the exact version of each, and the transport **contract hash** makes sure they all speak the same wire format. See [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
+Every component is built and released on its own. A **bundle** names the exact version of each, and the transport **contract hash** makes sure they all speak the same wire format. See [Transport contract]({{< ref "/06-advanced/03-transport.md" >}}).
 
 ## In this section
 
 | Page | What it covers |
 |------|----------------|
 | [Library Architecture]({{< ref "/06-advanced/01-architecture.md" >}}) | The layers of `raccoon-lib`, the module map and what happens when you call `drive_forward(25)` |
-| [Transport]({{< ref "/06-advanced/transport/_index.md" >}}) | Channels, messages, the shared-memory ring and the contract check |
-| [Firmware and Pi Bridge]({{< ref "/06-advanced/firmware/_index.md" >}}) | STM32 firmware, SPI protocol, motor control, sensor pipeline, the Pi bridge |
-| [WebIDE Internals]({{< ref "/06-advanced/web-ide-internals/_index.md" >}}) | How the WebIDE backend and frontend are built |
+| [Transport]({{< ref "/06-advanced/03-transport.md" >}}) | Channels, messages, the shared-memory ring and the contract check |
+| [Firmware and Pi Bridge]({{< ref "/06-advanced/04-firmware/_index.md" >}}) | STM32 firmware, SPI protocol, motor control, sensor pipeline, the Pi bridge |
+| [WebIDE Internals]({{< ref "/06-advanced/05-web-ide-internals/_index.md" >}}) | How the WebIDE backend and frontend are built |
 
 Looking for how to build or release these components yourself? That is in [Build and Contribute]({{< ref "/07-build-and-contribute/_index.md" >}}).

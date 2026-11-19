@@ -1,7 +1,7 @@
 ---
 title: "Data Pipeline"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 4
 ---
@@ -35,7 +35,7 @@ graph LR
     end
 
     subgraph Lib["raccoon-lib (Python)"]
-        LCMR["LcmReader\nspinOnce() thread\nfutex_waitv"]
+        LCMR["TransportReader\nspinOnce() thread\nfutex_waitv"]
         CACHE["mutex-protected\nper-channel cache"]
         API["motor.get_position()\nanalog.read()\nimu.heading()"]
     end
@@ -75,10 +75,10 @@ stm32-data-reader: DataPublisher::publishSensorData()
 raccoon_ring shared memory (/dev/shm/raccoon_ring_<channel>)
       │  (primary IPC; one ring-buffer file per channel)
       ▼
-raccoon-lib: LcmReader (background thread in C++ process)
+raccoon-lib: TransportReader (callbacks on the shared spin thread)
       │  (raccoon::Transport::spinOnce, updates caches)
       ▼
-LcmReader caches (mutex-protected std::unordered_map
+TransportReader caches (mutex-protected std::unordered_map
       │   / scalar fields)
       ▼
 Python binding call (e.g., motor.get_position(),
@@ -135,7 +135,7 @@ The Pi's `stm32-data-reader` calls `spi_update()` on every main-loop iteration. 
 - Analog sensor values are passed as raw `int16_t` counts. No physical conversion is applied in the SPI layer.
 - Motor position reset is on-STM32 (via `motorPositionReset` bitmask + `PI_BUFFER_UPDATE_MOTOR_POS_RESET`); there are no Pi-side `positionOffsets_` in the current code.
 
-`DataPublisher::publishSensorData()` serialises each field as an transport message on the raccoon transport. All channel names use the **`raccoon/` prefix** — the old `libstp/` prefix is obsolete and will receive no data.
+`DataPublisher::publishSensorData()` serialises each field as an transport message on the raccoon transport. All channel names use the **`raccoon/` prefix**.
 
 #### Publish-rate gating
 
@@ -177,7 +177,6 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 | `raccoon/bemf/N/value` | `scalar_i32_t` | filtered + offset-corrected BEMF ticks | yes |
 | `raccoon/motor/N/power` | `scalar_i32_t` | last commanded duty (−399 to +399) | yes |
 | `raccoon/motor/N/position` | `scalar_i32_t` | accumulated BEMF ticks (dt-aware) | yes |
-| `raccoon/motor/N/done` | `scalar_i32_t` | 0 or 1 (MTP done flag) | yes |
 | `raccoon/servo/N/mode` | `scalar_i8_t` | servo mode state (reader→UI, not commands) | yes |
 | `raccoon/servo/N/position` | `scalar_f_t` | servo position (degrees) | yes |
 | `raccoon/odometry/pos_x` | `scalar_f_t` | world-frame x (meters) | yes |
@@ -191,43 +190,37 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 | `raccoon/errors` | `string_t` | STM32 UART error messages | no |
 | `raccoon/cpu/temp/value` | `scalar_f_t` | Pi CPU temperature (°C) | no |
 
-"Retained" channels use `publishRetained()`. A new subscriber that calls `subscribeWithRetain` immediately receives the last published value without waiting for the next SPI cycle. This is important for motor position, done flag, and battery voltage, where a late subscriber must not block waiting for the next update.
+"Retained" channels use `publishRetained()`. A new subscriber that calls `subscribeWithRetain` immediately receives the last published value without waiting for the next SPI cycle. This is important for motor position and battery voltage, where a late subscriber must not block waiting for the next update.
 
 IMU accuracy channels (`gyro/accuracy`, `accel/accuracy`, `mag/accuracy`, `imu/quaternion_accuracy`) are published only when the accuracy value changes, not on every loop.
 
-### Step 4: raccoon-transport — raccoon_ring SHM
+### Step 4: raccoon-transport
 
-The raccoon-transport library provides the IPC layer between the bridge and all subscribers (raccoon-lib, BotUI, and any diagnostic tool). The primary transport backend is `raccoon_ring`, a lock-minimal single-producer multi-consumer shared memory ring buffer.
-
-**File naming:** each transport channel maps to one file under `/dev/shm/`. Forward slashes are URL-encoded to `_2F`, so `raccoon/motor/0/power` becomes `/dev/shm/raccoon_ring_raccoon_2Fmotor_2F0_2Fpower`. You can inspect all ring files with `ls /dev/shm/raccoon_ring_*` and remove them with `rm -f /dev/shm/raccoon_ring_*` (they are recreated on reader restart).
-
-**Ring layout:** each file contains a `ring_hdr_t` (magic `0x52435242`, version 3) followed by `slot_count` slot records of `sizeof(slot_t) + max_payload` bytes each. Defaults are **64 slots × 2 KiB payload** (~130 KiB per channel). The header carries `producer_seq` (monotonic write counter), `wake_seq` (futex word), and `waiter_count` (optimization: producer skips `FUTEX_WAKE` when 0).
+The [Transport]({{< ref "/06-advanced/03-transport.md" >}}) carries every value from the bridge to its subscribers (raccoon-lib, BotUI, diagnostic tools). Each channel is one ring file `/dev/shm/raccoon_ring_<channel>` with 64 slots of 2 KiB. The publisher copies the encoded message into the next slot and wakes parked subscribers with a futex. A subscriber that is too slow loses old frames and never blocks the publisher. You can list the files with `ls /dev/shm/raccoon_ring_*`.
 
 ```mermaid
 sequenceDiagram
     participant PUB as DataPublisher (bridge)
     participant RING as raccoon_ring file\n(/dev/shm/raccoon_ring_*)
-    participant SUB as raccoon-lib spinOnce()
+    participant SUB as raccoon-lib spin thread
 
-    PUB->>RING: rrb_writer_publish(encoded_lcm, len)\nslot = producer_seq % 64\nslot.seq_lock = 0 (writing flag)\ncopy payload\nslot.seq_lock = producer_seq\nbump producer_seq\nbump wake_seq + FUTEX_WAKE if waiter_count > 0
+    PUB->>RING: rrb_writer_publish(encoded_msg, len)\nslot = producer_seq % 64\nSeqLock write, bump producer_seq\nFUTEX_WAKE if a subscriber is parked
 
-    SUB->>RING: rrb_reader_recv_wait_many()\nfutex_waitv on wake_seq of all channels
-    RING-->>SUB: frame available\ncopy payload out\nverify seq_lock unchanged\ndecode + dispatch callback
+    SUB->>RING: rrb_reader_recv_wait_many()\nfutex_waitv on the wake word of all channels
+    RING-->>SUB: frame available\ncopy payload out, verify the SeqLock\ndecode + dispatch callback
 ```
 
-**SeqLock safety:** the producer marks a slot `seq = 0` (writing-in-progress), copies the payload, then stamps it with the sequence number. A subscriber that reads `seq = 0` after copying knows the producer raced it and skips the frame. Slow subscribers lose frames but never block the producer.
+**Retained channels:** `publishRetained()` marks a channel so that a new subscriber starts at the latest frame in the ring and gets the last value immediately. Battery voltage, motor position, servo state, odometry, heading and BEMF are retained for this reason.
 
-**Retained channels:** `publishRetained()` sets a `retained=true` flag on the publish options. The transport calls `rrb_reader_seek_to_latest()` when a new subscriber attaches, positioning its read cursor at the most recently published slot so the first `rrb_reader_recv()` immediately returns the last value — no waiting for the next publish cycle. Battery voltage, motor position, motor done, servo state, odometry, heading, and BEMF are all retained for this reason.
+**Producer restart:** when `stm32-data-reader` restarts it re-initialises the existing ring files in place, and subscribers resync. Never wipe `/dev/shm/raccoon_ring_*` while components run.
 
-**Producer restart transparency:** when `stm32-data-reader` restarts, `rrb_writer_create()` reinitialises the ring header in place (new `producer_seq` epoch). Existing subscribers detect the sequence reset and resync. No subscriber restart or file deletion is required.
+**Namespace:** `stm32_data_reader.service` sets `PrivateTmp=false` so the ring files are visible to every process, see [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md" >}}).
 
-**Namespace isolation:** `stm32_data_reader.service` sets `PrivateTmp=false` explicitly so the `/dev/shm/` files sit in the host-global tmpfs namespace. Any service option that creates a mount namespace (`ProtectSystem=strict`, `PrivateTmp=true`) would isolate `/dev/shm` to the service and make all ring files invisible to raccoon-lib and BotUI.
-
-The `lcm-loopback-multicast.service` remains required for reliable command delivery (the reliable delivery protocol uses a control channel that currently routes over UDP loopback), but the primary sensor data path uses raccoon_ring SHM exclusively.
+Reliable command delivery uses the same ring: the publisher re-sends until the subscriber acknowledges on the internal `__raccoon/ack` channel. Nothing goes over the network; the old `lcm-loopback-multicast.service` no longer exists.
 
 ### Step 5: raccoon-lib HAL
 
-`LcmReader` runs as a singleton with a background `listenLoop` thread. This thread calls `transport_.spinOnce(0)` continuously and updates mutex-protected caches. Each HAL class (Motor, Analog, Digital, IMU) calls the appropriate `LcmReader::read*()` method which takes the lock and returns the cached value. Sensor reads in user code are non-blocking and always return the most recently observed value.
+`TransportReader` is a singleton that subscribes to the sensor channels and keeps mutex-protected caches of the latest value. The callbacks run on `SharedTransport`'s one spin thread, which parks in `futex_waitv` and wakes on every publish. Each HAL class (Motor, Analog, Digital, IMU) calls the appropriate `TransportReader::read*()` method, which takes the lock and returns the cached value. Sensor reads in user code are non-blocking and always return the most recently observed value.
 
 ## Command Path (Python → STM32)
 
@@ -238,10 +231,10 @@ Python: motor.set_speed(50)
 raccoon-lib::hal::motor::Motor::setSpeed()
       │  (maps percent to signed duty, applies inversion)
       ▼
-LcmDataWriter::setMotor(port, duty)
+TransportWriter::setMotor(port, duty)
       │  (publishes scalar_i32_t to raccoon/motor/N/power_cmd)
       ▼
-raccoon_ring SHM → shared-memory transport (loopback)
+raccoon_ring SHM (/dev/shm)
       │
       ▼
 stm32-data-reader: CommandSubscriber::onMotorPowerCommand()
@@ -311,7 +304,6 @@ sequenceDiagram
 | `raccoon/motor/N/power_cmd` | `scalar_i32_t` | no | open-loop PWM (−100 to +100%) |
 | `raccoon/motor/N/velocity_cmd` | `scalar_i32_t` | no | MAV velocity setpoint (BEMF ticks/s) |
 | `raccoon/motor/N/position_cmd` | `vector3f_t` | yes | MTP: x=speed_limit, y=goal_position |
-| `raccoon/motor/N/relative_cmd` | `vector3f_t` | yes | relative move: adds delta to current position |
 | `raccoon/motor/N/position_reset_cmd` | `scalar_i32_t` | yes | reset motor N position on STM32 |
 | `raccoon/motor/N/stop_cmd` | `scalar_i32_t` | yes | stop motor N (passive brake) |
 | `raccoon/motor/N/mode_cmd` | `scalar_i32_t` | yes | set raw motor control mode |
@@ -328,8 +320,6 @@ sequenceDiagram
 
 **Servo mode vs. servo mode command:** The servo mode channel is split into two: `raccoon/servo/N/mode` (state, reader publishes) and `raccoon/servo/N/mode_cmd` (command, raccoon-lib publishes). This prevents the reader from subscribing to its own publishes, which previously caused a ~5 ms internal latency floor.
 
-**Motor relative move:** `raccoon/motor/N/relative_cmd` carries a delta (BEMF ticks) relative to the motor's current position. `CommandSubscriber::onMotorRelativeCommand` reads the current position, adds the delta, and issues an absolute MTP command. The payload is `vector3f_t` matching the position command format: `x=speed_limit, y=delta_ticks`.
-
 ### Reliable Commands
 
 Commands that must not be lost (position targets, PID configuration, servo mode changes, shutdown, position resets) are subscribed with `reliableOpts` (`SubscribeOptions{.reliable = true}`). Reliable delivery is a transport-level option implemented in `raccoon::Transport`; there is no separate `ReliablePublisher` class. The reliable path adds a sequence number envelope and retransmits until an ACK is received.
@@ -338,7 +328,7 @@ Continuous commands (motor power percentage, motor velocity) are sent without re
 
 ### Timestamp-Based Deduplication
 
-The `CommandSubscriber` tracks the timestamp of the most recently applied command per channel. If a message arrives with a timestamp older than the last applied message (possible if LCM delivers messages out of order), it is silently dropped. This is the `isTimestampNewer()` check.
+The `CommandSubscriber` tracks the timestamp of the most recently applied command per channel. If a message arrives with a timestamp older than the last applied message (possible if messages arrive out of order, for example re-sends of a reliable command), it is silently dropped. This is the `isTimestampNewer()` check.
 
 ## Timing Budget
 
@@ -348,7 +338,7 @@ The `CommandSubscriber` tracks the timestamp of the most recently applied comman
 | SPI transfer | < 1 ms |
 | stm32-data-reader main loop | < 5 ms (mainLoopDelay = 5 ms) |
 | raccoon_ring SHM delivery | < 0.1 ms |
-| LcmReader cache update | < 0.1 ms |
+| TransportReader cache update | < 0.1 ms |
 | Python read call | < 0.1 ms (non-blocking) |
 | **Total sensor→Python** | **< 12 ms** |
 
@@ -356,9 +346,9 @@ Command latency follows the same path in reverse; the dominant factor is the BEM
 
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — ISR context, ADC interrupt rates, and super-loop scheduling that produce the data entering the pipeline
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — deep dive into `Application` lifecycle, `SpiReal` vs `SpiMock`, `DataPublisher` gate logic, `CommandSubscriber`, `MotorWatchdog`, `LcmBroker`, and `raccoon_ring` internals
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — the wire format and all transport channel names
-- [Motor Control](/06-advanced/firmware/motor-control/) — what happens inside each BEMF cycle
-- [IMU Stack](/06-advanced/firmware/imu/) — how `txBuffer.imu` fields are produced by the MPL fusion pipeline
-- [Robot Services And systemd](/06-advanced/firmware/robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — ISR context, ADC interrupt rates, and super-loop scheduling that produce the data entering the pipeline
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — deep dive into `Application` lifecycle, `SpiReal` vs `SpiMock`, `DataPublisher` gate logic, `CommandSubscriber`, `MotorWatchdog`, `LcmBroker`, and `raccoon_ring` internals
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — the wire format and all transport channel names
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — what happens inside each BEMF cycle
+- [IMU Stack](/06-advanced/04-firmware/imu/) — how `txBuffer.imu` fields are produced by the MPL fusion pipeline
+- [Robot Services And systemd](/06-advanced/04-firmware/robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology

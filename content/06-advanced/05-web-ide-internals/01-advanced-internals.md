@@ -11,7 +11,7 @@ description: "Technical internals of the WebIDE: backends, run configurations, s
 
 This page covers the parts of the WebIDE that matter when you need to debug behavior, understand how it talks to the robot, or keep the docs aligned with the actual application.
 
-For a higher-level overview with diagrams, see [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}).
+For a higher-level overview with diagrams, see [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}).
 
 ## Two backends, not one
 

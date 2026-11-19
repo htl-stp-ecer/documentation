@@ -1,7 +1,7 @@
 ---
 title: "Motor Control"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 6
 ---
@@ -12,7 +12,7 @@ The STM32 runs a **four-level control hierarchy** for each motor. Understanding 
 
 ```
 Level 4 (highest):  Chassis kinematics   →  body-frame [vx, vy, wz] → per-wheel velocity
-Level 3:            Position trajectory   →  sqrt-decel profile → velocity setpoint
+Level 3:            Position trajectory   →  trapezoid profile → velocity setpoint
 Level 2:            Velocity PID          →  BEMF feedback → PWM duty setpoint
 Level 1 (lowest):   PWM generation        →  H-bridge enable pin, 25 kHz
 ```
@@ -225,7 +225,7 @@ stateDiagram-v2
 
     MAV : MAV — Move At Velocity\nVelocity PID on BEMF\ntarget = BEMF ticks/s
 
-    MTP : MTP — Move To Position\nSqrt-decel profile → velocity PID\nDone when |error| ≤ 40 ticks
+    MTP : MTP — Move To Position\nTrapezoid profile → velocity PID\nHolds the goal when |error| ≤ 3 ticks
 
     CHASSIS : CHASSIS\nBody [vx,vy,wz] → fwd_matrix\n→ per-wheel velocity PID
 
@@ -245,8 +245,8 @@ stateDiagram-v2
     MAV --> MTP : setMotorPosition
     MAV --> PWM : setMotorPwm
 
-    MTP --> BRAKE : position reached\n(sticky done flag set)
-    MTP --> MTP : new goal position\n(resets done + profile)
+    MTP --> MTP : position reached\n(brake + hold, driven back if pushed > 8 ticks)
+    MTP --> MTP : new goal position\n(restarts the profile)
     MTP --> OFF : motorOff
 
     CHASSIS --> OFF : motorOff
@@ -260,7 +260,7 @@ When `ctlMode != prevControlMode[channel]`, `motor_on_mode_change()` fires befor
 1. Logs the transition via UART3: `[stp] mot{N} mode {prev}->{new} pos={pos}`
 2. Calls `pid_reset()` on both `pidControllers[ch]` and `posPidControllers[ch]` (zeroes `prevErr` and `iErr`)
 3. Sets `profileVel[ch] = 0` (resets the trapezoidal ramp)
-4. Clears bit N of `motor_data.done`
+4. Clears the hold latch for motor N (`mtpHolding`)
 
 This prevents integral windup from a previous mode from contaminating the new one, and ensures MTP always starts from a stationary profile regardless of prior motion.
 
@@ -323,7 +323,7 @@ applyMotorOutput(ch, pidOut);
 
 ### `MOT_MODE_MTP` — Move To Position (0b100)
 
-`motor_mode_mtp()` — Moves to an absolute position target (`rxBuffer.motorGoalPosition[ch]`) using a sqrt-deceleration plus trapezoidal acceleration profile feeding the velocity PID.
+`motor_mode_mtp()` — Moves to an absolute position target (`rxBuffer.motorGoalPosition[ch]`) using a trapezoid profile (rate-limited acceleration, linear deceleration ramp) that feeds the velocity PID. After reaching the goal the motor brakes and keeps holding it.
 
 **transport command:** `vector3f_t` (x=speed_limit, y=goal_position) on `Channels::motorPositionCommand(port)`. Use `reliable=True`.
 
@@ -407,7 +407,7 @@ These are loaded by `pid_init()` at startup:
 | `iMax` | 399 (full duty) | 399 |
 | `outMax` | 399 | 399 |
 
-**When tuning `kI`, always use per-second units.** A `kI = 9.0` means the integral term grows by 9.0 counts per (error × 1 second). The old convention (where `kI` was implicitly divided by the loop rate) no longer applies.
+**When tuning `kI`, always use per-second units.** A `kI = 9.0` means the integral term grows by 9.0 counts per (error × 1 second).
 
 ### Runtime PID update (via SPI)
 
@@ -419,93 +419,71 @@ The Pi can push new gains at any time by writing `rxBuffer.motorPidSettings` and
 
 ## MTP: Move-To-Position Mode (Level 3)
 
-MTP is the most complex motor mode. It does not use a position PID outer loop; instead, it uses a **sqrt-deceleration profile** to generate a velocity setpoint, then runs the velocity PID as the inner loop.
+MTP does not use a position PID outer loop. It generates a velocity setpoint with a **trapezoid profile** and runs the velocity PID as the inner loop. When the goal is reached the motor brakes and **keeps holding** the position, there is no "done" state.
 
 ```mermaid
 flowchart TD
     A[MTP invoked for channel ch] --> B{Goal changed?}
-    B -- yes --> C[Clear done flag\nReset profileVel to 0\nReset PID integral\nStore new prevGoalPos]
-    B -- no --> D{Done flag set?}
+    B -- yes --> C[Clear hold latch\nReset profileVel to 0\nReset PID integral\nStore new prevGoalPos]
+    B -- no --> D{Holding?}
     C --> D
-    D -- yes --> E[SHORT_BREAK active\nreturn]
-    D -- no --> F[Compute posError = goalPos − currentPos]
-    F --> G{absError ≤ 40?}
-    G -- yes --> H[Set done flag\nSHORT_BRAKE\nreturn]
-    G -- no --> I[Compute sqrt-decel velocity\nvDecel = sqrt(2 × 10 × absError)]
-    I --> J[Clamp: vDecel ≥ MTP_MIN_VEL=15\nvDecel ≤ speedLimit (default 300)]
-    J --> K[Apply direction sign]
-    K --> L{Accelerating?\nabs(desired) ≥ abs(profileVel)?}
-    L -- yes --> M[Rate-limit:\nΔvel ≤ ±150 per update]
-    L -- no --> N[Follow curve directly\nClear PID iErr]
+    D -- yes --> E{absError ≤ MTP_HOLD_RELEASE = 8?}
+    E -- yes --> F[SHORT_BRAKE, duty 0\nreturn]
+    E -- no --> G[Clear hold latch\nReset profile + PID]
+    D -- no --> H
+    G --> H{absError ≤ MTP_DONE_THRESHOLD = 3?}
+    H -- yes --> I[Set hold latch\nSHORT_BRAKE\nreturn]
+    H -- no --> J[Desired velocity from the trapezoid:\ncruise at speedLimit, linear ramp\nin the last MTP_DECEL_ZONE = 40 ticks]
+    J --> K[Clamp to MTP_MIN_VEL ... speedLimit\nApply direction sign]
+    K --> L{Accelerating?}
+    L -- yes --> M[Rate-limit:\nΔvel ≤ ±300 per update]
+    L -- no --> N[Follow the ramp directly\nClear PID iErr]
     M --> O[profileVel updated]
     N --> O
-    O --> P[pid_update(profileVel, bemf_filtered, dt)]
+    O --> P[pid_update on profileVel and BEMF]
     P --> Q[applyMotorOutput]
 ```
 
-### Sqrt-deceleration curve
+### Trapezoid profile
 
-The desired velocity at distance `d` from the goal is:
-
-```
-vDecel = sqrt(2 × MTP_DECEL_FACTOR × d)
-       = sqrt(2 × 10 × d)
-       = sqrt(20d)
-```
-
-This matches the kinematics of constant-deceleration: if the motor decelerates at constant rate `a`, the velocity at distance `d` is `sqrt(2ad)`. A smaller `MTP_DECEL_FACTOR` means earlier, gentler deceleration; a larger factor means later, more aggressive braking.
-
-The firmware computes integer square root without FPU via a 16-bit binary search loop:
+The speed limit is `rxBuffer.motorTarget[ch]` (300 if it is zero or negative). Far from the goal (`absError ≥ MTP_DECEL_ZONE`) the motor cruises at the speed limit. Closer than that the desired velocity falls linearly from the speed limit down to `MTP_MIN_VEL` at `MTP_DONE_THRESHOLD`:
 
 ```c
-// motor.c — inside motor_mode_mtp()
-uint32_t val = 2u * MTP_DECEL_FACTOR * (uint32_t)absError;
-uint32_t r = 0;
-for (int b = 15; b >= 0; b--) {
-    uint32_t test = r | (1u << b);
-    if (test * test <= val) r = test;
-}
-vDecel = r;
+desiredVel = MTP_MIN_VEL + (speedLimit - MTP_MIN_VEL) * (absError - MTP_DONE_THRESHOLD)
+                         / (MTP_DECEL_ZONE - MTP_DONE_THRESHOLD);
 ```
 
-### Trapezoidal acceleration / instant deceleration
+An earlier version used a square-root curve, which slowed the whole move down. The linear ramp keeps the speed longer and still stops without overshoot. A larger `MTP_DECEL_ZONE` slows down earlier and more gently, a smaller one stays fast longer but risks overshoot.
 
-When the profile velocity is **increasing** (moving away from target or picking up speed), acceleration is rate-limited to `MTP_ACCEL_PER_TICK = 150` counts per BEMF update. When the profile velocity is **decreasing** (braking toward target), the profile follows the sqrt curve immediately without rate-limiting, and the PID integral is cleared to prevent the accumulation from the acceleration phase from fighting the brake:
+### Acceleration and deceleration
+
+When the profile velocity is **increasing**, acceleration is rate-limited to `MTP_ACCEL_PER_TICK = 300` counts per BEMF update. When it is **decreasing**, the profile follows the ramp immediately, and the PID integral is cleared so the integral of the acceleration phase does not fight the brake:
 
 ```c
-// Decelerating — follow curve directly
+// Decelerating — follow the ramp directly
 profileVel[ch] = desiredVel;
 pidControllers[ch].iErr = 0.0f;  // flush windup
 ```
 
-### Done detection and sticky flag
+### Reaching the goal and holding it
 
-When `|goalPos − currentPos| ≤ MTP_DONE_THRESHOLD (40 ticks)`:
+When `|goalPos − currentPos| ≤ MTP_DONE_THRESHOLD` (3 ticks), `profileVel[ch]` is set to 0, bit N of the firmware-internal `mtpHolding` bitmask is set and the motor is braked (`SHORT_BREAK`, duty 0). MTP stays the active mode. While holding, the motor stays braced as long as it is within `MTP_HOLD_RELEASE` (8 ticks) of the goal. If it is pushed further away it is driven back with a fresh profile. The two thresholds are different on purpose, so the motor does not chatter at the edge.
 
-1. `profileVel[ch] = 0`
-2. `motor_data.done |= (1u << ch)` — bit N in the 8-bit `done` bitmask is set
-3. The motor is actively braked: `SHORT_BREAK` direction, duty = 0
-4. The done state is **sticky**: subsequent calls return immediately until either the goal changes or the mode changes
-
-The Pi reads `motor_data.done` via `TxBuffer.motor.done`. In Python:
-
-```python
-# Subscribe to Channels.motor_done(port); decode as scalar_i32_t
-# .value is non-zero when done
-```
+`mtpHolding` is internal to the firmware and not part of the SPI buffer. The Pi decides that a goal is reached by comparing `motor.position[N]` with the goal it sent.
 
 **Key MTP constants (all in `motor.c`):**
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `MTP_DONE_THRESHOLD` | 40 ticks | Position error deadband for "done" |
+| `MTP_DONE_THRESHOLD` | 3 ticks | Position error at which the goal counts as reached and holding starts |
+| `MTP_HOLD_RELEASE` | 8 ticks | While holding, the motor is driven back once pushed this far away |
+| `MTP_DECEL_ZONE` | 40 ticks | Distance from the goal where the linear slow-down starts |
 | `MTP_MIN_VEL` | 15 counts/s | Minimum crawl velocity to overcome static friction |
-| `MTP_ACCEL_PER_TICK` | 150 counts/update | Maximum acceleration step per BEMF update |
-| `MTP_DECEL_FACTOR` | 10 | Deceleration shape factor in sqrt curve |
+| `MTP_ACCEL_PER_TICK` | 300 counts/update | Maximum acceleration step per BEMF update |
 
 ### `posPidControllers` — present but unused
 
-`posPidControllers[4]` is declared and initialized in `motor.c`. In the current implementation, MTP does **not** call `pid_update(&posPidControllers[ch], ...)`. The sqrt profile directly generates the velocity setpoint. The array is kept so the `PI_BUFFER_UPDATE_MOTOR_PID_POS` (0x02) update flag and `update_motor_posPidSettings()` have a valid destination and remain API-compatible.
+`posPidControllers[4]` is declared and initialized in `motor.c`. In the current implementation, MTP does **not** call `pid_update(&posPidControllers[ch], ...)`. The trapezoid profile directly generates the velocity setpoint. The array is kept so the `PI_BUFFER_UPDATE_MOTOR_PID_POS` (0x02) update flag and `update_motor_posPidSettings()` have a valid destination and remain API-compatible.
 
 ---
 
@@ -540,40 +518,9 @@ Also note: the `positionAccum[]` float remainder in `bemf.c` is **not** cleared 
 
 ## MotorWatchdog (Pi-side safety layer)
 
-The `MotorWatchdog` class in `MotorWatchdog.cpp` provides a Pi-side heartbeat watchdog that enforces hardware shutdown when the user program becomes unresponsive.
+The Pi-side `MotorWatchdog` in `stm32-data-reader` shuts the motors down when the heartbeats of the user program stop (500 ms timeout, three consecutive heartbeats to recover). Its state machine and parameters are in [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md#motorwatchdog-pi-side-hardware-safety" >}}).
 
-```mermaid
-stateDiagram-v2
-    [*] --> DORMANT : constructed (armed=false)
-
-    DORMANT : Dormant\nfirst heartbeat not yet seen\nno timeout checks
-
-    MONITORING : Monitoring\narmed=true, fired=false
-
-    FIRED : Shutdown active\narmed=true, fired=true\nSTM32 SHUTDOWN_MOTOR set
-
-    RECOVERING : Recovery hysteresis\nrecoveryCount counting up
-
-    DORMANT --> MONITORING : first heartbeat received\nwatchdog.feed()
-    MONITORING --> MONITORING : heartbeat within 500 ms\nwatchdog.feed()
-    MONITORING --> FIRED : 500 ms timeout\nsetShutdown(true)
-    FIRED --> RECOVERING : heartbeat received
-    RECOVERING --> RECOVERING : heartbeat received\nrecoveryCount < 3
-    RECOVERING --> MONITORING : 3 consecutive heartbeats\nall within 500 ms of each other\nsetShutdown(false)
-    RECOVERING --> FIRED : gap > 500 ms\nrecoveryCount reset to 0
-    FIRED --> DORMANT : user clears shutdown manually\nresetAfterManualClear()
-```
-
-**Parameters (from `MotorWatchdog.h`):**
-
-| Parameter | Default | Meaning |
-|---|---|---|
-| `timeout_` | 500 ms | Heartbeat deadline. Python sends heartbeats every ~100 ms. |
-| `recoverFeeds_` | 3 | Consecutive heartbeats required to clear shutdown after firing |
-
-The watchdog is **dormant** until the first heartbeat arrives via `Channels::HEARTBEAT_CMD`, so the robot can boot and wait for the start light without being killed. Once armed, it fires `DeviceController::setShutdown(true)` (which sets `SHUTDOWN_MOTOR | SHUTDOWN_SERVO` in `rxBuffer.systemShutdown`) and publishes `kShutdownByWatchdog = 0x07` on the shutdown status channel.
-
-**Interaction with firmware:** the STM32 checks `rxBuffer.systemShutdown & SHUTDOWN_MOTOR` at the top of `update_motor()` before any mode logic. If set, it forces all H-bridge direction pins to OFF and returns immediately — this happens every 1250 µs regardless of what the Pi is doing.
+**Interaction with firmware:** the STM32 checks `rxBuffer.systemShutdown & SHUTDOWN_MOTOR` at the top of `update_motor()` before any mode logic. If set, it forces all H-bridge direction pins to OFF and returns immediately. This happens every 1250 µs regardless of what the Pi is doing.
 
 ---
 
@@ -682,8 +629,8 @@ spi_->setServoState(port, {ServoMode::Enabled, pos});
 
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — TIM6 ISR orchestration, ADC2 callback context, interrupt priorities, and the `update_motor()` call chain
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — how motor modes and targets are carried over the wire
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — the full command path from Python `motor.set_speed()` to H-bridge output
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — `CommandSubscriber` motor power/velocity routing and `DeviceController` idempotent writes
-- [Build and Flash](/06-advanced/firmware/build-flash/) — how to change PID defaults and reflash the firmware
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — TIM6 ISR orchestration, ADC2 callback context, interrupt priorities, and the `update_motor()` call chain
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — how motor modes and targets are carried over the wire
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — the full command path from Python `motor.set_speed()` to H-bridge output
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `CommandSubscriber` motor power/velocity routing and `DeviceController` idempotent writes
+- [Build and Flash](/06-advanced/04-firmware/build-flash/) — how to change PID defaults and reflash the firmware

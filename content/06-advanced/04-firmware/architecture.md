@@ -1,7 +1,7 @@
 ---
 title: "Architecture Overview"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 1
 ---
@@ -110,7 +110,7 @@ The STM32 owns everything that must happen at a precise time, every time, with n
 | IMU acquisition + DMP fusion | 50 Hz | `Sensors/IMU/imu.c` | SPI3 |
 | Odometry integration | ~200 Hz (BEMF-paced) | `Sensors/odometry.c` | — |
 | SPI slave interface to Pi | Continuous DMA | `Communication/communication_with_pi.c` | SPI2 |
-| Flash storage of IMU calibration | On-demand | `Storage/flash_cal.c` | Internal flash |
+| Flash storage of IMU calibration (disabled) | – | `Storage/flash_cal.c` | Internal flash |
 
 The STM32 does **not** run user code, path planning, or vision. Its job is sensor acquisition, actuator control, and data buffering.
 
@@ -172,7 +172,7 @@ TxBuffer (STM32 → Pi):                   RxBuffer (Pi → STM32):
   motor            MotorData               systemShutdown   uint8_t
     .bemf[4]       int32_t                 motorControlMode uint16_t (3 bits/motor)
     .position[4]   int32_t                 motorTarget[4]   int32_t
-    .done          uint8_t (bitmask)       chassisVelocity[3] float
+                                           chassisVelocity[3] float
   analogSensor[6]  int16_t                 motorGoalPosition[4] int32_t
   batteryVoltage   int16_t                 servoMode        uint8_t
   digitalSensors   uint16_t               servoPos[4]      uint16_t
@@ -181,59 +181,17 @@ TxBuffer (STM32 → Pi):                   RxBuffer (Pi → STM32):
                                            featureFlags     uint8_t
 ```
 
-Both structs are `__attribute__((packed))`. The DMA transfer length is `max(sizeof(TxBuffer), sizeof(RxBuffer))` — the longer one dictates the transfer size so the SPI slave never under-reads. See the [SPI Protocol](/06-advanced/firmware/spi-protocol/) page for the full wire contract.
+Both structs are `__attribute__((packed))`. The DMA transfer length is `max(sizeof(TxBuffer), sizeof(RxBuffer))` — the longer one dictates the transfer size so the SPI slave never under-reads. See the [SPI Protocol](/06-advanced/04-firmware/spi-protocol/) page for the full wire contract.
 
 ## Startup sequence
 
-When the STM32 powers on:
+**STM32 side:** after reset the firmware sets up the clock (PLL 180 MHz), the peripherals, then starts the continuous ADC1 sampling, then the 1 µs system timer (TIM6) and only then arms the SPI2 slave DMA (`initPiCommunication()`), initialises the motor PIDs and sets up the IMU. The order matters: ADC1 must run before TIM6 so the analog accumulators have data on the first interrupt. The full sequence is in [Firmware Runtime and Scheduling]({{< ref "/06-advanced/04-firmware/firmware-runtime.md" >}}).
 
-```mermaid
-sequenceDiagram
-    participant Boot as Reset / HAL_Init
-    participant Clk as SystemClock_Config
-    participant Periph as Peripheral Init
-    participant ADC1 as ADC1 (analog DMA)
-    participant TIM6 as TIM6 (1µs tick)
-    participant SPI2 as SPI2 slave DMA
-    participant Motor as Motor PID init
-    participant IMU as MPU-9250 + DMP
-
-    Boot->>Clk: HAL_Init() → PLL 180MHz, flash cache ON, prefetch OFF (AN4073)
-    Clk->>Periph: GPIO, DMA, ADC1, ADC2, SPI2, SPI3, TIM1/3/6/8/9, USART3
-    Periph->>ADC1: startContinuousAnalogSampling() — ADC1 circular DMA starts
-    Note over ADC1: must precede TIM6 so oversampling accumulators have data on first ISR
-    ADC1->>TIM6: systemTimerStart() — TIM6 period=1µs, interrupts begin
-    Note over TIM6: drives BEMF scheduler + analog output at 250Hz
-    TIM6->>SPI2: initPiCommunication() — HAL_SPI_TransmitReceive_DMA armed
-    Note over SPI2: STM32 now ready; first Pi transfer can occur
-    SPI2->>Motor: initMotors() — PID state reset for all 4 channels
-    Motor->>IMU: setupImu() — MPU-9250 self-test, bias calibration, DMP load, 50Hz fusion
-    IMU-->>Boot: main() infinite loop begins
-```
-
-When the Pi-side `stm32-data-reader` process starts:
-
-1. `LcmBroker` initializes — opens the shared-memory transport socket.
-2. `UartMonitor` opens `/dev/ttyAMA0` (or configured path) to capture STM32 boot output.
-3. `spi_reset_stm32()` pulses the STM32 reset line and waits 1 s.
-4. `UartMonitor::drainFor(2000 ms)` captures the boot banner.
-5. `DeviceController::initialize()` opens the SPI file descriptor.
-6. `spi_probe_version()` reads `TxBuffer.transferVersion` and compares with `TRANSFER_VERSION = 21`. A mismatch is logged.
-7. `CommandSubscriber::initialize()` registers transport subscriptions for all command channels.
-8. Optional: startup `FEATURE_BEMF_DISABLE` flag is pushed to the STM32 on the very first transfer if `disableBemfOnStartup` is set in configuration.
-9. `Application::run()` enters the main loop at `config_.mainLoopDelay` cadence.
+**Pi side:** `stm32-data-reader` opens the transport and the UART monitor, resets the STM32, opens SPI, probes `TRANSFER_VERSION` (21) and subscribes to the command channels before it enters the main loop. The steps, including the automatic reflash on a version mismatch, are in [Pi Bridge Internals]({{< ref "/06-advanced/04-firmware/pi-bridge-internals.md" >}}) and [Build and Flash]({{< ref "/06-advanced/04-firmware/build-flash.md" >}}).
 
 ## Main loop cadence
 
-The Pi-side main loop runs approximately 200 Hz (driven by `config_.mainLoopDelay`). Each iteration:
-
-1. `messageBroker_->processMessages()` — drains the transport; any subscribed command handler fires synchronously here.
-2. `motorWatchdog_.update()` — checks whether the raccoon-lib heartbeat (`raccoon/system/heartbeat_cmd`) has been received within the watchdog timeout. If not, `setShutdown(true)` is called.
-3. `deviceController_->processUpdate()` — advances smooth servo trajectories, then calls `spi_->readSensorData()` to execute one SPI transfer and capture the returned `TxBuffer`.
-4. `systemMonitor_->updateCpuTemperature()` — reads `/sys/class/thermal/thermal_zone0/temp` and publishes to `raccoon/cpu/temp/value` at 1 Hz.
-5. `uartMonitor_->processUpdate()` — reads any pending bytes from USART3 and logs them.
-6. `checkStm32Health()` — verifies `TxBuffer.updateTime` is changing; if it has not changed for 10 s the service shuts down fatally.
-7. `publishCurrentData()` — calls `DataPublisher` to push sensor data to the transport if the timestamp changed.
+The Pi-side main loop runs every 5 ms (`config_.mainLoopDelay`): it drains the transport, updates the motor watchdog, does one SPI transfer, and publishes the new sensor data. The steps are listed in [Pi Bridge Internals]({{< ref "/06-advanced/04-firmware/pi-bridge-internals.md" >}}).
 
 The STM32's motor control loop runs **independently** of the Pi's main loop. It is triggered by the ADC2 conversion-complete interrupt (`HAL_ADC_ConvCpltCallback`), which fires approximately every 1250 µs per motor. The SPI transfer is therefore an asynchronous read of a continuously-updated snapshot, not a synchronous request/response.
 
@@ -282,7 +240,7 @@ Sensors/
     mpu9250_hal.c              — HAL SPI3 wrapper for MPU9250.c
 
 Storage/
-  flash_cal.c                  — IMU calibration save/load to internal flash sector 12
+  flash_cal.c                  — IMU calibration save/load stubs (no-ops)
 
 Utility/
   utillity.c                   — doEveryXuSeconds / doAfterXuSeconds macros
@@ -330,48 +288,7 @@ Channels.h                     — all raccoon/* channel name constants
 
 ## Motor control modes
 
-The `motorControlMode` field in `RxBuffer` packs 3 bits per motor (motors 0–3 occupy bits 0–11). The `MOTOR_CMD_MODE` enum in `pi_buffer.h`:
-
-| Value | Name | Description |
-|---|---|---|
-| `0b000` | `MOT_MODE_OFF` | Coast — both direction pins low, duty 0 |
-| `0b001` | `MOT_MODE_PASSIV_BRAKE` | Passive short-brake — both direction pins high, duty 0 |
-| `0b010` | `MOT_MODE_PWM` | Open-loop — duty from `motorTarget[]` (0–400 range) |
-| `0b011` | `MOT_MODE_MAV` | Move At Velocity — velocity PID closed on filtered BEMF reading |
-| `0b100` | `MOT_MODE_MTP` | Move To Position — sqrt decel profile → velocity PID → PWM |
-| `0b101` | `MOT_MODE_CHASSIS` | Chassis velocity — body-frame `[vx,vy,wz]` → per-wheel MAV via forward kinematics |
-
-```mermaid
-stateDiagram-v2
-    [*] --> OFF : power on / reset
-    OFF --> PASSIV_BRAKE : mode cmd 1
-    OFF --> PWM : mode cmd 2
-    OFF --> MAV : mode cmd 3
-    OFF --> MTP : mode cmd 4
-    OFF --> CHASSIS : mode cmd 5
-    PASSIV_BRAKE --> OFF : mode cmd 0
-    PASSIV_BRAKE --> PWM : mode cmd 2
-    PWM --> OFF : mode cmd 0
-    PWM --> MAV : mode cmd 3
-    MAV --> OFF : mode cmd 0
-    MAV --> PASSIV_BRAKE : mode cmd 1
-    MAV --> MTP : mode cmd 4
-    MTP --> OFF : done flag set / new goal
-    MTP --> MAV : mode cmd 3
-    CHASSIS --> OFF : mode cmd 0
-    CHASSIS --> MAV : mode cmd 3
-
-    note right of MAV
-        requires BEMF enabled
-        (FEATURE_BEMF_DISABLE = 0)
-    end note
-    note right of CHASSIS
-        all 4 motors must be CHASSIS
-        body-frame setpoint in chassisVelocity[]
-    end note
-```
-
-On any mode transition, `motor_on_mode_change()` resets both PID controllers, the trapezoidal profile velocity, and the done flag. This prevents stale integral windup from the previous mode contaminating the new one.
+The `motorControlMode` field in `RxBuffer` packs 3 bits per motor (motors 0–3 occupy bits 0–11). There are six modes: `MOT_MODE_OFF` (coast), `MOT_MODE_PASSIV_BRAKE`, `MOT_MODE_PWM` (open loop), `MOT_MODE_MAV` (move at velocity), `MOT_MODE_MTP` (move to position) and `MOT_MODE_CHASSIS` (body-frame chassis velocity). The table, the state machine and the behaviour of each mode are on [Motor Control]({{< ref "/06-advanced/04-firmware/motor-control.md" >}}).
 
 ## transport channel taxonomy
 
@@ -383,7 +300,7 @@ Key channel groups:
 
 | Group | Example channels | Direction |
 |---|---|---|
-| Motor telemetry | `raccoon/motor/N/power`, `/position`, `/done`, `raccoon/bemf/N/value` | STM32 → Pi → transport |
+| Motor telemetry | `raccoon/motor/N/power`, `/position`, `raccoon/bemf/N/value` | STM32 → Pi → transport |
 | Motor commands | `raccoon/motor/N/power_cmd`, `/velocity_cmd`, `/position_cmd`, `/stop_cmd` | transport → Pi → STM32 |
 | Chassis | `raccoon/chassis/velocity_cmd` | transport → Pi → STM32 |
 | Servo | `raccoon/servo/N/position`, `/mode` | STM32 → Pi → transport |
@@ -416,7 +333,7 @@ An 8-bit bitmask inside `RxBuffer.updates` (and mirrored into `volatile uint8_t 
 Motor control mode `0b011`. The Pi sets `motorTarget[ch]` to the desired BEMF velocity (raw ticks/s units). The STM32 runs a velocity PID loop using the filtered BEMF reading as feedback. Requires BEMF to be enabled.
 
 **MTP (Move To Position)**
-Motor control mode `0b100`. The Pi sets `motorGoalPosition[ch]` (BEMF tick count) and `motorTarget[ch]` (speed limit). The firmware generates a sqrt-deceleration velocity profile, feeds it through the velocity PID, and sets `motor_data.done` bit when within `MTP_DONE_THRESHOLD = 40` ticks of the goal.
+Motor control mode `0b100`. The Pi sets `motorGoalPosition[ch]` (BEMF tick count) and `motorTarget[ch]` (speed limit). The firmware cruises at the speed limit, ramps the velocity down linearly over the last 40 ticks, feeds it through the velocity PID and, once within `MTP_DONE_THRESHOLD = 3` ticks of the goal, brakes and **holds** the position: if the motor is pushed more than `MTP_HOLD_RELEASE = 8` ticks away it is driven back. MTP stays active until another mode is commanded.
 
 **CHASSIS mode**
 Motor control mode `0b101`. All four motors are set to this mode and the Pi writes a body-frame velocity command `[vx (m/s), vy (m/s), wz (rad/s)]` to `chassisVelocity[]`. The STM32 converts this to per-wheel rad/s using the stored `KinematicsConfig.fwd_matrix`, then runs the per-motor velocity PID. The chassis velocity loop closes entirely on-MCU, with no SPI round-trip in the control path.
@@ -428,7 +345,7 @@ Feature flag bit 0 in `RxBuffer.featureFlags`. When set, the BEMF sampling cycle
 InvenSense's on-chip processor inside the MPU-9250 that runs sensor fusion (gyro + accel + compass) and produces a calibrated orientation quaternion at 50 Hz. The STM32 loads the DMP firmware blob over SPI3 during `setupImu()` and reads results via `readImu()` in the main loop.
 
 **`raccoon_ring`**
-The shared-memory transport message bus on the Pi, configured as UDP multicast over the loopback interface. All processes (stm32-data-reader, raccoon-lib, vision, UI) subscribe and publish on this bus. The `lcm-loopback-multicast.service` systemd unit configures the multicast route.
+The shared-memory transport of `raccoon-transport`: one ring file `/dev/shm/raccoon_ring_<channel>` per channel, with a futex wake on every publish. All processes (stm32-data-reader, raccoon-lib, camera, UI) subscribe and publish through it, without network and without a broker. See [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
 
 **MotorWatchdog**
 A Pi-side safety mechanism in `MotorWatchdog.cpp`. raccoon-lib publishes a heartbeat message to `raccoon/system/heartbeat_cmd` periodically. If the watchdog does not see a heartbeat within its timeout, it calls `setShutdown(true)`, which sets `RxBuffer.systemShutdown = SHUTDOWN_MOTOR | SHUTDOWN_SERVO` and pushes it to the STM32. The STM32 `sanitizeMotorCommandsForShutdown()` function (in `spi.c`) then zeroes all motor commands on the next SPI callback.
@@ -444,12 +361,12 @@ A success/failure monad used throughout the Pi bridge C++ code (`core/Result.h`)
 
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — interrupt hierarchy, TIM6 ISR, super-loop task table, real-time hazards
-- [SPI Protocol](/06-advanced/firmware/spi-protocol/) — full wire format, struct fields, transfer timing
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — end-to-end timing from physical signal to Python
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — `Application` lifecycle, `SpiReal`/`SpiMock`, `DeviceController`, `raccoon_ring` SHM transport
-- [Motor Control](/06-advanced/firmware/motor-control/) — BEMF cycle, PID internals, MTP profile, chassis loop
-- [Sensor Reading](/06-advanced/firmware/sensors/) — ADC1, BEMF ADC2, IMU DMP pipeline, digital ports
-- [IMU Stack](/06-advanced/firmware/imu/) — MPU-9250 hardware layer, DMP, eMPL fusion pipeline, orientation frames
-- [Robot Services and systemd](/06-advanced/firmware/robot-services-and-systemd/) — MotorWatchdog, service topology
-- [Build and Flash](/06-advanced/firmware/build-flash/) — compiling, flashing, and deploying
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — interrupt hierarchy, TIM6 ISR, super-loop task table, real-time hazards
+- [SPI Protocol](/06-advanced/04-firmware/spi-protocol/) — full wire format, struct fields, transfer timing
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — end-to-end timing from physical signal to Python
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `Application` lifecycle, `SpiReal`/`SpiMock`, `DeviceController`, `raccoon_ring` SHM transport
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — BEMF cycle, PID internals, MTP profile, chassis loop
+- [Sensor Reading](/06-advanced/04-firmware/sensors/) — ADC1, BEMF ADC2, IMU DMP pipeline, digital ports
+- [IMU Stack](/06-advanced/04-firmware/imu/) — MPU-9250 hardware layer, DMP, eMPL fusion pipeline, orientation frames
+- [Robot Services and systemd](/06-advanced/04-firmware/robot-services-and-systemd/) — MotorWatchdog, service topology
+- [Build and Flash](/06-advanced/04-firmware/build-flash/) — compiling, flashing, and deploying

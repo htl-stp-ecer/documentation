@@ -1,7 +1,7 @@
 ---
 title: "Build and Flash"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 10
 ---
@@ -21,12 +21,12 @@ The full build-to-run pipeline looks like this:
 flowchart LR
     subgraph Laptop
         A["Edit source\n(firmware/ or\nsrc/wombat/)"]
-        B["./build.sh\n(Docker)\nProduces:\n• build/stm32_data_reader\n• build/wombat.bin"]
+        B["python3 build.py\n(Docker)\nProduces:\n• builds/stm32-data-reader_*.deb\n(reader + wombat.bin + units)"]
         A --> B
     end
-    subgraph "deploy.sh (SSH)"
-        C["Copy binary +\nflash scripts\nto Pi"]
-        D["flash_wombat.sh\nstm32flash via\n/dev/ttyAMA0"]
+    subgraph "deploy.py (SSH)"
+        C["Copy the .deb\nto the Pi,\napt install"]
+        D["postinst runs\nflash_wombat.sh\n(stm32flash via\n/dev/ttyAMA0)"]
         E["systemctl restart\nstm32_data_reader"]
         C --> D --> E
     end
@@ -49,9 +49,6 @@ If you only changed Python code, skip the build step entirely — `raccoon sync`
 ```
 stm32-data-reader/
 ├── firmware/                  # STM32 firmware (cross-compiled for Cortex-M4F)
-│   ├── build.sh               # Firmware-only Docker build (docker compose up)
-│   ├── Dockerfile             # Ubuntu + gcc-arm-none-eabi image
-│   ├── docker-compose.yml     # Mounts firmware/ + shared/ into container
 │   ├── CMakeLists.txt         # Top-level CMake; sets STM32F427xx target
 │   ├── CMake/
 │   │   └── GNU-ARM-Toolchain.cmake  # Toolchain file (compiler flags, sysroot)
@@ -70,9 +67,12 @@ stm32-data-reader/
 │       └── pi_buffer.h        # Single source of truth: TRANSFER_VERSION + structs
 ├── src/wombat/                # Pi bridge C++20 source
 ├── include/wombat/            # Pi bridge headers
-├── build.sh                   # Top-level: Pi bridge (Docker ARM64) + firmware
-├── deploy.sh                  # build.sh + install.py
-└── install.py                 # SCP + SSH: flash + install service on Pi
+├── systemd/                   # stm32_data_reader.service (source unit)
+├── packaging/debian/          # control, postinst, prerm, postrm of the .deb
+├── Dockerfile                 # builder image of the reader
+├── Dockerfile.firmware        # builder image of the firmware (gcc-arm-none-eabi)
+├── build.py                   # reader + firmware -> builds/*.deb
+└── deploy.py                  # copy the .deb to a Pi and install it
 ```
 
 ---
@@ -137,10 +137,10 @@ The Pi bridge is built inside a `debian:13-slim` ARM64 container (see `stm32-dat
 
 - CMake + Ninja (build system)
 - ccache (build cache, mounted as a Docker volume or host path)
-- liblcm-dev, libspdlog-dev (system libraries)
+- libspdlog-dev (system library)
 - Clang + libclang (for any bindgen steps)
 
-The container builds natively for `linux/arm64/v8` — no QEMU emulation. QEMU binfmt is only needed if you're building on a non-ARM host; on Apple Silicon or ARM workstations it runs at full speed.
+The reader is cross compiled on x86 PCs and compiled natively on arm64 machines (`build.py --mode`), nothing is emulated while compiling. The build steps are in [stm32-data-reader]({{< ref "/07-build-and-contribute/02-build-system/05-stm32-data-reader.md" >}}).
 
 ---
 
@@ -148,36 +148,14 @@ The container builds natively for `linux/arm64/v8` — no QEMU emulation. QEMU b
 
 ### Path: Docker (recommended — no local toolchain needed)
 
-**Firmware only** (if you only changed STM32 code):
-
-```bash
-cd stm32-data-reader/firmware
-bash build.sh
-# Output: firmware/build/Firmware/wombat.{elf,bin,hex,map,lss}
-```
-
-Internally this runs `docker compose up --build --exit-code-from build-wombat-firmware`, which builds the Ubuntu + `gcc-arm-none-eabi` image defined in `firmware/Dockerfile`, mounts `firmware/` and `../shared/` into the container, then executes `build.sh` (which deletes any old `build/` directory, re-runs CMake, and builds with `$(nproc)` parallel jobs).
-
-**Pi bridge + firmware** (normal development cycle):
-
 ```bash
 cd stm32-data-reader
-./build.sh
+python3 build.py                  # reader + firmware -> builds/stm32-data-reader_<version>_arm64.deb
+python3 build.py --skip-firmware  # reader only, reuse the firmware of the last build
+python3 build.py --test           # also run the unit tests
 ```
 
-This:
-1. Builds the Pi bridge binary (`build/stm32_data_reader`) inside the ARM64 Debian container.
-2. Then runs the firmware Docker Compose step (unless `SKIP_FIRMWARE=1`).
-3. Copies `firmware/build/Firmware/wombat.bin` and `firmware/flashFiles/*` into `build/` so `install.py` finds them next to the reader binary.
-
-Useful env var overrides:
-
-```bash
-SKIP_FIRMWARE=1 ./build.sh          # Pi bridge only (faster when firmware unchanged)
-CMAKE_BUILD_TYPE=Debug ./build.sh   # Debug build (both artifacts)
-FORCE_RECONFIGURE=1 ./build.sh      # Force CMake re-configure (after CMakeLists.txt changes)
-REBUILD_IMAGE=1 ./build.sh          # Rebuild the Docker builder image
-```
+`build.py` builds the reader in the builder image of `Dockerfile` and the firmware in the image of `Dockerfile.firmware` (`arm-none-eabi-gcc`), then packs both into one `.deb` with the systemd unit and the flash scripts. Only Docker and Python 3 are needed. All options are on the [stm32-data-reader build page]({{< ref "/07-build-and-contribute/02-build-system/05-stm32-data-reader.md" >}}).
 
 ### Path: Native CMake (toolchain installed locally)
 
@@ -250,7 +228,7 @@ Why sector erase (`-e 8`) instead of mass erase: `stm32flash` 0.7 times out wait
 
 ### Manual flash (from the Pi)
 
-If `install.py` has already deployed the flash scripts:
+On the Pi the package installs the flash scripts to `/usr/lib/stm32-data-reader/firmware` and links `~/flashFiles` to that directory:
 
 ```bash
 ssh pi@<PI_IP>
@@ -269,21 +247,18 @@ bash ~/flashFiles/reset_coprocessor.sh
 
 ```bash
 cd stm32-data-reader
-./deploy.sh                          # build + deploy to default Pi (10.101.156.14)
-RPI_HOST=192.168.1.100 ./deploy.sh   # override target IP
-RPI_USER=ubuntu ./deploy.sh          # override SSH user (default: pi)
+python3 deploy.py --host 192.168.4.1
 ```
 
-`deploy.sh` calls `build.sh` then `install.py`. `install.py` does (in order):
+`deploy.py` copies `builds/*.deb` to the Pi, sets `stm32-data-reader` to `dev` in `/etc/raccoon-bundle.json` and installs the package with `apt`. The `postinst` of the package then, in this order:
 
-1. Tests SSH connectivity.
-2. Stops `stm32_data_reader.service`.
-3. Copies `wombat.bin`, `flash_wombat.sh`, `reset_coprocessor.sh`, `init_gpio.sh` to `~/flashFiles/` on the Pi.
-4. Runs `flash_wombat.sh` over SSH.
-5. Copies the Pi bridge binary to `/home/pi/stm32_data_reader/`.
-6. Installs / reloads the systemd unit files.
-7. Enables `loginctl linger` for the `pi` user (keeps `/dev/shm/raccoon_ring_*` files alive across SSH disconnects).
-8. Starts `lcm-loopback-multicast.service` then `stm32_data_reader.service`.
+1. Creates `/var/lib/stm32-data-reader` and removes old units of earlier installs.
+2. Enables `loginctl linger` for the `pi` user (keeps `/dev/shm/raccoon_ring_*` alive across SSH disconnects).
+3. Links `~/flashFiles` to `/usr/lib/stm32-data-reader/firmware`.
+4. Flashes `wombat.bin` with `flash_wombat.sh` when `/dev/ttyAMA0`, `stm32flash` and `pinctrl` are present. A failed flash only prints a warning.
+5. Enables and restarts `stm32_data_reader.service`.
+
+Every install therefore flashes the STM32 again. Releases are installed the same way by `raccoon update`.
 
 ---
 
@@ -291,12 +266,12 @@ RPI_USER=ubuntu ./deploy.sh          # override SSH user (default: pi)
 
 ### As a systemd service (production)
 
-After `deploy.sh` completes, the reader runs as:
+After the install the reader runs as:
 
 ```
-stm32_data_reader.service   (Requires: lcm-loopback-multicast.service)
-WorkingDirectory: /home/pi/stm32_data_reader
-ExecStart:        /home/pi/stm32_data_reader/stm32_data_reader
+stm32_data_reader.service
+WorkingDirectory: /var/lib/stm32-data-reader
+ExecStart:        /usr/bin/stm32_data_reader
 Restart=always    RestartSec=5
 ```
 
@@ -313,16 +288,15 @@ ssh pi@<PI_IP> "sudo journalctl -u stm32_data_reader -f"
 ssh pi@<PI_IP>
 # Stop the service first so both don't fight over /dev/spidev0.0
 sudo systemctl stop stm32_data_reader
-cd /home/pi/stm32_data_reader
-WOMBAT_LOG_LEVEL=debug ./stm32_data_reader
+WOMBAT_LOG_LEVEL=debug /usr/bin/stm32_data_reader
 ```
 
 ### Runtime flags
 
 ```bash
-./stm32_data_reader --version     # Print STMREADER_VERSION and exit
-WOMBAT_LOG_LEVEL=debug ./stm32_data_reader    # Maximum verbosity
-WOMBAT_LOG_LEVEL=warn  ./stm32_data_reader    # Warnings and errors only
+stm32_data_reader --version       # Print STMREADER_VERSION and exit
+WOMBAT_LOG_LEVEL=debug stm32_data_reader    # Maximum verbosity
+WOMBAT_LOG_LEVEL=warn  stm32_data_reader    # Warnings and errors only
 ```
 
 Valid log levels: `debug`, `info`, `warn`, `error`. The env override is applied before any service initialisation, so even early-init messages (SPI open, GPIO init) are visible at `debug`.
@@ -367,7 +341,7 @@ sequenceDiagram
             SPI->>SPI: abort (fatal)
         end
     end
-    App->>main: run() — main loop at ~200 Hz
+    App->>main: run() — main loop (5 ms tick)
 ```
 
 The version probe sends a dummy SPI transfer and reads `rx.transferVersion` — the firmware writes `TRANSFER_VERSION` (21) into this field on every SPI exchange. If the field doesn't match, the Pi side invokes `flash_wombat.sh` inline (blocking), reopens the SPI device, and retries once. A second mismatch after reflash is a fatal error.
@@ -428,8 +402,8 @@ minicom -D /dev/ttyAMA0 -b 115200
 |---|---|---|
 | `spi_init() failed` | `/dev/spidev0.0` not present or wrong permissions | Check `ls -l /dev/spidev*`; SPI must be enabled in `raspi-config` |
 | `STM32 health check failed: updateTime has not changed for >10s` | SPI bus stalled or firmware crashed | Check USART3 output for firmware fault; power-cycle Wombat |
-| `Version check: MISMATCH` at startup, loop of reflash attempts | `wombat.bin` not present in `~/flashFiles/` | Re-run `deploy.sh` |
-| `STM32 flash failed!` in install.py | `stm32flash` not installed on Pi, or wrong GPIO wiring | `sudo apt install stm32flash`; check GPIO 17/23 |
+| `Version check: MISMATCH` at startup, loop of reflash attempts | `wombat.bin` not present in `/usr/lib/stm32-data-reader/firmware` (`~/flashFiles`) | Reinstall the package (`raccoon update` or `deploy.py`) |
+| `firmware flash failed` warning during the install | `stm32flash` not installed on Pi, or wrong GPIO wiring | `sudo apt install stm32flash`; check GPIO 17/23 |
 | UART heartbeats stop but SPI is live | Firmware writing calibration to flash | Normal; wait ~12s for recovery |
 | Pi bridge crashes immediately after systemd restart | `/dev/shm/raccoon_ring_*` inode inconsistency | Do NOT wipe `/dev/shm` on restart; unit file deliberately omits `ExecStartPre` wipe |
 
@@ -498,8 +472,8 @@ When you add a field to the SPI protocol:
 
 ## Related Pages
 
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — wire format, `TRANSFER_VERSION 21`, version mismatch behaviour
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — clock tree, timer inventory, and interrupt priorities that constrain firmware timing budgets
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — `SpiReal`/`SpiMock` switch, `USE_SPI_MOCK` build flag, and the `Application` startup sequence
-- [Motor Control](/06-advanced/firmware/motor-control/) — BEMF timing constants, velocity PID loop details
-- [Robot Services and systemd](/06-advanced/firmware/robot-services-and-systemd/) — `stm32_data_reader.service` lifecycle, linger, shared-memory transport
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — wire format, `TRANSFER_VERSION 21`, version mismatch behaviour
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — clock tree, timer inventory, and interrupt priorities that constrain firmware timing budgets
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `SpiReal`/`SpiMock` switch, `USE_SPI_MOCK` build flag, and the `Application` startup sequence
+- [Motor Control](/06-advanced/04-firmware/motor-control/) — BEMF timing constants, velocity PID loop details
+- [Robot Services and systemd](/06-advanced/04-firmware/robot-services-and-systemd/) — `stm32_data_reader.service` lifecycle, linger, shared-memory transport

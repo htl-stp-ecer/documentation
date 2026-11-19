@@ -1,16 +1,14 @@
 ---
 title: "Library Architecture"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 10
 ---
 
 # Library Architecture
 
-`raccoon` is a modular robotics SDK written in C++20 with Python bindings. It runs on a Raspberry Pi inside the Wombat controller. You write mission code in Python; the heavy lifting (control loops at 100 Hz, kinematics math, motor drivers) happens in compiled C++ underneath.
-
-> **Always use `from raccoon import *`** in mission and step files. The older `from libstp import *` still works but emits a `DeprecationWarning` — `libstp` is a compatibility shim that will be removed in a future version. If you see `libstp` in older project files (such as the examplebot), replace the import with `raccoon`.
+`raccoon` is a modular robotics SDK written in C++20 with Python bindings. It runs on a Raspberry Pi inside the Wombat controller. You write mission code in Python; the heavy lifting (control loops at 100 Hz, kinematics math, motor drivers) happens in compiled C++ underneath. Import conventions are on [Project Model]({{< ref "/06-advanced/02-project-model.md#import-convention" >}}).
 
 ## The Layer Cake
 
@@ -43,7 +41,7 @@ graph TB
     end
 
     subgraph "Platform"
-        WOM["Wombat Driver<br/><small>transport-based IPC to firmware</small>"]
+        WOM["Wombat Driver<br/><small>shared-memory transport to firmware</small>"]
         MOCK["Mock Driver<br/><small>For testing without hardware</small>"]
     end
 
@@ -103,7 +101,7 @@ When you call `drive_forward(25)`, the motion layer plans a trapezoidal velocity
 Abstract interfaces (`Motor`, `Servo`, `IMU`, `IRSensor`, etc.) that hide platform-specific details. The same mission code works whether you're running on a real Wombat or a mock driver for testing.
 
 ### Platform Layer (Orange)
-Concrete drivers that talk to actual hardware. The Wombat driver communicates with the STM32 firmware through the `raccoon_transport` layer (a custom IPC transport). The mock driver returns simulated values for testing.
+Concrete drivers that talk to actual hardware. The Wombat driver does not talk to the STM32 directly. It publishes commands and subscribes to sensor values on the [transport]({{< ref "/06-advanced/03-transport.md" >}}), and the `stm32-data-reader` service forwards them to the firmware over SPI. The mock driver returns simulated values for testing.
 
 ## Module Map
 
@@ -114,7 +112,7 @@ Internally, the library is split into many `libstp-*` implementation modules, ea
 | `libstp-foundation` | Core | Types (`Pose`, `ChassisVelocity`), PID, math, logging |
 | `libstp-hal` | HAL | Abstract hardware interfaces |
 | `libstp-platforms` | Platform | Wombat and Mock drivers |
-| `libstp-transport-core` | Platform | Low-level IPC transport layer (`raccoon_transport`) used by Wombat driver |
+| `libstp-transport-core` | Platform | Glue to [`raccoon-transport`]({{< ref "/06-advanced/03-transport.md" >}}) (channels over a shared-memory ring), used by the Wombat driver |
 | `libstp-drive` | Control | Chassis velocity controller |
 | `libstp-kinematics` | Control | Differential and mecanum kinematic models (`DifferentialKinematics`, `MecanumKinematics`) |
 | `libstp-odometry` | Control | Position tracking |
@@ -166,7 +164,7 @@ sequenceDiagram
 
 ## Getting Started
 
-If you haven't set up a robot yet, follow [Getting Started]({{< ref "/00-getting-started/_index.md" >}}) first. It walks you through creating a project, configuring hardware in the YAML file, generating code, calibrating, and running your first mission.
+This page is about the library itself. How a project turns into a running robot (YAML, code generation, `Defs`, `Robot`, the mission lifecycle) is on [Project Model]({{< ref "/06-advanced/02-project-model.md" >}}). If you haven't set up a robot yet, start with [Getting Started]({{< ref "/00-getting-started/_index.md" >}}).
 
 ## Key Design Decisions
 

@@ -1,7 +1,7 @@
 ---
 title: "Firmware and Pi Bridge"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 30
 ---
@@ -77,14 +77,14 @@ sequenceDiagram
     SPI->>DC: returns SensorData from TxBuffer
     DC->>DP: publishSensorData() called by Application::publishCurrentData()
     DP->>LCM: publish raccoon/bemf/N/value, raccoon/motor/N/position<br/>(rate-gated 50Hz, noise-epsilon filtered)
-    LCM->>PY: raccoon-lib reads LcmReader cache → motor.position()
+    LCM->>PY: raccoon-lib reads the TransportReader cache → motor.position()
 ```
 
 ## Learning path
 
 Work through the pages in this order. Each one builds on the previous:
 
-### 1. [Architecture Overview](/06-advanced/firmware/architecture/)
+### 1. [Architecture Overview](/06-advanced/04-firmware/architecture/)
 
 The mental model, responsibility split, the two-processor rationale, the full component map with real file names and function names, motor control modes, the transport channel taxonomy, and a glossary of every term used across the stack. **Start here.**
 
@@ -96,7 +96,7 @@ Key questions answered:
 
 ---
 
-### 2. [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/)
+### 2. [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/)
 
 The bare-metal super-loop, interrupt hierarchy, all five hardware timers, BEMF orchestration inside the TIM6 ISR, ADC architecture, the main loop task table, and real-time hazards (blocking UART, SPI idle guard, updateFlags race).
 
@@ -107,7 +107,7 @@ Key questions answered:
 
 ---
 
-### 3. [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/)
+### 3. [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/)
 
 The wire contract between the STM32 and the Pi: the `TxBuffer` and `RxBuffer` packed structs, how the DMA circular mode works, the version handshake, the `updateFlags` bitmask, and the per-transfer timing.
 
@@ -118,7 +118,7 @@ Key questions answered:
 
 ---
 
-### 4. [Data Pipeline](/06-advanced/firmware/data-pipeline/)
+### 4. [Data Pipeline](/06-advanced/04-firmware/data-pipeline/)
 
 The complete path from a physical signal to a Python API call, with latency budget at each stage: ADC → BEMF processing → TxBuffer → SPI transfer → `DeviceController` → `DataPublisher` → transport → raccoon-lib.
 
@@ -129,7 +129,7 @@ Key questions answered:
 
 ---
 
-### 5. [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/)
+### 5. [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/)
 
 Deep dive into the `stm32-data-reader` process: `Application` lifecycle, `SpiReal` vs `SpiMock`, `DeviceController` state caching and smooth servo interpolation, `DataPublisher` gate logic, `CommandSubscriber` timestamp deduplication, `MotorWatchdog`, `LcmBroker`, and the `raccoon_ring` shared memory transport.
 
@@ -140,9 +140,9 @@ Key questions answered:
 
 ---
 
-### 6. [Motor Control](/06-advanced/firmware/motor-control/)
+### 6. [Motor Control](/06-advanced/04-firmware/motor-control/)
 
-The BEMF round-robin cycle (timing constants, ADC2 DMA, median+IIR filtering, dt-aware integration), the motor state machine (`update_motor()`), the velocity PID (`PID.c`), the MTP sqrt-deceleration profile, and the chassis velocity loop.
+The BEMF round-robin cycle (timing constants, ADC2 DMA, median+IIR filtering, dt-aware integration), the motor state machine (`update_motor()`), the velocity PID (`PID.c`), the MTP trapezoid profile and position hold, and the chassis velocity loop.
 
 Key questions answered:
 - How does BEMF position tracking actually work?
@@ -151,7 +151,7 @@ Key questions answered:
 
 ---
 
-### 7. [Sensor Reading](/06-advanced/firmware/sensors/)
+### 7. [Sensor Reading](/06-advanced/04-firmware/sensors/)
 
 ADC1 analog oversampling (6 ports + battery voltage, 250 Hz), digital GPIO inputs (11 ports), and the IMU pipeline (MPU-9250 DMP, SPI3, 50 Hz quaternion + heading fusion).
 
@@ -162,7 +162,7 @@ Key questions answered:
 
 ---
 
-### 8. [IMU Stack](/06-advanced/firmware/imu/)
+### 8. [IMU Stack](/06-advanced/04-firmware/imu/)
 
 Full coverage of the MPU-9250 hardware layer (SPI3 pin assignments, bus speed, AK8963 aux I²C), the DMP initialization sequence, 6-axis quaternion fixed-point formats, the eMPL/MPL fusion pipeline, sensor units and frames, orientation matrices, and the flash persistence design (currently disabled).
 
@@ -173,7 +173,7 @@ Key questions answered:
 
 ---
 
-### 9. [Robot Services and systemd](/06-advanced/firmware/robot-services-and-systemd/)
+### 9. [Robot Services and systemd](/06-advanced/04-firmware/robot-services-and-systemd/)
 
 The Pi-side service topology: what `stm32-data-reader` is, how it is managed by systemd, the `MotorWatchdog` heartbeat mechanism, the STM32 health check (`updateTime` timeout), and the graceful shutdown sequence.
 
@@ -184,9 +184,9 @@ Key questions answered:
 
 ---
 
-### 10. [Build and Flash](/06-advanced/firmware/build-flash/)
+### 10. [Build and Flash](/06-advanced/04-firmware/build-flash/)
 
-How to cross-compile the STM32 firmware (Docker / gcc-arm-none-eabi), how to cross-compile the Pi bridge for ARM64, how to deploy both to the Pi (`deploy.sh`), and how to verify the protocol version match.
+How to cross-compile the STM32 firmware (Docker / gcc-arm-none-eabi), how to cross-compile the Pi bridge for ARM64, how to deploy both to the Pi (`build.py` / `deploy.py`), and how to verify the protocol version match.
 
 ---
 
@@ -201,7 +201,6 @@ How to cross-compile the STM32 firmware (Docker / gcc-arm-none-eabi), how to cro
 | raccoon-transport transport wrapper | `stm32-data-reader/raccoon-transport/` |
 | transport channel names | `raccoon-transport/cpp/include/raccoon/Channels.h` |
 
-> **Note:** The firmware previously lived in `Firmware-Stp/` at the repository root. It has been merged into `stm32-data-reader/firmware/`. Any path references to `Firmware-Stp/` in older notes or scripts are stale.
 
 ## Key numbers at a glance
 
@@ -221,6 +220,6 @@ How to cross-compile the STM32 firmware (Docker / gcc-arm-none-eabi), how to cro
 | Pi health check timeout (SPI updateTime) | 10 s | `Application.cpp` `kTimeout` |
 | UART heartbeat warn timeout | 12 s | `Application.cpp` `kHeartbeatWarnTimeout` |
 | DataPublisher rate gate | 50 Hz (20 ms min interval) | `DataPublisher.cpp` `kFiftyHzInterval` |
-| MTP done threshold | 40 BEMF ticks | `motor.c` `MTP_DONE_THRESHOLD` |
+| MTP reached threshold / hold release | 3 / 8 BEMF ticks | `motor.c` `MTP_DONE_THRESHOLD`, `MTP_HOLD_RELEASE` |
 | BEMF dead-zone | ±25 ADC counts | `bemf.c` `BEMF_DEADZONE` |
 | Odometry rotational slip threshold | 0.5 rad/s | `odometry.c` `WZ_SLIP_THRESHOLD` |

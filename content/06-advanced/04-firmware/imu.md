@@ -1,7 +1,7 @@
 ---
 title: "IMU Stack"
-author: "Raccoon Docs Team"
-date: 2026-06-18
+author: "Mario Scholze"
+date: 2026-11-18
 draft: false
 weight: 8
 ---
@@ -355,29 +355,11 @@ These hardware offsets are subtracted by the MPU-9250 before the data ever reach
 - **2**: medium accuracy
 - **3**: high accuracy (fully calibrated)
 
-The `imu.c` loop watches these accuracy levels and sets a `cal_needs_save` flag whenever any sensor improves. The intention is to persist the converged calibration to Flash.
+The `imu.c` loop watches these accuracy levels and tracks them for the (disabled) Flash save.
 
-### Flash persistence: currently disabled
+### Flash persistence is disabled
 
-The SPI protocol defines a `PI_BUFFER_UPDATE_SAVE_IMU_CAL` flag (bitmask `0x08` in `rxBuffer.updates`). When the Pi sets this flag, the firmware calls `cal_save_to_flash()` in `Storage/flash_cal.c`.
-
-**`cal_save_to_flash()` is currently a no-op.** It returns `INV_SUCCESS` immediately without writing anything. The comment in `flash_cal.c` explains the reason: on the STM32F427VI, erasing and reprogramming Flash sector 12 (the 16 KiB block in Bank 2 used for calibration data) blocks the entire main loop for multiple minutes in practice. During that window, servo PWM registers never update, causing servos to freeze. The polling-mode HAL Flash API was the root cause.
-
-The auto-save path in `imu.c` is also effectively disabled:
-
-```c
-if (cal_needs_save && imu_timestamp >= next_cal_save_ms) {
-    cal_needs_save = 0;
-    next_cal_save_ms = imu_timestamp + CAL_PERIODIC_SAVE_MS; // 5 min
-    cal_save_to_flash();  // no-op
-}
-```
-
-The first save attempt happens 30 s after any accuracy improvement (`CAL_SAVE_INTERVAL_MS = 30000`); subsequent re-saves happen every 5 minutes (`CAL_PERIODIC_SAVE_MS = 300000`). These timers run normally but the actual Flash write is skipped.
-
-`cal_load_from_flash()` always returns `INV_ERROR_CALIBRATION_LOAD`, so `setupImu()` always starts fresh on boot. Calibration converges within 2–3 minutes of normal motion with `inv_enable_fast_nomot()` active.
-
-**If you need to re-enable Flash persistence:** the `flash_cal.c` comment recommends switching to interrupt-driven Flash programming (`HAL_FLASH_Program_IT` / `HAL_FLASHEx_Erase_IT`) and driving it from a low-priority background task that yields between sectors, ensuring the SysTick and PWM timers remain above the Flash IRQ in the NVIC priority group.
+The converged calibration is not stored across boots: `cal_save_to_flash()` is a no-op and `setupImu()` always starts fresh. Calibration converges within 2–3 minutes of normal motion. The reason and the rules for re-enabling it are in [IMU calibration is not persisted]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md#imu-calibration-is-not-persisted" >}}).
 
 ## `ImuData` struct and SPI fields
 
@@ -414,9 +396,9 @@ The `accuracy` field is the MPL's 0–3 accuracy metric for that sensor. Code co
 
 ## Related pages
 
-- [Firmware Runtime and Scheduling](/06-advanced/firmware/firmware-runtime/) — super-loop scheduling of `readImu()`, SPI2 idle guard for `txBuffer.imu` writes, and interrupt priority context
-- [Sensor Reading](/06-advanced/firmware/sensors/) — analog and digital sensor paths alongside the IMU overview
-- [Data Pipeline](/06-advanced/firmware/data-pipeline/) — how `txBuffer.imu` fields travel to `imu.heading()`, `imu.quaternion()`, and other Python API calls
-- [Pi Bridge Internals](/06-advanced/firmware/pi-bridge-internals/) — `DataPublisher` IMU channel gate logic and `raccoon/gyro`, `raccoon/imu/*` publish rates
-- [SPI Communication Protocol](/06-advanced/firmware/spi-protocol/) — complete `TxBuffer` layout and transport channel names for all IMU fields
-- [Architecture Overview](/06-advanced/firmware/architecture/) — interrupt priorities and how the IMU main loop interleaves with motor control
+- [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — super-loop scheduling of `readImu()`, SPI2 idle guard for `txBuffer.imu` writes, and interrupt priority context
+- [Sensor Reading](/06-advanced/04-firmware/sensors/) — analog and digital sensor paths alongside the IMU overview
+- [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — how `txBuffer.imu` fields travel to `imu.heading()`, `imu.quaternion()`, and other Python API calls
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `DataPublisher` IMU channel gate logic and `raccoon/gyro`, `raccoon/imu/*` publish rates
+- [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — complete `TxBuffer` layout and transport channel names for all IMU fields
+- [Architecture Overview](/06-advanced/04-firmware/architecture/) — interrupt priorities and how the IMU main loop interleaves with motor control
