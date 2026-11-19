@@ -128,4 +128,4 @@ Because the code and flowchart share the same source file, edits in one are visi
 ## Cross-references
 
 - [Flowchart Editor]({{< ref "/04-web-ide/03-flowchart-editor.md" >}}) — the primary editing surface
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — how flowchart saves become Python files
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — how flowchart saves become Python files

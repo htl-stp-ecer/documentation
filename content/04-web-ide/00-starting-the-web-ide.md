@@ -37,7 +37,7 @@ raccoon web --no-open    # start the server but don't open the browser
 - `GET/POST/PUT/DELETE /api/v1/...` — IDE backend API (project files, missions, steps, IK/FK)
 - `WebSocket /ws/...` — live run output and simulation pose events
 
-The Pi server on the robot is **separate** — it is not started by `raccoon web`. The WebIDE connects to it at `robot-ip:8421` when you issue real-robot run commands. See [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) for the full two-backend diagram.
+The Pi server on the robot is **separate** — it is not started by `raccoon web`. The WebIDE connects to it at `robot-ip:8421` when you issue real-robot run commands. See [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) for the full two-backend diagram.
 
 ## Troubleshooting startup
 

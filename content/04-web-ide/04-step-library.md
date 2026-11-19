@@ -139,4 +139,4 @@ Helper functions you do not want in the UI should remain unannotated — the IDE
 
 - [Settings Modal]({{< ref "/04-web-ide/05-settings-modal.md" >}}) — refreshing the step index
 - [Flowchart Editor]({{< ref "/04-web-ide/03-flowchart-editor.md" >}}) — dragging steps onto the canvas
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — where step indexing fits in the overall system
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — where step indexing fits in the overall system

@@ -91,4 +91,4 @@ Below the canvas the dialog shows a list of detected collision events. Each entr
 ## Cross-references
 
 - [Starting the WebIDE]({{< ref "/04-web-ide/00-starting-the-web-ide.md" >}}) — `raccoon web` and the local backend port
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — what the local IDE backend owns vs. the Pi server
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — what the local IDE backend owns vs. the Pi server

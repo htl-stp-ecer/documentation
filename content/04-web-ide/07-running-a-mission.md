@@ -46,7 +46,7 @@ sequenceDiagram
     end
 ```
 
-See [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) for the sequence diagram showing what happens end-to-end when you press Run.
+See [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) for the sequence diagram showing what happens end-to-end when you press Run.
 
 Run configurations are shared between the WebIDE and the `raccoon run` CLI. Any configuration you save in the IDE is written to `run_configurations:` in `raccoon.project.yml` and immediately available from the command line.
 
@@ -200,4 +200,4 @@ For quick iteration during development, use the built-in `dev` preset or create 
 
 - [Run Configurations]({{< ref "/04-web-ide/11-run-configurations.md" >}}) — creating and editing run configurations
 - [Localization Replay]({{< ref "/04-web-ide/12-localization-replay.md" >}}) — replaying a recorded run
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — what happens at the backend when you press Run
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — what happens at the backend when you press Run

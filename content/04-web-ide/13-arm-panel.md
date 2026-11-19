@@ -267,5 +267,5 @@ All arm endpoints are on the **IDE backend** (laptop, port 4200) except `/comman
 
 ## Cross-references
 
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — why FK/IK is on the IDE backend but `/command` is on the Pi
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — why FK/IK is on the IDE backend but `/command` is on the Pi
 - [Tool Panels]({{< ref "/04-web-ide/06-floating-panels.md" >}}) — how to open the Arm Visualizer from the tool stripe

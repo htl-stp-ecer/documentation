@@ -112,4 +112,4 @@ After a run completes, a **Timing Panel** overlay appears inside the flowchart c
 - [Step Library]({{< ref "/04-web-ide/04-step-library.md" >}}) — finding steps to drag onto the canvas
 - [Python Code Editor]({{< ref "/04-web-ide/10-code-editor.md" >}}) — viewing and editing the generated Python source
 - [Running a Mission]({{< ref "/04-web-ide/07-running-a-mission.md" >}}) — running and debugging from the flowchart
-- [Architecture]({{< ref "/06-advanced/web-ide-internals/02-architecture.md" >}}) — how a flowchart save becomes a Python file
+- [Architecture]({{< ref "/06-advanced/05-web-ide-internals/02-architecture.md" >}}) — how a flowchart save becomes a Python file
