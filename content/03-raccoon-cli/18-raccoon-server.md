@@ -37,7 +37,7 @@ The server spawns `src/main.py` as a child process and streams its stdout back t
 
 ## Transport contract: endpoint and run gate
 
-At start the server runs the [transport contract check]({{< ref "/06-advanced/transport/01-contract.md" >}}) for itself (component `raccoon-server`, its bundle entry is `raccoon-cli`) and records the result. Unlike the other components it **stays up** on a mismatch, because it is the one that reports the problem.
+At start the server runs the [transport contract check]({{< ref "/06-advanced/03-transport.md" >}}) for itself (component `raccoon-server`, its bundle entry is `raccoon-cli`) and records the result. Unlike the other components it **stays up** on a mismatch, because it is the one that reports the problem.
 
 | Endpoint | Description |
 |----------|-------------|

@@ -159,7 +159,7 @@ The runtime reads three environment variables set automatically by `raccoon run`
 
 ## Transport contract: refusal and dev warning
 
-Before the Pi starts your program, its server checks that every component on the robot matches the bundle ([Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})). If one does not, the run is **refused** and the server's message is printed, naming the component and both sides:
+Before the Pi starts your program, its server checks that every component on the robot matches the bundle ([Transport contract]({{< ref "/06-advanced/03-transport.md" >}})). If one does not, the run is **refused** and the server's message is printed, naming the component and both sides:
 
 ```
 Failed to start run on Pi: Transport contract check failed; refusing to start.

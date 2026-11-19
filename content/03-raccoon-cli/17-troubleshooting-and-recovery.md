@@ -108,7 +108,7 @@ The Pi server refuses runs while a component does not match the bundle. Read the
 2. `raccoon update` — brings every component and `/etc/raccoon-bundle.json` to one bundle and restarts the services.
 3. Still wrong, or the server is down: flash the latest raccoon image.
 
-Typical cases: `stm32-data-reader` shows `mismatch` and *not active* (it refused and exited with code 78; it does not restart by itself — fix the cause, then `sudo systemctl restart stm32_data_reader`); `bundle file is missing` (the Pi was not set up from an image or the file was deleted — run `raccoon update` or flash); you are testing your own transport (write `dev` into the bundle's `contract_hash` by hand, see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md#dev-mode" >}})). Full explanation: [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
+Typical cases: `stm32-data-reader` shows `mismatch` and *not active* (it refused and exited with code 78; it does not restart by itself — fix the cause, then `sudo systemctl restart stm32_data_reader`); `bundle file is missing` (the Pi was not set up from an image or the file was deleted — run `raccoon update` or flash); you are testing your own transport (write `dev` into the bundle's `contract_hash` by hand, see [Transport contract]({{< ref "/06-advanced/03-transport.md#dev-mode" >}})). Full explanation: [Transport contract]({{< ref "/06-advanced/03-transport.md" >}}).
 
 ## `raccoon update` says the bundle has no transport version
 

@@ -99,7 +99,7 @@ raccoon connect wombat.local --no-save
 
 ## Transport contract notice
 
-After connecting, raccoon asks the Pi whether all components match the bundle. If not, it prints one red line (`Runs will be refused; see raccoon doctor`); in dev mode a yellow line. Nothing is checked on your laptop. See [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
+After connecting, raccoon asks the Pi whether all components match the bundle. If not, it prints one red line (`Runs will be refused; see raccoon doctor`); in dev mode a yellow line. Nothing is checked on your laptop. See [Transport contract]({{< ref "/06-advanced/03-transport.md" >}}).
 
 ## Where the connection is saved
 

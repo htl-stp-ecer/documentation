@@ -17,7 +17,7 @@ Brings your **project** (laptop side) and the **robot** (Pi side) to the exact c
 
 ## The bundle model
 
-raccoon does not update packages independently. It fetches a **bundle manifest** — a JSON file in the `raccoon-image` repository that lists which exact component versions belong together as a tested set, and the [transport contract hash]({{< ref "/06-advanced/transport/01-contract.md" >}}) all of them were built against. Updating means "bring everything to the versions of this bundle."
+raccoon does not update packages independently. It fetches a **bundle manifest** — a JSON file in the `raccoon-image` repository that lists which exact component versions belong together as a tested set, and the [transport contract hash]({{< ref "/06-advanced/03-transport.md" >}}) all of them were built against. Updating means "bring everything to the versions of this bundle."
 
 1. You can never update one component without the ones it depends on.
 2. A package that is *newer* than the bundle is "ahead of bundle" and left alone — it has not been tested with the rest.
@@ -85,7 +85,7 @@ After the packages, in this order:
 2. the bundle manifest is written to `/etc/raccoon-bundle.json` (root-owned),
 3. `stm32_data_reader` and `flutter-ui` are restarted, then `raccoon.service` last.
 
-The order is deliberate: nothing may start against a bundle file that names a different transport than the one just installed. Every component then re-runs its startup check (see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})).
+The order is deliberate: nothing may start against a bundle file that names a different transport than the one just installed. Every component then re-runs its startup check (see [Transport contract]({{< ref "/06-advanced/03-transport.md" >}})).
 
 ## Options
 
@@ -107,7 +107,7 @@ The order is deliberate: nothing may start against a bundle file that names a di
 
 ## `--dev`
 
-The dev bundle has no transport field, so it runs **without a transport check or pin** (the transport comes in as a dependency) and **does not touch** `/etc/raccoon-bundle.json`. If you set the field to `dev` by hand (see [Dev mode]({{< ref "/06-advanced/transport/01-contract.md#dev-mode" >}})), it stays until the next normal `raccoon update`, which replaces it with the bundle's hash. Use `--dev` deliberately and at your own risk.
+The dev bundle has no transport field, so it runs **without a transport check or pin** (the transport comes in as a dependency) and **does not touch** `/etc/raccoon-bundle.json`. If you set the field to `dev` by hand (see [Dev mode]({{< ref "/06-advanced/03-transport.md#dev-mode" >}})), it stays until the next normal `raccoon update`, which replaces it with the bundle's hash. Use `--dev` deliberately and at your own risk.
 
 ## Common workflows
 
@@ -128,5 +128,5 @@ The Pi's bundle file is only rewritten when at least one Pi package is installed
 
 ## Related pages
 
-- [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})
+- [Transport contract]({{< ref "/06-advanced/03-transport.md" >}})
 - [Troubleshooting And Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}})
