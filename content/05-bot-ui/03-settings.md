@@ -202,7 +202,7 @@ The list loads the 20 newest runs of each program. See [raccoon logs]({{< ref "/
 
 The page has two sections, in the same component order:
 
-**Bundle metadata** is what the bundle file `/etc/raccoon-bundle.json` says ([Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})). **Bundle Version** is the name of the bundle, followed by the version of each component that this bundle expects and the `contract_hash`. The values are shown exactly as written in the file: `v173` stays `v173`, an empty value stays empty, and `dev` is shown as `dev` (version check for this component switched off). If the file is missing or broken, the page says "bundle file missing" or "bundle file unreadable". This part works even when the server is not reachable.
+**Bundle metadata** is what the bundle file `/etc/raccoon-bundle.json` says ([Transport contract]({{< ref "/06-advanced/03-transport.md" >}})). **Bundle Version** is the name of the bundle, followed by the version of each component that this bundle expects and the `contract_hash`. The values are shown exactly as written in the file: `v173` stays `v173`, an empty value stays empty, and `dev` is shown as `dev` (version check for this component switched off). If the file is missing or broken, the page says "bundle file missing" or "bundle file unreadable". This part works even when the server is not reachable.
 
 **Installed versions** is what is really on the robot. It is read from the `raccoon-server` (`/version`), except for BotUI itself, whose version is built into the app and shown immediately.
 

@@ -14,7 +14,7 @@ This page describes what BotUI does with such a screen. To *show* a screen from 
 
 ## The Protocol
 
-Two transport channels carry everything ([Transport]({{< ref "/06-advanced/transport/_index.md" >}})):
+Two transport channels carry everything ([Transport]({{< ref "/06-advanced/03-transport.md" >}})):
 
 | Channel | Direction | Content |
 |---------|-----------|---------|

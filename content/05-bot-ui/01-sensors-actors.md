@@ -12,7 +12,7 @@ Sensors & Actors is the diagnostic and manual-control hub of BotUI. Use it to ch
 
 ## How the Data Gets Here
 
-BotUI subscribes to the sensor channels on the [transport]({{< ref "/06-advanced/transport/_index.md" >}}) and pushes the values into Riverpod providers, so the widgets rebuild by themselves. Nothing is requested on demand: whatever `stm32-data-reader` publishes is what you see. Commands (motor power, servo angle, …) go the other way over the same transport.
+BotUI subscribes to the sensor channels on the [transport]({{< ref "/06-advanced/03-transport.md" >}}) and pushes the values into Riverpod providers, so the widgets rebuild by themselves. Nothing is requested on demand: whatever `stm32-data-reader` publishes is what you see. Commands (motor power, servo angle, …) go the other way over the same transport.
 
 Every screen follows the same drill-down: pick a category, pick a port, arrive at a screen for that kind of sensor. The back arrow goes up one level.
 

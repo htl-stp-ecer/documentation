@@ -62,7 +62,7 @@ If one of them is wrong, a popup **System mismatch** covers the screen. For a tr
 
 Tap **Acknowledge** to continue. BotUI does not quit, it is the only screen on the robot. But the `raccoon-server` refuses to run programs until the mismatch is fixed.
 
-Nothing is shown when everything matches, in dev mode (`botui` is `dev` in the bundle), or when BotUI does not run on a Raccoon device. [Settings → Versions]({{< ref "/05-bot-ui/03-settings.md#app-status" >}}) shows the bundle's values. The result of the check is also written to `/run/raccoon/botui.json`, which `raccoon doctor` shows. Background: [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}}).
+Nothing is shown when everything matches, in dev mode (`botui` is `dev` in the bundle), or when BotUI does not run on a Raccoon device. [Settings → Versions]({{< ref "/05-bot-ui/03-settings.md#app-status" >}}) shows the bundle's values. The result of the check is also written to `/run/raccoon/botui.json`, which `raccoon doctor` shows. Background: [Transport contract]({{< ref "/06-advanced/03-transport.md" >}}).
 
 ## Error Messages from the Robot {#error-messages}
 
