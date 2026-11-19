@@ -1,7 +1,7 @@
 ---
 title: "Settings"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 4
 ---
@@ -132,6 +132,8 @@ One tile per theme, tap to select; the selected one has a white border and a che
 |-------|------|
 | **Colorful** | Every kind of tile has its own color (default) |
 | **Raccoon** | The docs palette: gold, rust and green, repeating from tile to tile, with dark text |
+| **Nordic** | Cool arctic blues and greys with a dusky violet, repeating from tile to tile |
+| **Catppuccin** | Catppuccin Mocha pastels (mauve, blue, green, yellow, peach, red, teal, pink), repeating from tile to tile, with dark text |
 | **Monochrome** | One grey for everything |
 
 Disabled things are grey in every theme.

@@ -76,6 +76,17 @@ Sync complete!
 
 Press **Ctrl+C**. raccoon sends a shutdown signal to the robot, waits for it to stop cleanly (motors disabled), then pulls files back.
 
+## What the program writes to stderr
+
+A Python traceback or an import error goes to the program's stderr, not into the log. `raccoon run` captures it during the run and prints it in full when the run is over, whatever the exit code was. It is printed between the lines `BEGIN PROGRAM STDERR` and `END PROGRAM STDERR`. It is also saved:
+
+- as `stderr.log` in the run's log folder, and
+- at the end of the run's `.jsonl` log as three records with the source `stderr`: the BEGIN line, the text, and the END line. They have the level `error` if the program exited with a non-zero code and `warn` otherwise, so `raccoon logs show 1 --source stderr` finds them.
+
+## Exit code of a crashed program
+
+If the program ends with an uncaught exception, it exits with code 1, and `raccoon run` reports a failed run together with the traceback. Ctrl+C is a clean exit (code 0).
+
 ## Sync backend selection
 
 The push sync backend is chosen automatically:
