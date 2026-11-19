@@ -18,7 +18,7 @@ Everything you need before the robot can drive: what is in a project, how the YA
 | [YAML Includes]({{< ref "/01-programming-guide/01-basics/03-yaml-includes.md" >}}) | Splitting the config over several files with `!include` and `!include-merge` |
 | [Code Generator]({{< ref "/01-programming-guide/01-basics/04-code-generator.md" >}}) | How `raccoon codegen` turns the YAML into `Defs` and `Robot` |
 | [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) | Declaring drivetrain, motors, servos and sensors |
-| [Missions]({{< ref "/01-programming-guide/01-basics/06-missions.md" >}}) | Writing, numbering and ordering missions, `raccoon missions` |
+| [Missions]({{< ref "/01-programming-guide/01-basics/06-missions.md" >}}) | Writing, numbering and ordering missions, `raccoon mission` |
 | [Steps DSL]({{< ref "/01-programming-guide/01-basics/07-steps-dsl.md" >}}) | What a step is, chaining, step lifecycle |
 | [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) | Named profiles for `raccoon run` |
 | [Parallel and Background]({{< ref "/01-programming-guide/01-basics/09-parallel-and-background.md" >}}) | Doing several things at once |

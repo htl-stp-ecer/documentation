@@ -39,7 +39,7 @@ No separate compile step, no firmware flashing, no manual file copying. `raccoon
 Open your first mission file. If you created a project with the setup script, you already have `src/missions/m010_first_mission.py` (or similar). If not, create one:
 
 ```bash
-raccoon missions create M010MyFirstMission
+raccoon mission create M010MyFirstMission
 ```
 
 This creates `src/missions/m010_my_first_mission.py` with the next available 3-digit number (starting at `M010`, incrementing by 10). Replace the contents with:
@@ -389,7 +389,7 @@ missions:
   - M010GrabObjectMission
 ```
 
-> **3-digit mission numbers**: The CLI uses a 3-digit zero-padded numbering scheme: `M000` (setup), `M010`–`M990` (main missions, incrementing by 10), `M999` (shutdown). Numbers `0` and `999` are reserved. `raccoon missions create` picks the next free number if you leave it out (`raccoon missions create MyMission` gives `M010MyMission`) and names the file accordingly.
+> **3-digit mission numbers**: The CLI uses a 3-digit zero-padded numbering scheme: `M000` (setup), `M010`–`M990` (main missions, incrementing by 10), `M999` (shutdown). Numbers `0` and `999` are reserved. `raccoon mission create` picks the next free number if you leave it out (`raccoon mission create MyMission` gives `M010MyMission`) and names the file accordingly.
 
 The `setup` mission runs first (before the start signal). After the start signal, missions run in list order. When `shutdown_in` milliseconds expire, the current mission is cancelled and the `shutdown` mission runs.
 

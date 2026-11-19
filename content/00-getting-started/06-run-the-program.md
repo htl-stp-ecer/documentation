@@ -14,7 +14,7 @@ description: "Run the project with raccoon run and drive a first smoke-test miss
 To check that your motors and wiring are right, create a small test mission:
 
 ```bash
-raccoon missions create M010TestMission
+raccoon mission create M010TestMission
 ```
 
 Mission names use a **three-digit** zero-padded prefix. `M000` is reserved for the setup mission, `M999` for shutdown, and regular missions start at `M010` and increment by 10 (`M010`, `M020`, `M030`, …) so that later you can insert missions (like if you wanna insert one before M010, just use the M005 prefix. This will order it before M010.

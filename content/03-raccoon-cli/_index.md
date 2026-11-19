@@ -41,7 +41,7 @@ Code generation and all validation happen on your laptop. The Pi only receives t
 | `raccoon run` | Checkpoint, generate code, sync, execute, pull back | [run]({{< ref "/03-raccoon-cli/05-run.md" >}}) |
 | `raccoon sync` | Push or pull files between laptop and robot | [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}) |
 | `raccoon codegen` | Generate `defs.py`, `defs.pyi` and `robot.py` | [codegen]({{< ref "/03-raccoon-cli/04-codegen.md" >}}) |
-| `raccoon missions` | Create, list, rename, remove and reorder missions | [missions]({{< ref "/03-raccoon-cli/14-missions.md" >}}) |
+| `raccoon mission` | Create, list, rename, remove and reorder missions | [missions]({{< ref "/03-raccoon-cli/14-missions.md" >}}) |
 | `raccoon calibrate` | Ticks, autotune, servos and step response | [calibrate]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}) |
 | `raccoon logs` | Show, tail, download and clear robot logs | [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) |
 | `raccoon checkpoint` | Automatic safety snapshots of your project | [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) |
@@ -76,4 +76,4 @@ New to the CLI? Read in this order:
 
 For maintenance and problems, jump to [update]({{< ref "/03-raccoon-cli/09-update.md" >}}), [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}), [Troubleshooting and Recovery]({{< ref "/03-raccoon-cli/17-troubleshooting-and-recovery.md" >}}), [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) and [raccoon-server]({{< ref "/03-raccoon-cli/18-raccoon-server.md" >}}) (the daemon on the Pi).
 
-The transport contract check that `connect` and `doctor` report is explained in [Advanced → Transport]({{< ref "/06-advanced/transport/_index.md" >}}).
+The transport contract check that `connect` and `doctor` report is explained in [Advanced → Transport]({{< ref "/06-advanced/03-transport.md" >}}).
