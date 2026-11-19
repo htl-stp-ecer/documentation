@@ -440,5 +440,5 @@ seq([
 ## Related Pages
 
 - [Servos]({{< ref "/01-programming-guide/04-servos/01-servos.md" >}})
-- [WebIDE Advanced Internals]({{< ref "/06-advanced/web-ide-internals/01-advanced-internals.md" >}})
+- [WebIDE Advanced Internals]({{< ref "/06-advanced/05-web-ide-internals/01-advanced-internals.md" >}})
 - [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}})

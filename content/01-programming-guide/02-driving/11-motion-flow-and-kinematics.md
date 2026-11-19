@@ -278,7 +278,7 @@ In that mode, the kinematics layer still preserves the wheel-ratio math, but the
 
 ## Related Pages
 
-- [Architecture & Project Model]({{< ref "/06-advanced/02-project-model.md" >}}) — the full layered stack diagram (step DSL → motion controller → HAL → firmware)
+- [Library Architecture]({{< ref "/06-advanced/01-architecture.md" >}}) — the full layered stack diagram (step DSL → motion controller → HAL → firmware)
 - [Drive System]({{< ref "/01-programming-guide/02-driving/01-drive-system.md" >}}) — tuning reference and the low-level ChassisVelocity API
 - [Odometry]({{< ref "/01-programming-guide/02-driving/10-odometry.md" >}}) — how pose estimation connects to motion feedback
 - [Smooth Path and Spline Motion]({{< ref "/01-programming-guide/02-driving/05-smooth-path.md" >}}) — velocity-continuous motion across segments
