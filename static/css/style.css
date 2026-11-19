@@ -311,7 +311,7 @@ body {
     display: block;
 }
 
-.nav-folder.expanded .folder-toggle svg {
+.nav-folder.expanded > .nav-folder-header .folder-toggle svg {
     transform: rotate(180deg);
 }
 
@@ -326,7 +326,7 @@ body {
     border-left: 2px solid var(--border-color);
 }
 
-.nav-folder.expanded .nav-folder-items {
+.nav-folder.expanded > .nav-folder-items {
     display: block;
 }
 
@@ -369,7 +369,7 @@ body {
 
 /* ─── Doc Content ────────────────────────────────────────── */
 .doc-content {
-    padding-bottom: 40px;
+    padding-bottom: 16px;
 }
 
 .doc-title {
@@ -561,7 +561,7 @@ pre::-webkit-scrollbar-thumb:hover { background: var(--dim); }
     color: var(--dim);
     background: var(--bg-med);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     opacity: 0.8;
 }
@@ -581,6 +581,22 @@ pre code {
     color: inherit;
     font-size: 1em;
 }
+
+/* ─── Syntax highlighting (Chroma classes, site palette) ──── */
+.highlight { margin: 0; }
+.chroma .err { color: inherit; background: none; }
+.chroma .c, .chroma .c1, .chroma .cm, .chroma .cs, .chroma .ch, .chroma .cp, .chroma .cpf { color: #8f8272; font-style: italic; }
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kn, .chroma .kp, .chroma .kr, .chroma .kt, .chroma .ow { color: var(--berry); }
+.chroma .nb, .chroma .bp, .chroma .nf, .chroma .fm, .chroma .nc, .chroma .nd, .chroma .ne { color: var(--sky); }
+.chroma .s, .chroma .s1, .chroma .s2, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .sd, .chroma .se, .chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .ss { color: var(--green); }
+.chroma .m, .chroma .mi, .chroma .mf, .chroma .mh, .chroma .mo, .chroma .il, .chroma .mb { color: var(--rust); }
+.chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi, .chroma .vm, .chroma .na, .chroma .nt { color: var(--amber); }
+.chroma .o, .chroma .p { color: var(--dim); }
+
+/* Shell blocks: command and flags, added by /js/shell-highlight.js */
+.sh-cmd  { color: var(--amber); font-weight: 600; }
+.sh-flag { color: var(--sky); }
+.sh-prompt { color: var(--dim); user-select: none; }
 
 p code, li code, td code, th code {
     background: var(--bg-med);
@@ -704,9 +720,7 @@ td {
 .doc-navigation {
     display: flex;
     justify-content: space-between;
-    margin-top: 48px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-color);
+    margin-top: 20px;
 }
 
 .doc-nav-left {
@@ -722,7 +736,7 @@ td {
     padding: 9px 16px;
     background: var(--bg-med);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 6px;
     color: var(--amber);
     text-decoration: none;
     transition: border-color 0.15s, background 0.15s;
@@ -759,8 +773,8 @@ td {
 
 /* ─── Author attribution ─────────────────────────────────── */
 .doc-author {
-    margin-top: 3rem;
-    padding-top: 1rem;
+    margin-top: 2.5rem;
+    padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
     font-size: 0.82rem;
     color: var(--dim);
@@ -897,11 +911,15 @@ div.contributor-photo-placeholder {
     border-radius: 6px;
     padding: 16px;
     margin: 1.4rem 0;
+    width: fit-content;
+    min-width: 50%;
     max-width: 100%;
     overflow-x: auto;
 }
 
 .mermaid svg {
+    display: block;
+    margin: 0 auto;
     max-width: 100%;
     height: auto;
 }
@@ -1117,7 +1135,7 @@ div.contributor-photo-placeholder {
     color: var(--bg-deeper);
     font-weight: 700;
     font-size: 0.9rem;
-    border-radius: 4px;
+    border-radius: 6px;
     text-decoration: none;
     border: none;
     transition: background 0.15s, color 0.15s;
@@ -1218,4 +1236,14 @@ div.contributor-photo-placeholder {
     font-size: 0.72rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+}
+
+/* ─── External links ─────────────────────────────────────── */
+a.external-link::after {
+    content: "\2197";          /* north-east arrow */
+    display: inline-block;
+    margin-left: 0.2em;
+    font-size: 0.85em;
+    text-decoration: none;
+    opacity: 0.75;
 }

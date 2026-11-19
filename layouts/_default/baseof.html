@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ .Site.LanguageCode }}">
+<html lang="{{ .Site.Language.Locale }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,6 +17,11 @@
         mermaid.initialize({
             startOnLoad: true,
             securityLevel: 'loose',
+            // natural pixel width instead of width="100%", so the box can shrink to the diagram
+            flowchart: { useMaxWidth: false },
+            sequence: { useMaxWidth: false },
+            state: { useMaxWidth: false },
+            class: { useMaxWidth: false },
             theme: 'base',
             themeVariables: {
                 darkMode: true,
@@ -48,6 +53,7 @@
     </div>
     <script src="/js/sidebar.js"></script>
     <script src="/js/search.js"></script>
+    <script src="/js/shell-highlight.js"></script>
     <script src="/js/copy-code.js"></script>
 </body>
 </html>

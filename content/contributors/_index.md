@@ -1,9 +1,9 @@
 ---
 title: "Contributors"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-15
 draft: false
-weight: 99
+weight: 90
 layout: "list"
 type: "contributors"
 contributors:
@@ -18,6 +18,11 @@ contributors:
     role: "Hardware & Embedded Engineering"
     image: "/images/contributors/matthias-greil.jpg"
     bio: "Responsible for the STM32 firmware and low-level hardware integration. Implemented motor encoder readout, IMU fusion, and the electrical engineering work that makes the Raccoon controller's sensors and actuators function reliably."
+  - name: "Mario Scholze"
+    role: "Lead Maintainer (since GCER 2026)"
+    image: "/images/contributors/mario-scholze.jpg"
+    github: "MarioS271"
+    bio: "Took over maintaining raccoon after GCER 2026, responsible for many things that happened after GCER 2026 (like a BotUI overhaul, various CLI fixes and improvements, many fixes across the board, updating the documentation and more)"
   - name: "Jakob Schlögl"
     role: "Documentation & BotUI"
     image: "/images/contributors/jakob-schloegl.jpg"

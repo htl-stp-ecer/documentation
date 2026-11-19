@@ -12,7 +12,7 @@
 
                 {{ $currentPage := . }}
                 {{ $home := .Site.Home }}
-                {{ range sort $home.Sections ".File.Path" }}
+                {{ range $home.Sections.ByWeight }}
                     <div class="nav-folder{{ if $currentPage.IsDescendant . }} expanded{{ end }}">
                         <div class="nav-folder-header">
                             <a href="{{ .Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">

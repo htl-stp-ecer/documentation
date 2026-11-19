@@ -1,7 +1,7 @@
 ---
 title: "RaccoonOS Documentation"
-author: "Tobias Madlberger"
-date: 2024-01-01
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-15
 draft: false
 ---
 
@@ -9,60 +9,44 @@ draft: false
 
 **A full custom robotics platform for competitive Botball — built from scratch, documented for everyone.**
 
-> *"Raise the Floor, Don't Lower the Ceiling"*
+## What is RaccoonOS?
 
----
+RaccoonOS is a robotics platform for competitive Botball that runs on the [KIPR Wombat](https://www.kipr.org/kipr/hardware-software) controller. It covers everything from the STM32 firmware up to a visual mission editor, and all parts talk to each other over one shared transport.
 
-## What Is RaccoonOS?
+You write missions in Python. The platform handles kinematics, PID control, odometry, sensor fusion and the hardware communication underneath. You do not need to touch C++ to build a competitive robot.
 
-RaccoonOS is a five-layer robotics stack that runs on the [KIPR Wombat](https://www.kipr.org/kipr/hardware-software) controller. It covers everything from bare-metal STM32 firmware up to a visual drag-and-drop mission editor — with a shared LCM communication backbone tying it all together.
+## The Platform at a glance
 
-You write missions in Python. The platform handles kinematics, PID control, odometry, sensor fusion, and hardware communication underneath. You don't need to touch C++ to build a competitive robot.
+| Part | What it does |
+|------|--------------|
+| **raccoon-lib** | Python SDK on a C++ core: steps, missions, motion control, odometry, sensors and more |
+| **raccoon-cli** | Code generation, project management, running programs on the robot, logs, ... |
+| **raccoon-transport** | Messages and shared-memory transport between all components on the robot |
+| **raccoon-cam** | Camera service with pluggable image processors and camera backends|
+| **botui** | The touchscreen UI on the robot |
+| **STM32 Reader and Firmware** | Motor control and IMU on the microcontroller, bridged to the Pi over SPI |
+| **WebIDE** | Visual flowchart editor which can generate the python code |
 
-```bash
-# create the project with the setup script (see the quick start), then, inside it:
-raccoon missions list
-raccoon connect 192.168.1.100
-raccoon run
-```
+How these fit together is in [Advanced → The platform at a glance]({{< ref "/06-advanced/_index.md" >}}).
 
-New here? Start with the **[Quick Start guide →]({{< ref "/00-quick-start" >}})**
 
----
+## Documentation sections
 
-## Platform Architecture
-
-Five layers, one platform:
-
-| Layer | Component | What It Does |
-|-------|-----------|--------------|
-| **Application** | `raccoon-lib` | Python SDK — step DSL, missions, PID, odometry, sensors |
-| **Visualization** | BotUI | Flutter touchscreen dashboard — sensor monitoring, program launcher |
-| **Visual Editor** | Web IDE | Drag-and-drop flowchart editor that generates real Python |
-| **Toolchain** | raccoon-cli | Laptop-side tool — project scaffolding, code generation, remote sync |
-| **Firmware** | STM32 firmware | Bare-metal motor control, IMU, SPI bridge to Raspberry Pi |
-
-All layers communicate over **LCM** (Lightweight Communications and Marshalling) — the same message bus whether you're reading sensor data in Python or displaying it in Flutter.
-
----
-
-## Documentation Sections
-
-| Section | What It Covers |
+| Section | What it covers |
 |---------|----------------|
-| [Quick Start]({{< ref "/00-quick-start" >}}) | Flash the SD card, install the CLI, connect to the robot, and run your first mission |
-| [BotUI]({{< ref "/01-botui" >}}) | The touchscreen UI on the robot — sensor dashboard, program launcher, settings |
-| [Programming Guide]({{< ref "/02-programming" >}}) | The full `raccoon` SDK — missions, steps, sensors, drive system, odometry, servos, calibration |
-| [Web IDE]({{< ref "/03-web-ide" >}}) | Visual flowchart editor for building missions without writing code |
-| [raccoon-cli]({{< ref "/04-raccoon-cli" >}}) | All CLI commands — `create`, `connect`, `run`, `update`, `list` |
-| [API Reference]({{< ref "/05-api-reference" >}}) | Full step and function reference with signatures and parameters |
-| [Firmware]({{< ref "/06-firmware" >}}) | STM32 architecture, SPI protocol, motor control, sensor pipeline |
+| [Getting Started]({{< ref "/00-getting-started/_index.md" >}}) | How to set up RaccoonOS, create a raccoon project and get started on programming|
+| [Programming Guide]({{< ref "/01-programming-guide/_index.md" >}}) | Learn Raccoon's steps |
+| [Steps Reference]({{< ref "/02-steps-reference/_index.md" >}}) | Every step with signature and parameters |
+| [Raccoon CLI]({{< ref "/03-raccoon-cli/_index.md" >}}) | All CLI commands: `connect`, `run`, `sync`, `logs`, `doctor`, ... |
+| [WebIDE]({{< ref "/04-web-ide/_index.md" >}}) | The visual flowchart editor for building missions |
+| [BotUI]({{< ref "/05-bot-ui/_index.md" >}}) | The touchscreen UI on the robot |
+| [Advanced]({{< ref "/06-advanced/_index.md" >}}) | Architecture, transport, firmware and other internals |
+| [Build and Contribute]({{< ref "/07-build-and-contribute/_index.md" >}}) | How to build components yourself, how to contribute and how the build system works |
 
----
 
 ## Origins
 
-RaccoonOS grew out of Tobias Madlberger's years competing in Botball at HTL St. Pölten (2022–2026). What started as competition code went through multiple complete rewrites, slowly becoming a proper five-layer platform — not by design, but by necessity.
+RaccoonOS grew out of Tobias Madlberger's years competing in Botball at HTL St. Pölten (2022–2026). What started as competition code went through multiple complete rewrites, slowly becoming a proper platform — not by design, but by necessity.
 
 The platform was formally named *RaccoonOS* in September 2025. On graduating in 2026, Tobias open-sourced everything — not just for future HTL teams, but for every Botball student who would otherwise face the same wall he hit in 2022: no documentation, no foundation, no starting point.
 

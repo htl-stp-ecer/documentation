@@ -56,14 +56,17 @@ Each top-level folder under `content/` is a section. The numeric prefix controls
 
 | Section | Covers |
 |---------|--------|
-| `00-quick-start/` | First-time setup |
-| `01-botui/` | BotUI web dashboard |
-| `02-programming/` | raccoon SDK — missions, steps, sensors, drive |
-| `02-programming/algorithms/` | Self-contained algorithm explanations |
-| `03-web-ide/` | Web IDE panels and workflows |
-| `04-raccoon-cli/` | One page per `raccoon` CLI command |
-| `05-api-reference/` | Auto-generated — do not edit by hand |
-| `06-firmware/` | Firmware internals — SPI, motor control, data pipeline |
+| `00-getting-started/` | From a flashed SD card to a running robot, one page per step |
+| `01-programming-guide/` | Learning path for `raccoon-lib`: `01-basics/`, `02-driving/`, `03-calibration/`, `04-servos/`, `05-motors/`, `06-sensors/`, `07-custom-steps/`, `08-more-topics/`, `09-camera/` |
+| `02-steps-reference/` | The step catalog. Generated from `raccoon-lib`, do not edit by hand |
+| `03-raccoon-cli/` | One page per `raccoon` CLI command |
+| `04-web-ide/` | Using the WebIDE |
+| `05-bot-ui/` | Using the on-robot UI |
+| `06-advanced/` | How RaccoonOS works inside: architecture, `transport/`, `firmware/`, `web-ide-internals/` |
+| `07-build-and-contribute/` | Building, releases, CI, contributing |
+| `contributors/` | Contributor listing |
+
+Sections inside a section (for example `01-programming-guide/02-driving/`) need their own `_index.md`. The sidebar shows two levels: section, then sub-section, then pages.
 
 If your page doesn't fit anywhere, open an issue first and discuss where it belongs.
 
@@ -72,7 +75,7 @@ If your page doesn't fit anywhere, open an issue first and discuss where it belo
 ## Creating a page
 
 ```bash
-hugo new 02-programming/my-topic.md
+hugo new 01-programming-guide/08-more-topics/my-topic.md
 ```
 
 Fill in the front matter:
@@ -92,7 +95,7 @@ Pick `weight` by looking at neighbouring pages. Gaps of 10 make it easy to inser
 
 ### Section index pages
 
-Each folder can have an `_index.md` that renders as the section landing page. If you add a new section, include one with a table linking every page — see `content/02-programming/_index.md` for the pattern.
+Each folder can have an `_index.md` that renders as the section landing page. If you add a new section, include one with a table linking every page — see `content/01-programming-guide/02-driving/_index.md` for the pattern.
 
 ---
 
@@ -143,7 +146,7 @@ Renders the auto-generated step catalog from `raccoon-lib`. Accepts an optional 
 {{< dsl-steps tag="drive" >}}
 ```
 
-Used on `05-api-reference/01-available-steps.md`. Don't use it elsewhere.
+Used on `02-steps-reference/_index.md`. Don't use it elsewhere.
 
 ### Mermaid diagrams
 
@@ -185,3 +188,10 @@ See [DESIGN.md](DESIGN.md) for colours, typography, components, and voice. The C
 ## Questions
 
 Open an issue on GitHub or reach out to the maintainers listed in `content/contributors/_index.md`.
+
+
+---
+
+## Moving or renaming a page
+
+Fix the links that point to the page. Use `{{< ref "/section/page.md" >}}` with the full path from `content/`, not a relative path.

@@ -1,0 +1,4 @@
+{{- /* Markdown links: external ones (http/https to another host) open in a new tab and get an arrow. */ -}}
+{{- $dest := .Destination -}}
+{{- $external := and (or (strings.HasPrefix $dest "http://") (strings.HasPrefix $dest "https://")) (not (strings.Contains $dest "raccoon-docs.pages.dev")) -}}
+<a href="{{ $dest | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $external }} class="external-link" target="_blank" rel="noopener noreferrer"{{ end }}>{{ .Text | safeHTML }}</a>
