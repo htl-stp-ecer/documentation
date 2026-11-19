@@ -1,7 +1,7 @@
 ---
 title: "Calibration Board"
 author: "Raccoon Docs Team, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 5
 ---
@@ -289,4 +289,4 @@ For a freshly assembled or repositioned robot, perform calibration in this order
 
 All calibration values are written to the calibration board's own flash memory and persist across reboots without any action required in BotUI.
 
-> **Cross-link:** The raccoon odometry subsystem that consumes these values is described in the [Programming — Odometry]({{< ref "/01-programming-guide/02-driving/10-odometry.md" >}}) page.
+> **Cross-link:** The raccoon odometry subsystem that consumes these values is described in the [Programming — Odometry]({{< ref "/06-advanced/06-motion-and-localization/03-odometry.md" >}}) page.

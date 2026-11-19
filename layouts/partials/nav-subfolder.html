@@ -1,0 +1,32 @@
+{{ $currentPage := .current }}
+{{ $section := .section }}
+<div class="nav-folder nav-subfolder{{ if $currentPage.IsDescendant $section }} expanded{{ end }}">
+    <div class="nav-folder-header">
+        <a href="{{ $section.Permalink }}" class="nav-folder-link{{ if eq $currentPage.Permalink $section.Permalink }} active{{ end }}">
+            {{ $section.Title }}
+        </a>
+        {{ if or $section.RegularPages $section.Sections }}
+        <button class="folder-toggle" aria-label="Toggle folder">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        {{ end }}
+    </div>
+    {{ if or $section.RegularPages $section.Sections }}
+    <ul class="nav-folder-items">
+        {{ range $section.RegularPages.ByWeight }}
+        <li>
+            <a href="{{ .Permalink }}" class="nav-item{{ if eq $currentPage.Permalink .Permalink }} active{{ end }}">
+                <span class="nav-text">{{ .Title }}</span>
+            </a>
+        </li>
+        {{ end }}
+        {{ range $section.Sections.ByWeight }}
+        <li>
+            {{ partial "nav-subfolder.html" (dict "current" $currentPage "section" .) }}
+        </li>
+        {{ end }}
+    </ul>
+    {{ end }}
+</div>

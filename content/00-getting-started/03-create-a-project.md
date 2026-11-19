@@ -1,7 +1,7 @@
 ---
 title: "Create a Project"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 30
 description: "Set up a new robot project from the example template with one command."
@@ -79,7 +79,7 @@ MyRobot/
 
 The example comes with a small set of demo missions you can read, change, or delete. The `hardware/` files are generated from your YAML config, so edit the YAML, not the Python.
 
-→ See [Project Structure]({{< ref "/01-programming-guide/01-basics/01-project-structure.md" >}}) for a full explanation of every file.
+→ See [Project Structure]({{< ref "/01-programming-guide/01-basics/02-project-structure.md" >}}) for a full explanation of every file.
 
 ## Optional: IDE Setup
 

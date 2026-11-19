@@ -1,7 +1,7 @@
 ---
 title: "Dynamic Screens"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 6
 ---
@@ -10,7 +10,7 @@ weight: 6
 
 While a program runs, it can put its own screens on the display: a calibration wizard, a "press the button to start" prompt, a progress indicator, a live sensor view. These are called **dynamic screens**. BotUI does not know any of them in advance. It receives a description of the screen from your program, draws it, and sends your taps back.
 
-This page describes what BotUI does with such a screen. To *show* a screen from your Python code, see [UI Steps & Screens]({{< ref "/01-programming-guide/08-more-topics/06-ui-steps.md" >}}) in the programming guide. You do not need this page to use the built-in screens; it helps when you build your own screens, or when a screen does not behave as expected.
+This page describes what BotUI does with such a screen. To *show* a screen from your Python code, see [UI Steps & Screens]({{< ref "/06-advanced/08-runtime-and-tooling/02-ui-steps.md" >}}) in the programming guide. You do not need this page to use the built-in screens; it helps when you build your own screens, or when a screen does not behave as expected.
 
 ## The Protocol
 

@@ -1,26 +1,27 @@
 ---
 title: "Basics"
 author: "Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 10
-description: "How a raccoon project is built, how the config becomes code, how missions work and how you run them."
+description: "The concept of raccoon, the project and its config, the code generator, run configurations, missions, steps, waiting and the start lamp."
 ---
 
 # Basics
 
-Everything you need before the robot can drive: what is in a project, how the YAML config turns into Python, how missions are written and how you run them.
+Everything you need before the robot can drive: what raccoon is made of, what is in a project, how the YAML config turns into Python, how you run it, and how a mission is built from steps.
 
 | Page | What it covers |
 |------|----------------|
-| [Project Structure]({{< ref "/01-programming-guide/01-basics/01-project-structure.md" >}}) | Every file and folder in a project and what it is for |
-| [Configuration Reference]({{< ref "/01-programming-guide/01-basics/02-config-reference.md" >}}) | The base config: `raccoon.project.yml` and all files in `config/` |
-| [YAML Includes]({{< ref "/01-programming-guide/01-basics/03-yaml-includes.md" >}}) | Splitting the config over several files with `!include` and `!include-merge` |
-| [Code Generator]({{< ref "/01-programming-guide/01-basics/04-code-generator.md" >}}) | How `raccoon codegen` turns the YAML into `Defs` and `Robot` |
-| [Robot Definition]({{< ref "/01-programming-guide/01-basics/05-robot-definition.md" >}}) | Declaring drivetrain, motors, servos and sensors |
-| [Missions]({{< ref "/01-programming-guide/01-basics/06-missions.md" >}}) | Writing, numbering and ordering missions, `raccoon mission` |
-| [Steps DSL]({{< ref "/01-programming-guide/01-basics/07-steps-dsl.md" >}}) | What a step is, chaining, step lifecycle |
-| [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) | Named profiles for `raccoon run` |
-| [Parallel and Background]({{< ref "/01-programming-guide/01-basics/09-parallel-and-background.md" >}}) | Doing several things at once |
+| [Concept]({{< ref "/01-programming-guide/01-basics/01-concept.md" >}}) | What a step is and how everything fits together, in short |
+| [Project Structure]({{< ref "/01-programming-guide/01-basics/02-project-structure.md" >}}) | Every file and folder in a project and what it is for |
+| [Config Structure]({{< ref "/01-programming-guide/01-basics/03-config-structure.md" >}}) | What the config files contain and which ones you should not touch |
+| [Run Configurations]({{< ref "/01-programming-guide/01-basics/04-run-configurations.md" >}}) | Named profiles for `raccoon run` and `run-configurations.yml` |
+| [Code Generator]({{< ref "/01-programming-guide/01-basics/05-code-generator.md" >}}) | How `raccoon codegen` turns the YAML into `Defs` and `Robot` |
+| [Robot Definition]({{< ref "/01-programming-guide/01-basics/06-robot-definition.md" >}}) | What the generated `Defs` and `Robot` classes contain |
+| [Missions]({{< ref "/01-programming-guide/01-basics/07-missions.md" >}}) | Writing, numbering and ordering missions, setup and shutdown |
+| [Sequences, Parallel and Background]({{< ref "/01-programming-guide/01-basics/08-parallel-and-background.md" >}}) | Doing steps one after another, together or in the background |
+| [Wait For Steps]({{< ref "/01-programming-guide/01-basics/10-wait-for.md" >}}) | Pausing until a condition, time, button or sensor |
+| [Wait for Light]({{< ref "/01-programming-guide/01-basics/11-wait-for-light.md" >}}) | Starting the run on the start lamp |
 
-A good first read is [How Raccoon works]({{< ref "/06-advanced/02-project-model.md" >}}), which explains how these pieces fit together.
+For the full picture of how a project becomes a running robot, see [Project Model]({{< ref "/06-advanced/02-project-model.md" >}}) in Advanced.

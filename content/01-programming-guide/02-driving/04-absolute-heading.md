@@ -1,7 +1,7 @@
 ---
 title: "Absolute Heading"
 author: "Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 40
 description: "Mark a heading once and then turn to it or hold it, so turning errors do not add up over a mission."
@@ -59,7 +59,7 @@ drive_backward(cm=200)                  # relative: may end 5 to 10 degrees off 
 drive_backward(cm=200, heading=180)     # absolute: locked to 180 degrees the whole way
 ```
 
-Use it for long drives (about 50 cm and more on mecanum), after any wall alignment, and per segment in a [`smooth_path`]({{< ref "/01-programming-guide/02-driving/05-smooth-path.md" >}}).
+Use it for long drives (about 50 cm and more on mecanum), after any wall alignment, and per segment in a [`smooth_path`]({{< ref "/01-programming-guide/02-driving/07-smooth-path.md" >}}).
 
 > **Always call `mark_heading_reference()` first.** `turn_to_heading_*` and `heading=` are interpreted relative to the reference, and they need one.
 
@@ -84,7 +84,7 @@ seq([
 
 ## Related pages
 
-- [Odometry]({{< ref "/01-programming-guide/02-driving/10-odometry.md" >}}): the heading reference in depth, including ramp robots and `origin_offset_deg`.
-- [Drive System]({{< ref "/01-programming-guide/02-driving/01-drive-system.md" >}}): heading hold during linear motion.
+- [Odometry]({{< ref "/06-advanced/06-motion-and-localization/03-odometry.md" >}}): the heading reference in depth, including ramp robots and `origin_offset_deg`.
+- [Drive, Turn and Arc]({{< ref "/01-programming-guide/02-driving/01-drive-turn-arc.md" >}}): the `heading=` parameter of the drive steps.
 - [Wall Alignment]({{< ref "/01-programming-guide/02-driving/09-wall-alignment.md" >}}): the usual way to get a trustworthy heading to mark.
-- [Optimize]({{< ref "/01-programming-guide/02-driving/06-optimize.md" >}}): `.absolute_heading()` pins every straight leg of a path to one heading.
+- [Optimize]({{< ref "/01-programming-guide/02-driving/08-optimize.md" >}}): `.absolute_heading()` pins every straight leg of a path to one heading.

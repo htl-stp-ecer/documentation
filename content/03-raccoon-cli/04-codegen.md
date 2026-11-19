@@ -1,7 +1,7 @@
 ---
 title: "codegen"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 4
 description: "Generate defs.py, defs.pyi and robot.py from raccoon.project.yml."
@@ -17,7 +17,7 @@ raccoon codegen --no-format
 
 Generates the Python files in `src/hardware/` from `raccoon.project.yml` and the `config/*.yml` files. It runs on your laptop and needs no connection to the robot. [`raccoon run`]({{< ref "/03-raccoon-cli/05-run.md" >}}) and [`raccoon upload`]({{< ref "/03-raccoon-cli/06-upload.md" >}}) call it for you; you run it yourself to refresh IDE completion after editing the YAML.
 
-What the generated files contain and why you never edit them is explained in [Code Generator]({{< ref "/01-programming-guide/01-basics/04-code-generator.md" >}}).
+What the generated files contain and why you never edit them is explained in [Code Generator]({{< ref "/01-programming-guide/01-basics/05-code-generator.md" >}}).
 
 ## What it does
 

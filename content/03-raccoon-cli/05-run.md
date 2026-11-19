@@ -1,7 +1,7 @@
 ---
 title: "run"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 5
 ---
@@ -121,7 +121,7 @@ The setup and shutdown missions cannot be skipped. Skipping is entirely a runtim
 
 ## Run configurations
 
-`raccoon run` supports named run configurations that bundle multiple flags together. See [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) for full details.
+`raccoon run` supports named run configurations that bundle multiple flags together. See [Run Configurations]({{< ref "/01-programming-guide/01-basics/04-run-configurations.md" >}}) for full details.
 
 The three built-in presets are always available:
 
@@ -201,6 +201,6 @@ These are rarely needed — `raccoon run` covers both.
 ## Related pages
 
 - [sync]({{< ref "/03-raccoon-cli/08-sync.md" >}}) — what the push/pull steps do in detail, including fingerprint verification
-- [Run Configurations]({{< ref "/01-programming-guide/01-basics/08-run-configurations.md" >}}) — how to name `dev` vs `competition` mode configurations
+- [Run Configurations]({{< ref "/01-programming-guide/01-basics/04-run-configurations.md" >}}) — how to name `dev` vs `competition` mode configurations
 - [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) — the automatic pre-run snapshots
 - [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) — browsing output from previous runs

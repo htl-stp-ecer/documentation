@@ -1,7 +1,7 @@
 ---
 title: "Mission Panel (Left)"
-author: "Tobias Madlberger"
-date: 2026-06-18
+author: "Tobias Madlberger, Mario Scholze"
+date: 2026-11-19
 draft: false
 weight: 5
 ---
@@ -84,7 +84,7 @@ Missions in the WebIDE use 3-digit numeric prefixes: `M000`, `M010`, `M020`, …
 
 The panel does not enforce gaps — you can use non-decade numbers like `M025` or `M027` when you need to insert between existing missions. The CLI tooling identifies missions by the 3-digit prefix, so always use exactly 3 digits.
 
-See the Programming Guide page on [project structure]({{< ref "/01-programming-guide/01-basics/01-project-structure.md" >}}) for full naming rules.
+See the Programming Guide page on [project structure]({{< ref "/01-programming-guide/01-basics/02-project-structure.md" >}}) for full naming rules.
 
 ---
 

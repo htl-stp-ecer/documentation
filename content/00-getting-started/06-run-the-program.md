@@ -1,7 +1,7 @@
 ---
 title: "Run the program"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-15
+date: 2026-11-19
 draft: false
 weight: 60
 description: "Run the project with raccoon run and drive a first smoke-test mission."
@@ -62,3 +62,7 @@ Then, The robot should drive forward and turn. Distance and straightness may be 
 
 **If it doesn't move at all:** check `config/motors.yml` — are the port numbers correct? <br>
 **If it turns instead of driving straight:** check `config/motors.yml` — are the motor's `inverted` attributes correct?
+
+## Next
+
+[Your first program]({{< ref "/00-getting-started/07-your-first-program.md" >}}) walks you through driving, servos, sensors and a full mission sequence.

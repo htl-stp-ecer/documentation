@@ -1,15 +1,15 @@
 ---
 title: "Advanced"
 author: "Mario Scholze"
-date: 2026-11-18
+date: 2026-11-19
 draft: false
 weight: 60
-description: "How RaccoonOS works inside: the platform architecture, the library layers, the STM32 firmware and Pi bridge, the transport and the WebIDE internals."
+description: "How RaccoonOS works inside, and the deeper features: architecture, firmware, transport, WebIDE internals, motion and localization, arms, table maps and runtime tools."
 ---
 
 # Advanced
 
-You do not need this section to program a robot. It documents **how RaccoonOS is built**: which components exist, how they talk to each other, and how the firmware, the transport and the WebIDE work inside. Read it when you debug something deep, extend the platform, or are just curious.
+You do not need this section to get a robot driving. It documents **how RaccoonOS is built** (which components exist, how they talk to each other, how the firmware, the transport and the WebIDE work inside) and the **deeper features** of the library, such as odometry, localization, arms and the simulator. Read it when you debug something deep, need a feature beyond the Programming Guide, or are just curious.
 
 ## The platform at a glance
 
@@ -58,5 +58,8 @@ Every component is built and released on its own. A **bundle** names the exact v
 | [Transport]({{< ref "/06-advanced/03-transport.md" >}}) | Channels, messages, the shared-memory ring and the contract check |
 | [Firmware and Pi Bridge]({{< ref "/06-advanced/04-firmware/_index.md" >}}) | STM32 firmware, SPI protocol, motor control, sensor pipeline, the Pi bridge |
 | [WebIDE Internals]({{< ref "/06-advanced/05-web-ide-internals/_index.md" >}}) | How the WebIDE backend and frontend are built |
+| [Motion and Localization]({{< ref "/06-advanced/06-motion-and-localization/_index.md" >}}) | Drive system, kinematics, odometry, IMU, localization, `robot.yml` |
+| [Arms and Table Maps]({{< ref "/06-advanced/07-arms-and-maps/_index.md" >}}) | Inverse kinematics for arms and the table map files |
+| [Runtime and Tooling]({{< ref "/06-advanced/08-runtime-and-tooling/_index.md" >}}) | Async model and services, UI steps, simulator, two robots, competition checklist |
 
 Looking for how to build or release these components yourself? That is in [Build and Contribute]({{< ref "/07-build-and-contribute/_index.md" >}}).

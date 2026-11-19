@@ -1,7 +1,7 @@
 ---
 title: "raccoon-server (Pi daemon)"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-19
 draft: false
 weight: 18
 ---
@@ -49,7 +49,7 @@ The CLI (`doctor`, `connect`, `run`) and the WebIDE read this endpoint; neither 
 
 ## Camera backend endpoints
 
-The server lists and configures the backends of the [camera service]({{< ref "/01-programming-guide/09-camera/02-backends.md" >}}) for the UI. Changing something needs the [API token](#api-token); reading does not. The server only reads project source with `ast` (it never imports your code) and asks `python -m raccoon_cam.describe` in a separate process for the options. Without `raccoon-cam` installed these answer **503**; a wrong class or configuration answers **400** with the reason in `detail`.
+The server lists and configures the backends of the [camera service]({{< ref "/01-programming-guide/06-camera/03-backends.md" >}}) for the UI. Changing something needs the [API token](#api-token); reading does not. The server only reads project source with `ast` (it never imports your code) and asks `python -m raccoon_cam.describe` in a separate process for the options. Without `raccoon-cam` installed these answer **503**; a wrong class or configuration answers **400** with the reason in `detail`.
 
 | Endpoint | Description |
 |----------|-------------|
