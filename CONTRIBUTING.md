@@ -29,9 +29,16 @@ hugo server -D          # live preview at http://localhost:1313
 
 ### Local development note — `data/dsl_steps.json`
 
-`data/dsl_steps.json` is the step catalog that powers the Available Steps page. It is **committed to this repository**, so it works on a fresh clone. However, in CI the file is overwritten by the latest release artifact from `raccoon-lib` (CI workflow step "Fetch library API docs"). This means the committed file may lag slightly behind the very latest library release.
+`data/dsl_steps.json` is the step catalog that powers the Steps Reference page. It is **not committed** (`data/` is in `.gitignore`), so a fresh clone has no catalog and `hugo server` stops with an error until you add one. In CI the workflow step "Fetch DSL step catalog (required)" downloads it from the latest `raccoon-lib` release.
 
-If you want to regenerate the catalog from local source:
+Get the catalog of the latest release:
+
+```bash
+mkdir -p data
+gh release download --repo htl-stp-ecer/raccoon-lib --pattern 'dsl-steps.json' --output data/dsl_steps.json --clobber
+```
+
+Or generate it from your local `raccoon-lib` source, to see unreleased steps:
 
 1. Clone (or have) the `raccoon-lib` repo alongside this one.
 2. From its root, run:
@@ -43,10 +50,11 @@ If you want to regenerate the catalog from local source:
 3. Copy the output to this repo:
 
    ```bash
+   mkdir -p documentation/data
    cp raccoon-lib/docs/_build/dsl-steps.json documentation/data/dsl_steps.json
    ```
 
-The Available Steps page will then reflect your local library version.
+The Steps Reference page then shows the steps of the catalog you copied.
 
 ---
 
