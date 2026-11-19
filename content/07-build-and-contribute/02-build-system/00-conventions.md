@@ -40,7 +40,7 @@ Standard library only, so it runs without installing anything.
 | `--artifact` | Result to install. Default: the one in `builds/manifest.json`. |
 | `--ssh-params` | Extra options for `ssh` and `scp` as one string. Default none. |
 
-`deploy.py` always sets the component to `"dev"` in the Pi's `/etc/raccoon-bundle.json`. A deployed local build is a **custom build**, and the component version check is skipped for components the bundle marks `dev` (see [Transport contract]({{< ref "/06-advanced/transport/01-contract.md" >}})).
+`deploy.py` always sets the component to `"dev"` in the Pi's `/etc/raccoon-bundle.json`. A deployed local build is a **custom build**, and the component version check is skipped for components the bundle marks `dev` (see [Transport contract]({{< ref "/06-advanced/03-transport.md" >}})).
 
 ## Versions
 

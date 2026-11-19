@@ -31,7 +31,7 @@ Every repository has a `README` with the build commands and a `CONTRIBUTING.md` 
 1. Work on a feature branch. `main` holds the released state and receives changes through pull requests.
 2. Build and test locally. Every repository builds with `python3 build.py` in Docker (see [Build System]({{< ref "/07-build-and-contribute/02-build-system/_index.md" >}})).
 3. To try a change on a real robot, use `python3 deploy.py --host <pi>`, which installs your local build.
-4. If you change a message, a channel or the ring layout in `raccoon-transport`, regenerate the contract with `python3 scripts/contract.py --write` and commit it. Otherwise CI fails, see [Transport]({{< ref "/06-advanced/transport/_index.md" >}}).
+4. If you change a message, a channel or the ring layout in `raccoon-transport`, regenerate the contract with `python3 scripts/contract.py --write` and commit it. Otherwise CI fails, see [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
 5. Open a pull request. CI builds the change in the same Docker setup.
 
 Two rules to know:
