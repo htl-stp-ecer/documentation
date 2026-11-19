@@ -20,6 +20,8 @@ The badge disappears after three seconds. It is not part of the screenshot. If s
 
 A screenshot shows exactly what BotUI draws, including the camera image, the [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}) and a program's [dynamic screen]({{< ref "/05-bot-ui/05-dynamic-screens.md" >}}). It is 800×480 pixels.
 
+BotUI waits about a quarter of a second after the third click. If you click again in that time, no screenshot is taken, so clicking the button four or more times does nothing.
+
 The triple-click does not work in the two games of the Dev Menu (Flappy Wombat and Tilt Maze), because they use the button as their own input.
 
 ## Allowing and Blocking Screenshots
