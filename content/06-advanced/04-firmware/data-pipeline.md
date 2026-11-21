@@ -1,7 +1,7 @@
 ---
 title: "Data Pipeline"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-21
 draft: false
 weight: 4
 ---
@@ -179,6 +179,9 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 | `raccoon/motor/N/position` | `scalar_i32_t` | accumulated BEMF ticks (dt-aware) | yes |
 | `raccoon/servo/N/mode` | `scalar_i8_t` | servo mode state (reader→UI, not commands) | yes |
 | `raccoon/servo/N/position` | `scalar_f_t` | servo position (degrees) | yes |
+| `raccoon/servo/N/feedback` | `vector3f_t` | bus servo: x=position (deg, multi-turn), y=speed (deg/s), z=load (% of max torque, signed) | yes |
+| `raccoon/servo/N/health` | `vector3f_t` | bus servo: x=voltage (V), y=temperature (°C), z=error bits (−1 = no servo answers) | yes |
+| `raccoon/servo/N/done` | `scalar_i32_t` | bus servo: 0 = moving, 1 = reached, 2 = stalled | yes |
 | `raccoon/odometry/pos_x` | `scalar_f_t` | world-frame x (meters) | yes |
 | `raccoon/odometry/pos_y` | `scalar_f_t` | world-frame y (meters) | yes |
 | `raccoon/odometry/heading` | `scalar_f_t` | heading (radians, CCW+) | yes |
@@ -312,6 +315,7 @@ sequenceDiagram
 | `raccoon/servo/N/mode_cmd` | `scalar_i8_t` | yes | servo mode (separate from state channel) |
 | `raccoon/servo/N/position_cmd` | `scalar_f_t` | yes | servo target angle (degrees) |
 | `raccoon/servo/N/smooth_cmd` | `vector3f_t` | yes | smooth servo: x=angle, y=speed, z=easing |
+| `raccoon/servo/N/velocity_cmd` | `scalar_f_t` | yes | bus servo: continuous rotation in deg/s (signed) |
 | `raccoon/odometry/reset_cmd` | `scalar_i32_t` | yes | reset odometry |
 | `raccoon/kinematics/config_cmd` | (kinematics type) | yes | send KinematicsConfig to STM32 |
 | `raccoon/system/heartbeat_cmd` | `scalar_i32_t` | no | MotorWatchdog heartbeat |
@@ -319,6 +323,32 @@ sequenceDiagram
 | `raccoon/cmd/feature/bemf_enabled` | `scalar_i32_t` | yes | enable/disable BEMF at runtime |
 
 **Servo mode vs. servo mode command:** The servo mode channel is split into two: `raccoon/servo/N/mode` (state, reader publishes) and `raccoon/servo/N/mode_cmd` (command, raccoon-lib publishes). This prevents the reader from subscribing to its own publishes, which previously caused a ~5 ms internal latency floor.
+
+### Bus Servo Channels {#bus-servo-channels}
+
+A servo port can drive a Feetech STS serial bus servo (e.g. STS3215) instead of a PWM servo. Which one it is depends on the port's servo mode, which is set on `raccoon/servo/N/mode_cmd`:
+
+| Value | Mode |
+|-------|------|
+| 0 | Fully disabled (PWM off, 6 V supply off if all servos are) |
+| 1 | Disabled (PWM off for this servo) |
+| 2 | PWM servo enabled |
+| 3 | Bus servo |
+
+Setting mode 3 hands the pin from the PWM timer to the bus and leaves the servo **relaxed** (torque off). The STM32 then searches for one servo on the port, whatever its ID is, and reports it on the health channel. A servo that stops answering is searched for again.
+
+The same command channels as for PWM servos drive a bus servo, with these meanings:
+
+| Channel | On a bus servo |
+|---------|----------------|
+| `position_cmd` | Go to the angle (0–360°) at the servo's maximum speed, then hold |
+| `smooth_cmd` | Go to x=angle at y=speed (deg/s). The servo runs the ramp itself; z=0 uses its default acceleration, any other easing uses a ramp over about the first third of the move |
+| `velocity_cmd` | Turn continuously at the given signed speed |
+| `mode_cmd` = 3 while already in bus mode | Relax the servo (torque off) |
+
+The servo has 4096 steps per revolution. `feedback` reports the position in degrees, unwrapped by the STM32, so it keeps counting past 360° and goes negative when the servo is turned back. `done` refers to the latest command: it is `0` until the move has finished, then `1` (target reached) or `2` (the servo stopped before the target). The error bits of `health` are `0x01` voltage, `0x02` sensor, `0x04` overheat, `0x08` current, `0x10` angle and `0x20` overload.
+
+`velocity_cmd` is the only command that fails on a PWM port: the reader logs an error and ignores it.
 
 ### Reliable Commands
 
