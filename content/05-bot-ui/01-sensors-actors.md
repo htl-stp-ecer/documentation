@@ -1,7 +1,7 @@
 ---
 title: "Sensors & Actors"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-21
 draft: false
 weight: 2
 ---
@@ -146,13 +146,57 @@ The motor list also has a full-width **Stop All Motors** button that sets the po
 
 ## Servo Screen
 
-A servo port opens a large arc slider with a readout of the commanded angle (`CMD`), the angle reported by the servo (`ACT`), and the current servo mode.
+A servo port opens a screen with a **type sidebar** on the left and the control on the right. The sidebar selects what is plugged into the port:
+
+| Type | Servo | Control |
+|------|-------|---------|
+| **PWM** | Classic hobby servo | Arc slider, 0° to 180° |
+| **BUS** | Feetech STS serial bus servo (e.g. STS3215) | Full-turn position ring, speed, spin and health |
+
+The sidebar is always switchable. Until you pick a type it follows the mode the port is in. Picking **BUS** puts the port into bus mode (the servo starts relaxed, torque off); picking **PWM** leaves bus mode with the PWM output still off, and the first move of the slider switches it on.
+
+### PWM Servo
+
+A large arc slider with a readout of the commanded angle (`CMD`), the angle reported by the servo (`ACT`), and the current servo mode.
 
 - **Normal range:** 0° to 180°. Moving the handle sends the new position.
-- **Danger mode:** the **Danger** button widens the range to −50° … 360° and shows it in red. Angles outside 0–180° can damage the servo or your mechanism, so use it only when you know the hardware allows it. Turning Danger off again clamps the angle back to 0–180°.
+- **Danger mode:** the **Danger** button widens the range to −50° … 360°. Angles outside 0–180° can damage the servo or your mechanism, so use it only when you know the hardware allows it. Turning Danger off again clamps the angle back to 0–180°.
 - **Fully Disable** cuts the power to the servo; it goes limp and the angle reads 0° again.
 
 The servo list has a **Disable All Servos** button that does this for all four ports.
+
+### Bus Servo
+
+A bus servo reports its own position, so unlike a PWM servo the screen shows what the servo really does. One servo per port; the robot finds it by itself, you do not have to set an ID. While no servo answers, the controls are greyed out and the status card says either `Waiting for the bus servo on port N...` or `No bus servo answers on port N. Check cable and battery.`
+
+**Position ring.** Drag the handle to move the servo to an angle from 0° to 360°. The middle of the ring shows the **target** (`Target`) and the measured angle (`ACT`). The servo counts past 360°, so below `ACT` a `turn +2` or `turn -1` shows how many full turns it is away from where it connected. A chip shows the state of the last move:
+
+| Chip | Meaning |
+|------|---------|
+| **Moving** | The servo is on its way |
+| **In position** | The target is reached |
+| **Blocked** | The servo stopped before the target (something is in the way, or it is overloaded) |
+
+While you drag, the target is sent about 20 times per second; the ring follows the measured angle again once you let go.
+
+**Move speed.** **MAX** moves at the full speed of the servo. **180°/s**, **90°/s** and **30°/s** run the move at that speed with a short ramp at start and end.
+
+**Spin.** The slider from −360 to +360°/s (steps of 30) makes the servo turn continuously; the speed is sent when you let go. **HOLD** stops the spinning and holds the angle the servo is at.
+
+**Relax (torque off).** Releases the servo so you can turn it by hand. The position is still reported. Any new command makes it hold again.
+
+**Status card.** Shows the supply voltage, temperature, speed and the load in percent of the maximum torque (a bar, orange above 80 %). The voltage turns orange below 5.0 V and the temperature from 60 °C. If the servo reports an error, a red chip names it:
+
+| Chip | Cause |
+|------|-------|
+| **Voltage** | Supply voltage outside the allowed range |
+| **Sensor** | Position sensor error |
+| **Overheat** | The servo is too hot |
+| **Current** | Too much current |
+| **Angle** | Angle error |
+| **Overload** | The load is too high for the servo |
+
+For driving a bus servo from your own tools, see [the bus servo channels]({{< ref "/06-advanced/04-firmware/data-pipeline.md#bus-servo-channels" >}}).
 
 ### Shutdown Guard
 

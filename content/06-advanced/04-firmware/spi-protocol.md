@@ -1,7 +1,7 @@
 ---
 title: "SPI Communication Protocol"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-21
 draft: false
 weight: 3
 ---
@@ -12,13 +12,13 @@ weight: 3
 
 The Raspberry Pi runs Linux with a real-time process (`stm32-data-reader`) and an transport message bus. The STM32F427 runs bare-metal firmware that controls motors, reads sensors, and computes odometry at deterministic rates. There is no Linux scheduler, no TCP/IP, no protobuf negotiation — just two microprocessors sharing a four-wire SPI bus.
 
-The protocol makes one deliberate trade-off: **all communication happens in a single fixed-size, full-duplex packed-struct exchange** with no framing overhead. The Pi always drives the clock (master); the STM32 listens and responds simultaneously (slave). Every exchange is exactly 277 bytes in each direction. The Pi sends a `RxBuffer` (commands) while simultaneously receiving a `TxBuffer` (sensor data). Both structs are packed with `__attribute__ ((packed))` and both sides include the same `shared/spi/pi_buffer.h` header — there is no separate copy on either side.
+The protocol makes one deliberate trade-off: **all communication happens in a single fixed-size, full-duplex packed-struct exchange** with no framing overhead. The Pi always drives the clock (master); the STM32 listens and responds simultaneously (slave). Every exchange is exactly 305 bytes in each direction. The Pi sends a `RxBuffer` (commands) while simultaneously receiving a `TxBuffer` (sensor data). Both structs are packed with `__attribute__ ((packed))` and both sides include the same `shared/spi/pi_buffer.h` header — there is no separate copy on either side.
 
 This gives three properties that matter for robotics:
 
 1. **Deterministic latency.** A motor command written to `RxBuffer` on the Pi is on the wire in less than one main-loop iteration (5 ms). The STM32's DMA interrupt fires on completion and applies the command within the next BEMF cycle (1 250 µs per motor).
 2. **No serialisation cost.** The raw struct bytes are the wire bytes. `memcpy` is the only serialisation step.
-3. **Single point of truth.** `pi_buffer.h` is included by both the STM32 firmware and the Pi reader. A version field (`TRANSFER_VERSION 21`) detects any drift between the two. A mismatch is treated as a repairable deployment fault, not a silent error.
+3. **Single point of truth.** `pi_buffer.h` is included by both the STM32 firmware and the Pi reader. A version field (`TRANSFER_VERSION 22`) detects any drift between the two. A mismatch is treated as a repairable deployment fault, not a silent error.
 
 ```mermaid
 sequenceDiagram
@@ -31,11 +31,11 @@ sequenceDiagram
     App->>Pi: Motor/chassis/servo command
     Pi->>Pi: CommandSubscriber writes to staged RxBuffer (ctx.tx)
     Pi->>Kernel: ioctl(SPI_IOC_MESSAGE) — SPI_MODE_0, 20 MHz
-    Note over Kernel,STM: Full-duplex DMA transfer, 277 bytes each way
+    Note over Kernel,STM: Full-duplex DMA transfer, 305 bytes each way
     Kernel-->>STM: RxBuffer (commands)
     STM-->>Kernel: TxBuffer (sensor data + odometry)
     Note over STM: HAL_SPI_TxRxCpltCallback fires (DMA1_Stream3/4 IRQ, priority 0)
-    STM->>STM: Validate transferVersion == 21
+    STM->>STM: Validate transferVersion == 22
     STM->>STM: Stamp txBuffer.updateTime = microSeconds
     STM->>STM: updateFlags |= rxBuffer.updates
     Note over STM: Main loop polls updateFlags each iteration
@@ -93,16 +93,16 @@ Most embedded SPI slave drivers re-arm the DMA on every transfer. RaccoonOS uses
 HAL_SPI_TransmitReceive_DMA(&hspi2,
     (uint8_t*)&txBuffer,
     (uint8_t*)&rxBuffer,
-    BUFFER_LENGTH_DUPLEX_COMMUNICATION);   // 277 bytes
+    BUFFER_LENGTH_DUPLEX_COMMUNICATION);   // 305 bytes
 ```
 
 The workflow on every Pi-initiated transfer:
 
-1. Pi calls `ioctl(SPI_IOC_MESSAGE(1), &tr)` with `tr.len = 277`.
+1. Pi calls `ioctl(SPI_IOC_MESSAGE(1), &tr)` with `tr.len = 305`.
 2. Pi Linux SPI driver asserts NSS (PB12 low) and starts clocking at 20 MHz.
 3. DMA1_Stream4 pushes `txBuffer` bytes from STM32 memory → SPI2 DR.
 4. DMA1_Stream3 pulls bytes from SPI2 DR → `rxBuffer` memory.
-5. After 277 bytes, DMA transfer-complete fires on both streams.
+5. After 305 bytes, DMA transfer-complete fires on both streams.
 6. HAL calls `HAL_SPI_TxRxCpltCallback` (SPI2_IRQHandler path, priority 0).
 7. Callback stamps `txBuffer.updateTime`, reads digital sensors, merges update flags.
 8. Circular DMA re-arms automatically — no software re-arm needed.
@@ -118,15 +118,15 @@ sequenceDiagram
 
     Pi->>NSS: Assert NSS (PB12 low) + start clock (20 MHz)
     activate NSS
-    Note over DMA_TX,DMA_RX: Both DMA streams drain 277 bytes simultaneously
-    DMA_TX-->>Pi: Byte 0..276 (TxBuffer: sensor data)
-    Pi-->>DMA_RX: Byte 0..276 (RxBuffer: commands)
+    Note over DMA_TX,DMA_RX: Both DMA streams drain 305 bytes simultaneously
+    DMA_TX-->>Pi: Byte 0..304 (TxBuffer: sensor data)
+    Pi-->>DMA_RX: Byte 0..304 (RxBuffer: commands)
     deactivate NSS
     DMA_TX->>CB: Transfer-complete IRQ (priority 0/2)
     DMA_RX->>CB: Transfer-complete IRQ (priority 0/1)
     CB->>CB: txBuffer.updateTime = microSeconds
     CB->>CB: txBuffer.digitalSensors = readDigitalInputs()
-    CB->>CB: if rxBuffer.transferVersion == 21: updateFlags |= rxBuffer.updates
+    CB->>CB: if rxBuffer.transferVersion == 22: updateFlags |= rxBuffer.updates
     CB->>CB: sanitizeMotorCommandsForShutdown() if SHUTDOWN_MOTOR set
     Note over CB: Circular DMA re-arms automatically — no relaunch needed
 ```
@@ -140,7 +140,7 @@ sequenceDiagram
 Both ends of the link include the same constant:
 
 ```c
-#define TRANSFER_VERSION 21   // pi_buffer.h
+#define TRANSFER_VERSION 22   // pi_buffer.h
 ```
 
 The STM32 sets `txBuffer.transferVersion = TRANSFER_VERSION` at initialisation (`communication_with_pi.c`). The Pi sets `ctx.tx.transferVersion = TRANSFER_VERSION` when the SPI fd is opened (`Spi.cpp`, `spi_reopen`).
@@ -174,22 +174,22 @@ Actual sizes (computed from `pi_buffer.h` with `__attribute__ ((packed))`):
 
 | Struct | Bytes |
 |--------|-------|
-| `TxBuffer` | 167 |
-| `RxBuffer` | 277 |
-| Wire frame | **277** |
+| `TxBuffer` | 227 |
+| `RxBuffer` | 305 |
+| Wire frame | **305** |
 
-Every SPI transaction is 277 bytes in each direction regardless of how many fields are actively used. The trailing 110 bytes of the STM32's TX frame are always zero-padded.
+Every SPI transaction is 305 bytes in each direction regardless of how many fields are actively used. The trailing 78 bytes of the STM32's TX frame are always zero-padded.
 
 ---
 
-## `TxBuffer` — STM32 → Pi (167 bytes)
+## `TxBuffer` — STM32 → Pi (227 bytes)
 
 The naming is from the STM32's perspective: this is what it *transmits*. The Pi calls its local copy `ctx.rx`.
 
 ```mermaid
 classDiagram
     class TxBuffer {
-        +uint8 transferVersion       [0]   = 21
+        +uint8 transferVersion       [0]   = 22
         +uint32 updateTime           [1-4] µs timestamp
         +MotorData motor             [5-36]
         +int16 analogSensor[6]       [37-48]
@@ -197,6 +197,7 @@ classDiagram
         +uint16 digitalSensors       [51-52]
         +ImuData imu                 [53-142]
         +OdometryData odometry       [143-166]
+        +BusServoState busServo[4]   [167-226] bus servo state
     }
     class MotorData {
         +int32 bemf[4]               [5-20]  filtered BEMF ticks
@@ -229,7 +230,7 @@ classDiagram
 
 | Offset | Bytes | Field | Type | Notes |
 |--------|-------|-------|------|-------|
-| 0 | 1 | `transferVersion` | `uint8_t` | Always 21 |
+| 0 | 1 | `transferVersion` | `uint8_t` | Always 22 |
 | 1 | 4 | `updateTime` | `uint32_t` | µs since boot (`microSeconds` timer), stamped in `HAL_SPI_TxRxCpltCallback` |
 | 5 | 16 | `motor.bemf[4]` | `int32_t[4]` | Offset-corrected, dead-zone-applied, IIR-filtered BEMF ticks per motor |
 | 21 | 16 | `motor.position[4]` | `int32_t[4]` | dt-weighted integrated position in BEMF ticks |
@@ -250,6 +251,7 @@ classDiagram
 | 155 | 4 | `odometry.vx` | `float` | m/s, body frame |
 | 159 | 4 | `odometry.vy` | `float` | m/s, body frame |
 | 163 | 4 | `odometry.wz` | `float` | rad/s, body frame |
+| 167 | 60 | `busServo[4]` | `BusServoState[4]` | One state per port, valid while the port is in bus mode (see [Bus servo state](#bus-servos)) |
 
 ### MotorData detail
 
@@ -265,7 +267,7 @@ The Pi health monitor in `Application.cpp` (`checkStm32Health`) watches `updateT
 
 ---
 
-## `RxBuffer` — Pi → STM32 (277 bytes)
+## `RxBuffer` — Pi → STM32 (305 bytes)
 
 This is what the Pi *transmits* to the STM32. The Pi's local copy is `ctx.tx`; the STM32's is `rxBuffer`.
 
@@ -273,7 +275,7 @@ This is what the Pi *transmits* to the STM32. The Pi's local copy is `ctx.tx`; t
 
 | Offset | Bytes | Field | Type | Notes |
 |--------|-------|-------|------|-------|
-| 0 | 1 | `transferVersion` | `uint8_t` | Must equal 21; STM32 ignores the buffer if mismatched |
+| 0 | 1 | `transferVersion` | `uint8_t` | Must equal 22; STM32 ignores the buffer if mismatched |
 | 1 | 4 | `updates` | `uint32_t` | Bitmask of which fields are new (see Update flags table) |
 | 5 | 1 | `systemShutdown` | `uint8_t` | Bitmask: `0x01`=servo off, `0x02`=motor off |
 | 6 | 2 | `motorControlMode` | `uint16_t` | 3 bits per motor: motors 0–3 packed at bits [2:0],[5:3],[8:6],[11:9] |
@@ -281,13 +283,14 @@ This is what the Pi *transmits* to the STM32. The Pi's local copy is `ctx.tx`; t
 | 24 | 12 | `chassisVelocity[3]` | `float[3]` | Body-frame setpoint `[vx m/s, vy m/s, wz rad/s]` for MOT_MODE_CHASSIS |
 | 36 | 16 | `motorGoalPosition[4]` | `int32_t[4]` | Target position in BEMF ticks for MTP mode |
 | 52 | 1 | `motorPositionReset` | `uint8_t` | Bitmask: bit N = reset motor N counter to 0 on STM32 |
-| 53 | 1 | `servoMode` | `uint8_t` | 2 bits per servo: servos 0–3 packed at bits [1:0],[3:2],[5:4],[7:6] |
+| 53 | 1 | `servoMode` | `uint8_t` | 2 bits per servo port: ports 0–3 packed at bits [1:0],[3:2],[5:4],[7:6]; `0` fully disabled, `1` disabled, `2` PWM, `3` bus servo |
 | 54 | 8 | `servoPos[4]` | `uint16_t[4]` | Servo PWM pulse width in µs (600 µs + degrees × 10) |
 | 62 | 68 | `motorPidSettings` | `MotorPidSettings` | Global clamps + per-motor Kp/Ki/Kd (see PID section) |
 | 130 | 9 | `imuGyroOrientation[9]` | `int8_t[9]` | 3×3 row-major chip-to-board mapping, values −1/0/+1 |
 | 139 | 9 | `imuCompassOrientation[9]` | `int8_t[9]` | Same format for compass chip |
 | 148 | 128 | `kinematics` | `KinematicsConfig` | inv_matrix[3][4] + ticks_to_rad[4] + bemf_offset[4] + fwd_matrix[4][3] |
 | 276 | 1 | `featureFlags` | `uint8_t` | Bit 0: `FEATURE_BEMF_DISABLE` = speed mode |
+| 277 | 28 | `busServo[4]` | `BusServoCommand[4]` | One command per port, used while the port is in bus mode (see [Bus servo commands](#bus-servos)) |
 
 ### Update flags (`updates` bitmask)
 
@@ -426,6 +429,38 @@ Until `PI_BUFFER_UPDATE_KINEMATICS` is received, all offsets default to `0.0f` (
 
 ---
 
+## Bus servos {#bus-servos}
+
+Ports whose `servoMode` is `3` drive a Feetech STS serial bus servo. For these ports the Pi sends a `BusServoCommand` in `RxBuffer.busServo[port]` and reads a `BusServoState` from `TxBuffer.busServo[port]`. Like `servoMode` and `servoPos`, they are consumed on every transfer and have no update flag.
+
+`BusServoCommand` (7 bytes):
+
+| Offset | Bytes | Field | Type | Notes |
+|--------|-------|-------|------|-------|
+| 0 | 1 | `mode` | `uint8_t` | `0` relaxed (torque off), `1` position, `2` wheel (continuous rotation) |
+| 1 | 1 | `seq` | `uint8_t` | Incremented by the Pi for every new command; echoed as `commandSeq` |
+| 2 | 2 | `goalPosition` | `uint16_t` | Position mode: 0..4095 (4096 steps per revolution) |
+| 4 | 2 | `speed` | `int16_t` | Position mode: maximum speed in steps/s, `0` = servo maximum. Wheel mode: signed speed in steps/s |
+| 6 | 1 | `acc` | `uint8_t` | Acceleration ramp in units of 100 steps/s², `0` = servo default |
+
+`BusServoState` (15 bytes):
+
+| Offset | Bytes | Field | Type | Notes |
+|--------|-------|-------|------|-------|
+| 0 | 4 | `position` | `int32_t` | Multi-turn position in steps, unwrapped by the STM32 |
+| 4 | 2 | `rawPosition` | `uint16_t` | The servo's own single-turn position, 0..4095 |
+| 6 | 2 | `speed` | `int16_t` | Steps/s, signed |
+| 8 | 2 | `load` | `int16_t` | Signed, in 0.1 % of the maximum torque (−1000..1000) |
+| 10 | 1 | `voltage` | `uint8_t` | 0.1 V |
+| 11 | 1 | `temperature` | `uint8_t` | °C |
+| 12 | 1 | `status` | `uint8_t` | The servo's error bits (`0x01` voltage, `0x02` sensor, `0x04` overheat, `0x08` current, `0x10` angle, `0x20` overload) |
+| 13 | 1 | `flags` | `uint8_t` | `0x01` connected, `0x02` moving, `0x04` done, `0x08` stalled, `0x10` torque enabled |
+| 14 | 1 | `commandSeq` | `uint8_t` | The `seq` of the command that `done` refers to |
+
+The STM32 talks to the servo over a half-duplex UART on the servo's signal wire (1 Mbit/s, 8N1). The servo pins have no UART TX function, so the firmware bit-bangs the protocol and runs at most one bus transaction per main-loop pass. A servo that is moving is polled faster than an idle one. With one servo per port the STM32 finds it with a broadcast ping, so the servo's ID does not matter. For what the reader publishes from this state, see [Bus Servo Channels]({{< ref "/06-advanced/04-firmware/data-pipeline.md#bus-servo-channels" >}}).
+
+---
+
 ## Update flags state machine
 
 The `updateFlags` byte in the STM32 is a software latch between the DMA callback (ISR context, priority 0) and the main loop (thread context). The callback ORs new flags in; the main loop clears each flag before acting on it. Because the Cortex-M4 does not have lock-free atomics for 8-bit variables, the strict priority model (main loop has no priority; IRQ priority 0 preempts everything) makes this safe without a mutex.
@@ -434,7 +469,7 @@ The `updateFlags` byte in the STM32 is a software latch between the DMA callback
 stateDiagram-v2
     [*] --> Idle : initPiCommunication() — circular DMA armed
 
-    Idle --> DMATransfer : Pi asserts NSS + clocks 277 bytes
+    Idle --> DMATransfer : Pi asserts NSS + clocks 305 bytes
 
     DMATransfer --> Callback : DMA transfer-complete IRQ (priority 0)
     Callback --> Idle : stamp updateTime, merge updateFlags, re-arm is automatic
@@ -491,9 +526,9 @@ sequenceDiagram
     App->>UART: drainFor(2000 ms) — capture boot output
     App->>SPI: spi_init(20 MHz) — open /dev/spidev0.0, set Mode 0, 8-bit
     App->>SPI: spi_probe_version() — up to 30 × 100 ms polls
-    SPI-->>STM: 277-byte dummy transfer (transferVersion=21, updates=0)
+    SPI-->>STM: 305-byte dummy transfer (transferVersion=22, updates=0)
     STM-->>SPI: TxBuffer with transferVersion field
-    alt transferVersion == 21
+    alt transferVersion == 22
         App->>App: log "Version check: OK"
     else mismatch
         App->>App: log "MISMATCH — reflash on first update"
@@ -534,15 +569,15 @@ This ensures motors are stopped even if the Pi crashes mid-command without re-se
 |-----------|-------|--------|
 | Pi main loop period | 5 ms | `config_.mainLoopDelay = 5ms` (`Configuration.h`) |
 | SPI clock | 20 MHz | `ctx.speed_hz = 20'000'000` (`Spi.cpp`) |
-| Wire transfer size | 277 bytes | `BUFFER_LENGTH_DUPLEX_COMMUNICATION` |
-| Wire transfer time | ~111 µs | 277 × 8 bits ÷ 20 MHz |
+| Wire transfer size | 305 bytes | `BUFFER_LENGTH_DUPLEX_COMMUNICATION` |
+| Wire transfer time | ~122 µs | 305 × 8 bits ÷ 20 MHz |
 | DMA completion IRQ priority | 0 (highest) | `interupt_prioryty.h` |
 | STM32 BEMF cycle (per motor) | 1 250 µs | Motor control page |
 | STM32 heartbeat interval | 5 000 ms | `HEARTBEAT_INTERVAL` in `main.c` |
 | Pi health watchdog | 10 s | `kTimeout` in `Application.cpp` |
 | spi_probe_version timeout | 3 s (30 × 100 ms) | `spi_probe_version()` in `Spi.cpp` |
 | Post-reflash delay | 2 s | `reflash_stm()` in `Spi.cpp` |
-| Transfer version | 21 | `TRANSFER_VERSION` in `pi_buffer.h` |
+| Transfer version | 22 | `TRANSFER_VERSION` in `pi_buffer.h` |
 
 ---
 
