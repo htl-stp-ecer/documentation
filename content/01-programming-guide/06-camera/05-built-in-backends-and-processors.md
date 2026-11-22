@@ -96,7 +96,7 @@ The areas of a colour come largest first.
 | `blur` | `3` | Size of the blur against noise, in pixels of the scaled picture. 0 for none. |
 | `cleanup` | `3` | Size of the clean-up of each mask (removes specks, closes holes), in pixels of the scaled picture. 0 for none. |
 | `max_per_color` | `10` | At most this many areas per colour. |
-| `largest_only` | `false` | Report only the one largest area of all colours, or nothing. The label of that one detection is the colour of the object in front of the camera. |
+| `dominant` | `false` | Report only the colour with the most area in total, as one detection: all its areas together with the box around them, or nothing. The label is the colour of the object in front of the camera, also when the object is made of several areas (the stickers of a cube). |
 
 The blur makes an area a little larger than it is, by about the width of the blur at each edge. Set `blur` to 0 when the exact area matters.
 
