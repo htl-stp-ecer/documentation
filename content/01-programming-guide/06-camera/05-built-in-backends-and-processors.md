@@ -30,7 +30,7 @@ It needs OpenCV (`cv2`), see [Dependencies of a backend](#dependencies-of-a-back
 | `retry_delay` | `1.0` | Seconds between open attempts, at least `0.01`. `start_camera(delay=...)` overrides it |
 | `max_read_failures` | `30` | Failed reads in a row before the device is reopened, at least `1` |
 
-An unknown option raises `ValueError`, so a typo does not pass silently. A failed open is reported to the sink (and so to the UI) only once it has kept failing for 5 seconds, and then at the first such attempt and every tenth one after it. Before that it is only in the journal and the status, because a USB camera needs a few seconds to come back right after it was closed. Failed reads that end in a reopen are a warning in the journal.
+An unknown option raises `ValueError`, so a typo does not pass silently. A failed open is reported to the sink (and so to the UI) when the backend gives up after its last attempt. While attempts are left it is only in the journal and the status, because a USB camera needs a few seconds to come back right after it was closed. A backend without a limit of attempts, and a camera that was open before and is gone, report after 5 seconds of failing, at the first such attempt and every tenth one after it. Failed reads that end in a reopen are a warning in the journal.
 
 `status()` returns the current `state` (`opening`, `running`, `reconnecting`, `stopped`), the settings, the frame count, the number of open attempts and the last error.
 

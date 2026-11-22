@@ -79,7 +79,7 @@ What causes one:
 | A processor failed, or was disabled after five failures in a row | `processor: <name>` |
 | The frame stream cannot encode JPEGs, so it is turned off | `phase: stream` |
 
-A camera that is only slow to come back is not an error for the UI. A USB camera needs a few seconds to reopen right after it was closed, so a failed open is sent to the UI only once it has kept failing for 5 seconds, and then every tenth attempt. Before that the attempts are in the journal and in the status of the backend (`open_attempts`).
+A camera that is only slow to come back is not an error for the UI. A USB camera needs a few seconds to reopen right after it was closed, so while the backend still has attempts left, a failed open is not sent to the UI: it is in the journal and in the status of the backend (`open_attempts`). The UI gets one error when the backend gives up after its last attempt. A backend without a limit of attempts, and a camera that was open before and is gone, report after 5 seconds of failing, and then every tenth attempt.
 
 A start that fails for good also sets `failed` in the status. Your program sees it as a `FailedCamera` from `start_camera()`, see [Retries and failure]({{< ref "/01-programming-guide/06-camera/01-client-api.md" >}}#retries-and-failure).
 
