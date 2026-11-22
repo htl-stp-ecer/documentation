@@ -43,6 +43,10 @@ With `0`, or without the variable, OpenCV is imported when the camera first star
 
 Opening the camera never blocks the service: `acquire` answers at once and the backend starts in its own thread. A start that fails shows up as `failed` in the status and as an error message, not as an error of the command.
 
+### USB cameras stay awake
+
+The post-install step installs a udev rule (`/etc/udev/rules.d/90-raccoon-cam-usb.rules`) that switches off USB power saving for cameras. A camera that the kernel has suspended after a pause needs several seconds to wake up. Many of them, for example the Logitech C270, leave the USB bus and come back, and their `/dev/video0` is missing in the meantime, so the first open fails again and again. The rule applies to USB devices of the class that UVC cameras report (device class `ef`, subclass `02`, protocol `01`) and keeps them powered while they are plugged in. It takes effect for cameras that are plugged in when the setup runs and for every camera that is plugged in later.
+
 ### As a project service
 
 A project can run it like its own `vision` daemon, with an entry in the project's `services:` configuration. The format follows the `vision` service of `drum-bot`:

@@ -13,7 +13,7 @@ The package lives in the `raccoon-cam` repository. It is a standalone Python pac
 
 ## What is verified
 
-All of this runs in the test suite against an in-memory bus and a fake OpenCV.
+All of this runs in the test suite against an in-memory bus and a fake OpenCV. In addition, a Logitech C270 on a Raspberry Pi 3 has run through the service with the USB backend (320x240, MJPG): a processor from the project on the frames, the robot transport, the service as a systemd unit, the frame stream to the UI, and the camera picture widget in a program's UI screen.
 
 | Part | Covered by tests |
 |---|---|
@@ -21,19 +21,17 @@ All of this runs in the test suite against an in-memory bus and a fake OpenCV.
 | Loading, setting and swapping processors | One active processor out of the loaded ones, `change_processor` without loading, loading at the call and refusing a processor the service rejects, a lease without an open camera that frees the loaded processors, refusing what is wrong where it is declared, refusing a processor that is not loaded (in the client and in the service), dropping the old processor's detections at a swap, the set processor surviving a restart of the service, `validate_camera` and the check in `start_camera` |
 | `UsbCameraBackend` | Delivery of numbered frames, open retries and giving up after the configured attempts, reopening after failed reads, stop, configuration errors |
 | `ReplayBackend` | Playing a video, a folder and a single image, looping, finishing, scaling, the playback rate, failing at once for a bad source, running through the service with a processor |
-| Robot setup (the post-install step) | Root check, unit install and keeping an edited unit, one apt call for all missing packages, nothing to install when all is present, a failing or missing apt, `--no-service` |
+| Robot setup (the post-install step) | Root check, unit install and keeping an edited unit, the udev rule that keeps USB cameras awake (also when the service is left alone, and without udev), one apt call for all missing packages, nothing to install when all is present, a failing or missing apt, `--no-service` |
 | Backend dependencies | A missing dependency fails the start with an install hint, and is not checked before the backend is used |
 | `ProcessorHost` | Failure isolation, disabling, replacement, commands, the active processor, refusing processors for backends without frames |
 | Service and client | Leases (open on start, immediate close on stop, expiry after a crash, heartbeat, extended after a stalled service), `on_fail`, the falsy `FailedCamera`, results with their source, ready and the start timeout per backend, retries and delay from the backend, restarts of the program and of the service, exclusive start, switching backends, the backend saved on the robot, pause, errors, dropping frames, the frame stream, the wire format, the journal and the log of each run |
 
 ## What has not been tried
 
-- **A real camera.** The USB backend has not run against a real device on a Raspberry Pi.
-- **The robot transport.** `TransportBus` wraps `raccoon.get_transport()` the way `drum-bot` uses it, but it has not run on a robot.
-- **Running as a service.** The `services:` entry and the unit file are written from the `drum-bot` example and the unit tests of `raccoon-cli`, and have not been started. The same holds for loading OpenCV at start of the service, the log directory of each run and the version check at start.
+- **Other cameras.** Only one camera model is tried, with its resolution and codec. Other USB cameras and the other backend options are not tried on a robot.
 - **Switching processors on a running robot.** `change_processor` is tested with an in-memory bus. How long a swap takes with a real model on the Raspberry Pi is not measured.
 - **Memory and CPU on the Raspberry Pi 3.** Nothing is measured yet. The Pi has 1 GB of RAM and the system already uses 300 to 400 MB.
-- **The UI.** What BotUI does with the frames and detections is not checked.
+- **The UI.** The frame stream and the camera picture widget run on a robot. How the picture, the size and fit options and the drawn detections look on the display is not checked.
 
 ## What does not exist
 
