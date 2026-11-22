@@ -9,7 +9,7 @@ description: "What is verified in raccoon-cam, what has not been tried on a robo
 
 # Status
 
-The package lives in the `raccoon-cam` repository. It is a standalone Python package. It depends on `numpy` and on `raccoon-transport` version 0.1.59 or later, which has the hand-written `cam_*` messages. Version 0.1.33, which is installed in the virtual environment of `drum-bot`, has the old LCM-generated Python messages that need the wire patch from `drum-bot`, so it does not work with `raccoon-cam`. It needs OpenCV from the system for the USB backend and for the frame stream, and `raccoon-lib` for the robot transport.
+The package lives in the `raccoon-cam` repository. It is a standalone Python package. It depends on `numpy` and on `raccoon-transport`, which provides the `cam_*` messages and the channels of the camera. It needs OpenCV from the system for the USB backend and for the frame stream, and `raccoon-lib` for the robot transport.
 
 ## What is verified
 

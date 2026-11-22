@@ -361,30 +361,33 @@ The geometry system uses these to compute:
 
 ## Raccoon Transport (IPC)
 
-Raccoon Transport is the inter-process communication layer between the Python SDK and the Wombat's STM32 firmware. It uses LCM (Lightweight Communications and Marshalling) for message passing.
+Raccoon Transport is the inter-process communication layer between the Python SDK and the Wombat's STM32 firmware. It is a shared-memory transport: one ring-buffer file per channel under `/dev/shm`, no daemon and no network.
 
 ```mermaid
 graph LR
     subgraph "Raspberry Pi"
         PY["Python SDK"] -->|"transport messages"| RT["Raccoon Transport"]
+        RD["stm32-data-reader"]
     end
 
     subgraph "STM32 Firmware"
         FW["Motor/Servo/Sensor<br/>Control Loop"]
     end
 
-    RT <-->|"USB / UART"| FW
+    RT <-->|"shared memory"| RD
+    RD <-->|"SPI"| FW
 
     style PY fill:#4CAF50,color:#fff
     style RT fill:#42A5F5,color:#fff
+    style RD fill:#AB47BC,color:#fff
     style FW fill:#FF7043,color:#fff
 ```
 
 The transport provides:
 - **Publish/Subscribe**: Send commands and receive sensor data
-- **Reliable delivery**: Messages are retransmitted if lost
-- **Retain**: Last-known values are cached for late subscribers
-- **Channels**: Typed message channels for motors, servos, sensors, IMU, etc.
+- **Reliable delivery**: A channel that is reliable in the channel table repeats a message until the receiver has acknowledged it
+- **Retain**: A late subscriber of a retained channel gets the last value
+- **Channels**: Typed message channels for motors, servos, sensors, IMU, etc., all listed in the channel table
 
 You don't interact with Raccoon Transport directly unless you're building platform-level extensions. The HAL layer wraps it for you.
 

@@ -17,7 +17,7 @@ Some events are too important to wait until you open the right screen. BotUI sho
 | [Low Battery](#low-battery) | Battery voltage below 6 V | Yes, until ignored |
 | [Hardware Shutdown](#hardware-shutdown) | The motors are latched off | Yes, until recovered |
 | [System mismatch](#system-mismatch) | BotUI does not match the installed system | Yes, until acknowledged |
-| [Error from the robot](#error-messages) | A service reports an error | Yes, until acknowledged |
+| [Error or warning from the robot](#error-messages) | A service reports an error or a warning | Yes, until acknowledged |
 | [Ethernet cable](#ethernet-cable) | A cable is plugged in or pulled out | Question, answer it |
 | [Messages at the bottom](#messages-at-the-bottom) | Result of something you did | No |
 
@@ -64,11 +64,18 @@ Tap **Acknowledge** to continue. BotUI does not quit, it is the only screen on t
 
 Nothing is shown when everything matches, in dev mode (`botui` is `dev` in the bundle), or when BotUI does not run on a Raccoon device. [Settings → Versions]({{< ref "/05-bot-ui/03-settings.md#app-status" >}}) shows the bundle's values. The result of the check is also written to `/run/raccoon/botui.json`, which `raccoon doctor` shows. Background: [Transport contract]({{< ref "/06-advanced/03-transport.md" >}}).
 
-## Error Messages from the Robot {#error-messages}
+## Errors and Warnings from the Robot {#error-messages}
 
-Services on the robot can send an error text over the transport (the `errorMessages` channel). BotUI shows it as a dialog titled **Error** with one button, **Acknowledge**. Use this for the cause when a program fails: for example the STM32 reader or the library report a hardware problem.
+Services on the robot send a message for the user on the transport channel `messages/error` or `messages/warn`. Each message has a **title** and a **text** (the `message_t` type). BotUI shows it as a dialog with one button, **Acknowledge**:
 
-- Only **one** error dialog is open at a time. If another error arrives while one is open, it is not shown (it still goes into the BotUI log). After you acknowledge, the next error opens its own dialog.
+- An **error** has a red header with a crossed circle and the word **Error**, and a red button.
+- A **warning** has a yellow header with a warning triangle and the word **Warning**, and a yellow button.
+
+Below the header the dialog shows the title in bold and the text, centred. A long text scrolls. Use these messages to find the cause when a program fails: for example the STM32 reader reports a defective IMU (**IMU not working**) or a control loop that takes too long (**Slow control loop**), and the camera service reports a camera that cannot be opened (**Camera problem**).
+
+- Only **one** dialog is open at a time. A message that arrives meanwhile waits and opens after you acknowledge. At most three messages wait, when more arrive the oldest waiting one is dropped.
+- A message with the same kind and title as the one on screen, or as one that waits, is dropped. A fault that repeats with changing numbers in the text therefore shows one dialog.
+- Every message also goes into the BotUI log.
 
 ## Ethernet Cable {#ethernet-cable}
 

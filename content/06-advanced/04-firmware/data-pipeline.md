@@ -35,7 +35,7 @@ graph LR
     end
 
     subgraph Lib["raccoon-lib (Python)"]
-        LCMR["TransportReader\nspinOnce() thread\nfutex_waitv"]
+        LCMR["TransportReader\nspin_once() thread\nfutex_waitv"]
         CACHE["mutex-protected\nper-channel cache"]
         API["motor.get_position()\nanalog.read()\nimu.heading()"]
     end
@@ -76,7 +76,7 @@ raccoon_ring shared memory (/dev/shm/raccoon-rings/<channel>)
       │  (primary IPC; one ring-buffer file per channel)
       ▼
 raccoon-lib: TransportReader (callbacks on the shared spin thread)
-      │  (raccoon::Transport::spinOnce, updates caches)
+      │  (raccoon::Transport::spin_once, updates caches)
       ▼
 TransportReader caches (mutex-protected std::unordered_map
       │   / scalar fields)
@@ -135,7 +135,7 @@ The Pi's `stm32-data-reader` calls `spi_update()` on every main-loop iteration. 
 - Analog sensor values are passed as raw `int16_t` counts. No physical conversion is applied in the SPI layer.
 - Motor position reset is on-STM32 (via `motorPositionReset` bitmask + `PI_BUFFER_UPDATE_MOTOR_POS_RESET`); there are no Pi-side `positionOffsets_` in the current code.
 
-`DataPublisher::publishSensorData()` serialises each field as an transport message on the raccoon transport. All channel names use the **`raccoon/` prefix**.
+`DataPublisher::publishSensorData()` serialises each field as an transport message on the raccoon transport. Every channel is an entry of the channel table, named `<root>/<device>/<kind>/<property>`, for example `hardware/imu/state/gyro`.
 
 #### Publish-rate gating
 
@@ -193,9 +193,9 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 | `messages/error` | `message_t` | STM32 UART error messages | no |
 | `system/state/cpu_temperature` | `scalar_f_t` | Pi CPU temperature (°C) | no |
 
-"Retained" channels use `publishRetained()`. A new subscriber that calls `subscribeWithRetain` immediately receives the last published value without waiting for the next SPI cycle. This is important for motor position and battery voltage, where a late subscriber must not block waiting for the next update.
+"Retained" channels are marked `retained` in the channel table. A new subscriber receives the last published value once, without waiting for the next SPI cycle. This is important for motor position and battery voltage, where a late subscriber must not block waiting for the next update.
 
-IMU accuracy channels (`gyro/accuracy`, `accel/accuracy`, `mag/accuracy`, `imu/quaternion_accuracy`) are published only when the accuracy value changes, not on every loop.
+IMU accuracy channels (`gyro_accuracy`, `accel_accuracy`, `mag_accuracy` and `quaternion_accuracy` under `hardware/imu/state/`) are published only when the accuracy value changes, not on every loop.
 
 ### Step 4: raccoon-transport
 
@@ -213,13 +213,13 @@ sequenceDiagram
     RING-->>SUB: frame available\ncopy payload out, verify the SeqLock\ndecode + dispatch callback
 ```
 
-**Retained channels:** `publishRetained()` marks a channel so that a new subscriber starts at the latest frame in the ring and gets the last value immediately. Battery voltage, motor position, servo state, odometry, heading and BEMF are retained for this reason.
+**Retained channels:** a channel that is `retained` in the channel table lets a new subscriber start with the latest frame in the ring and get the last value immediately. Battery voltage, motor position, servo state, odometry, heading and BEMF are retained for this reason.
 
 **Restart:** when `stm32-data-reader` restarts it attaches to the existing ring files, and subscribers keep running. Do not delete the files in `/dev/shm/raccoon-rings/` while components run.
 
 **Namespace:** `stm32_data_reader.service` sets `PrivateTmp=false` so the ring files are visible to every process, see [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md" >}}).
 
-Reliable command delivery uses the same ring: the publisher re-sends until the subscriber acknowledges on the internal `__raccoon/ack` channel. Nothing goes over the network; the old `lcm-loopback-multicast.service` no longer exists.
+Reliable command delivery uses the same ring: the publisher re-sends until the subscriber acknowledges on the `protocol/ack` channel. Which channels are reliable is a property of the channel in the channel table. Nothing goes over the network.
 
 ### Step 5: raccoon-lib HAL
 
@@ -281,10 +281,10 @@ sequenceDiagram
     participant SPI as SpiReal / C SPI layer
     participant STM as STM32F427
 
-    PY->>RING: publish raccoon/motor/0/power_cmd\n(scalar_i32_t, value=50)
+    PY->>RING: publish hardware/motor/0/cmd/power\n(scalar_i32_t, value=50)
     Note over RING: slot written, wake_seq bumped
 
-    Note over CS: main loop: processMessages() → spinOnce(1ms)
+    Note over CS: main loop: processMessages() → spin_once(1 ms)
     RING-->>CS: frame delivered, callback fires
     CS->>CS: isTimestampNewer()? yes
     CS->>CS: duty = 50 × 4 = 200

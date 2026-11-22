@@ -55,7 +55,7 @@ graph TD
 
     subgraph TRANSPORT["raccoon-transport (shared memory transport bus)"]
         SHM["raccoon_ring\nshared memory\n/dev/shm"]
-        CH["Channels.h\nall raccoon/* names\ncached string accessors"]
+        CH["channels.yml\nchannel table: names, types,\nring properties"]
     end
 
     subgraph LIB["Python Layer (raccoon-lib)"]
@@ -66,7 +66,7 @@ graph TD
     HW --> STM32
     STM32 --> HW
 
-    SPI2s -->|"TxBuffer (sensors)\nDMA circular\nTRANSFER_VERSION=21"| SpiReal
+    SPI2s -->|"TxBuffer (sensors)\nDMA circular\nTRANSFER_VERSION=22"| SpiReal
     SpiReal -->|"RxBuffer (commands)"| SPI2s
 
     UART3s -.->|"debug lines\n[stp] hb #N ..."| UartMon
@@ -139,7 +139,7 @@ graph TB
         USR["Python mission scripts\nraccoon-lib HAL"]
     end
     subgraph L3["Layer 3 — Message Bus (raccoon-transport)"]
-        LCM2["raccoon_ring\ntyped channels (Channels.h)\nretained + reliable delivery"]
+        LCM2["raccoon_ring\ntyped channels (channels.yml)\nretained + reliable delivery"]
     end
     subgraph L2["Layer 2 — Pi Bridge (stm32-data-reader, wombat namespace)"]
         APP["Application\n(orchestrator, lifecycle)"]
@@ -147,7 +147,7 @@ graph TB
         HAL2["Hardware HAL: SpiReal/SpiMock\nLcmBroker (transport wrapper)"]
     end
     subgraph L1["Layer 1 — SPI Wire Protocol"]
-        BUF["pi_buffer.h\nTxBuffer / RxBuffer packed structs\nTRANSFER_VERSION = 21"]
+        BUF["pi_buffer.h\nTxBuffer / RxBuffer packed structs\nTRANSFER_VERSION = 22"]
     end
     subgraph L0["Layer 0 — STM32 Firmware"]
         FW["Actors: motor.c, servo.c\nSensors: bemf.c, imu.c, odometry.c\nHardware: timer.c, dma.c, gpio.c\nData_structures: PID.c, filter.c"]
@@ -279,11 +279,13 @@ pi_buffer.h                    — TxBuffer, RxBuffer, all sub-structs, TRANSFER
                                  (compiled into both firmware and Pi bridge)
 ```
 
-### Transport (`raccoon-transport/cpp/include/raccoon/`)
+### Transport (`raccoon-transport/`)
 
 ```
-Channels.h                     — all raccoon/* channel name constants
-                                 cached per-port string accessors (avoids alloc at 200Hz)
+channels.yml                   — the channel table: every channel with its message type
+                                 and ring properties (slots, size, reliable, retained)
+cpp/include/raccoon/ChannelTable.h — generated from it: channel names as constants and functions
+                                 (for example channels::hardware::motor::cmd::power(port))
 ```
 
 ## Motor control modes
@@ -292,7 +294,7 @@ The `motorControlMode` field in `RxBuffer` packs 3 bits per motor (motors 0–3 
 
 ## transport channel taxonomy
 
-All channels are defined in `raccoon::Channels` (`Channels.h`). The naming convention:
+Every channel is an entry of the channel table (`channels.yml` in raccoon-transport). A channel is named by its path, for example `hardware/motor/0/cmd/power`. The naming convention:
 - Channels with a `cmd` segment carry **commands** (imperative, never deduplicated).
 - All other channels carry **values / telemetry** (may be rate-limited or deduplicated).
 
@@ -305,7 +307,7 @@ Key channel groups:
 | Chassis | `hardware/chassis/cmd/velocity` | transport → Pi → STM32 |
 | Servo | `hardware/servo/N/state/position`, `/mode` | STM32 → Pi → transport |
 | Servo commands | `hardware/servo/N/cmd/position`, `.../cmd/mode`, `.../cmd/smooth` | transport → Pi → STM32 |
-| IMU | `hardware/imu/state/gyro`, `/accel/value`, `/imu/quaternion`, `/imu/heading` | STM32 → transport |
+| IMU | `hardware/imu/state/gyro`, `.../accel`, `.../quaternion`, `.../heading` | STM32 → transport |
 | Odometry | `hardware/odometry/state/pos_x`, `/pos_y`, `/heading`, `/vx`, `/vy`, `/wz` | STM32 → transport |
 | Odometry cmds | `hardware/odometry/cmd/reset`, `hardware/kinematics/cmd/config` | transport → Pi → STM32 |
 | Analog/Digital | `hardware/analog/N/state/value`, `hardware/digital/N/state/value` | STM32 → transport |

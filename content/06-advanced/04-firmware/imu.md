@@ -399,6 +399,6 @@ The `accuracy` field is the MPL's 0–3 accuracy metric for that sensor. Code co
 - [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — super-loop scheduling of `readImu()`, SPI2 idle guard for `txBuffer.imu` writes, and interrupt priority context
 - [Sensor Reading](/06-advanced/04-firmware/sensors/) — analog and digital sensor paths alongside the IMU overview
 - [Data Pipeline](/06-advanced/04-firmware/data-pipeline/) — how `txBuffer.imu` fields travel to `imu.heading()`, `imu.quaternion()`, and other Python API calls
-- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `DataPublisher` IMU channel gate logic and `raccoon/gyro`, `raccoon/imu/*` publish rates
+- [Pi Bridge Internals](/06-advanced/04-firmware/pi-bridge-internals/) — `DataPublisher` IMU channel gate logic and the publish rates of `hardware/imu/state/*`
 - [SPI Communication Protocol](/06-advanced/04-firmware/spi-protocol/) — complete `TxBuffer` layout and transport channel names for all IMU fields
 - [Architecture Overview](/06-advanced/04-firmware/architecture/) — interrupt priorities and how the IMU main loop interleaves with motor control

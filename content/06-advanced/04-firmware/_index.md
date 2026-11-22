@@ -30,13 +30,13 @@ graph LR
 
     subgraph PI["Raspberry Pi — Linux user-space"]
         READER["stm32-data-reader\nC++ SPI master bridge"]
-        LCM["raccoon_ring bus\ntyped pub/sub channels"]
+        TP["raccoon_ring bus\ntyped pub/sub channels"]
         LIB["raccoon-lib\nPython HAL + mission runner"]
     end
 
-    STM32 <-->|"SPI2 full-duplex DMA\nTxBuffer ← sensors\nRxBuffer → commands\nTRANSFER_VERSION = 21"| READER
-    READER <-->|"raccoon/* transport channels"| LCM
-    LCM <-->|"subscribe / publish"| LIB
+    STM32 <-->|"SPI2 full-duplex DMA\nTxBuffer ← sensors\nRxBuffer → commands\nTRANSFER_VERSION = 22"| READER
+    READER <-->|"channels of the channel table"| TP
+    TP <-->|"subscribe / publish"| LIB
 ```
 
 The STM32 guarantees microsecond-level timing for the BEMF cycle that back-EMF position tracking depends on. The Pi handles everything that Linux is good at. The SPI link is the only shared boundary.
@@ -54,7 +54,7 @@ Linux on the Pi cannot reliably meet that constraint without a PREEMPT-RT kernel
 ```mermaid
 sequenceDiagram
     participant PY as raccoon-lib (Python)
-    participant LCM as raccoon_ring
+    participant TP as raccoon_ring
     participant CS as CommandSubscriber
     participant DC as DeviceController
     participant SPI as SpiReal (SPI master)
@@ -63,8 +63,8 @@ sequenceDiagram
 
     Note over STM: TIM6 ISR fires every 1µs<br/>BEMF cycle at 1250µs intervals<br/>ADC1 analog at 4000µs
 
-    PY->>LCM: motor.set_velocity(port, v) → publish hardware/motor/N/cmd/velocity
-    LCM->>CS: callback: onMotorVelocityCommand()
+    PY->>TP: motor.set_velocity(port, v) → publish hardware/motor/N/cmd/velocity
+    TP->>CS: callback: onMotorVelocityCommand()
     CS->>DC: setMotorVelocity(port, v)
     DC->>SPI: stage RxBuffer.motorControlMode=MAV, motorTarget[N]=v
 
@@ -76,8 +76,8 @@ sequenceDiagram
 
     SPI->>DC: returns SensorData from TxBuffer
     DC->>DP: publishSensorData() called by Application::publishCurrentData()
-    DP->>LCM: publish hardware/motor/N/state/bemf, hardware/motor/N/state/position<br/>(rate-gated 50Hz, noise-epsilon filtered)
-    LCM->>PY: raccoon-lib reads the TransportReader cache → motor.position()
+    DP->>TP: publish hardware/motor/N/state/bemf, hardware/motor/N/state/position<br/>(rate-gated 50Hz, noise-epsilon filtered)
+    TP->>PY: raccoon-lib reads the TransportReader cache → motor.position()
 ```
 
 ## Learning path
@@ -199,7 +199,7 @@ How to cross-compile the STM32 firmware (Docker / gcc-arm-none-eabi), how to cro
 | Pi bridge headers | `stm32-data-reader/include/wombat/` |
 | Shared SPI protocol | `stm32-data-reader/shared/spi/pi_buffer.h` |
 | raccoon-transport transport wrapper | `stm32-data-reader/raccoon-transport/` |
-| transport channel names | `raccoon-transport/cpp/include/raccoon/Channels.h` |
+| transport channel table | `raccoon-transport/channels.yml` |
 
 
 ## Key numbers at a glance

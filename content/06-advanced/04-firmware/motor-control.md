@@ -494,14 +494,14 @@ Motor position counters are reset on the STM32 directly, not by a Pi-side softwa
 ```mermaid
 sequenceDiagram
     participant Py as Python (raccoon-lib)
-    participant LCM as shared-memory transport
+    participant TP as shared-memory transport
     participant CS as CommandSubscriber (Pi)
     participant DC as DeviceController (Pi)
     participant SPI as SpiReal → Spi.cpp
     participant STM as STM32 main.c
 
-    Py->>LCM: publish scalar_i32_t(value=1)<br/>hardware/motor/N/cmd/reset_position<br/>reliable channel
-    LCM->>CS: onMotorPositionResetCommand(port, cmd)
+    Py->>TP: publish scalar_i32_t(value=1)<br/>hardware/motor/N/cmd/reset_position<br/>reliable channel
+    TP->>CS: onMotorPositionResetCommand(port, cmd)
     CS->>DC: resetMotorPosition(port)
     DC->>SPI: spi_->resetMotorPosition(port)
     SPI->>SPI: set motorPositionReset bit N\nset PI_BUFFER_UPDATE_MOTOR_POS_RESET flag

@@ -22,15 +22,15 @@ The most important rule: **`await self.show(screen)`** suspends the step until `
 sequenceDiagram
     participant Step as UIStep._execute_step
     participant Screen as UIScreen
-    participant LCM as Raccoon Transport
+    participant TP as Raccoon Transport
     participant UI as BotUI (touchscreen)
 
     Step->>Screen: show(screen)
-    Screen->>LCM: widget tree (JSON)
-    LCM->>UI: screen_render message
+    Screen->>TP: widget tree (JSON)
+    TP->>UI: screen_render message
     Note over UI: User sees screen and interacts
-    UI->>LCM: screen_render/answer (click / value)
-    LCM->>Screen: event dispatch
+    UI->>TP: screen_render/answer (click / value)
+    TP->>Screen: event dispatch
     Screen->>Screen: @on_click handler runs
     Screen->>Step: close(result)
     Step->>Step: result = await show(...)
@@ -48,17 +48,17 @@ graph LR
     end
 
     subgraph "Raccoon Transport"
-        LCM["Transport Messages"]
+        TP["Transport Messages"]
     end
 
     subgraph "BotUI (Flutter)"
         FL["Touchscreen Renderer"]
     end
 
-    SC -->|"Widget tree (JSON)"| LCM
-    LCM -->|"screen_render"| FL
-    FL -->|"screen_render/answer"| LCM
-    LCM -->|"clicks, values"| SC
+    SC -->|"Widget tree (JSON)"| TP
+    TP -->|"screen_render"| FL
+    FL -->|"screen_render/answer"| TP
+    TP -->|"clicks, values"| SC
 
     style US fill:#4CAF50,color:#fff
     style SC fill:#66BB6A,color:#fff

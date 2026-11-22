@@ -22,13 +22,13 @@ graph LR
     subgraph Pi
         Server[raccoon-server<br/>HTTP/WebSocket :8421]
         Main[src/main.py<br/>mission code]
-        LCM[transport bus]
+        TP[transport bus]
     end
 
     CLI -- sync files via rsync/SFTP --> Pi
     CLI -- run/stop/logs via HTTP --> Server
     Server -- spawns --> Main
-    Main -- sensor/motor data --> LCM
+    Main -- sensor/motor data --> TP
 ```
 
 The server spawns `src/main.py` as a child process and streams its stdout back to the laptop in real time. When you press Ctrl+C, the CLI sends a shutdown signal through the server API — it does not kill the SSH session.

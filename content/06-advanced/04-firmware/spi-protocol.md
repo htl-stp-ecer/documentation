@@ -594,7 +594,7 @@ This ensures motors are stopped even if the Pi crashes mid-command without re-se
 | `src/wombat/hardware/SpiReal.cpp` | C++ wrapper: `readSensorData`, `setMotorState`, `setChassisVelocity` |
 | `src/wombat/Application.cpp` | Startup probe sequence, STM32 health watchdog, main loop |
 | `include/wombat/core/Configuration.h` | `mainLoopDelay`, `speedHz`, `disableBemfOnStartup` |
-| `raccoon-transport/cpp/include/raccoon/Channels.h` | All transport channel name constants |
+| `raccoon-transport/channels.yml` | The channel table: every transport channel with its message type |
 
 ## Related pages
 

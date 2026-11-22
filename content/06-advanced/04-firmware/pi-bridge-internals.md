@@ -11,7 +11,7 @@ weight: 5
 The `stm32-data-reader` is a C++20 daemon that lives entirely on the Raspberry Pi and acts as the translation layer between the STM32 coprocessor and the rest of the robot software stack. Think of it as a protocol gateway with three faces:
 
 - **Toward the STM32:** speaks SPI binary protocol, translates packed C structs into typed C++ objects.
-- **Toward user code and services:** speaks transport publish/subscribe over `raccoon_ring` shared memory, presenting well-named `raccoon/*` channels.
+- **Toward user code and services:** speaks transport publish/subscribe over `raccoon_ring` shared memory, presenting the channels of the channel table, for example `hardware/imu/state/gyro`.
 - **Toward the system:** owns the hardware safety watchdog, resets the STM32 on startup, monitors health.
 
 Understanding the bridge means understanding exactly what runs in one process, what the main loop does on each iteration, and how the hardware abstraction layer lets the same binary run against either real SPI hardware or a software simulator.
@@ -183,17 +183,18 @@ Motor and servo write calls update an internal `motors_[4]` / `servos_[4]` array
 
 ### Publish variants
 
-`LcmBroker` exposes three publish variants, each with different delivery semantics:
+`LcmBroker` exposes two publish variants, each with different delivery semantics:
 
-| Broker method | Dedup? | Retained? | When used |
-|---|---|---|---|
-| `publish<T>()` | yes | no | Most sensor channels (gyro, accel, analog, digital, temperature) |
-| `publishForce<T>()` | no | no | Accelerometer (every frame must go through) |
-| `publishRetained<T>()` | yes | yes | Battery, motor state, servo state, odometry, feature flags |
+| Broker method | Dedup? | When used |
+|---|---|---|
+| `publish<T>()` | yes | Sensor channels, battery, motor state, servo state, odometry, feature flags |
+| `publishForce<T>()` | no | Accelerometer (every frame must go through), messages for the user |
+
+Whether a channel is retained or reliable is not a choice of the call: it is a property of the channel in the channel table.
 
 **Deduplication** is byte-level: the transport compares the encoded payload of the new message to the last published value for that channel. Command channels (names with a `cmd` segment) are always skipped by dedup regardless of the flag, because repeating the same command is semantically meaningful.
 
-**Retained** means a late subscriber that calls `subscribeWithRetain` immediately receives the last published value from the ring without waiting for a new publish cycle. The ring implementation stores the latest frame in the slot at `producer_seq % slot_count` and `rrb_reader_seek_to_latest()` positions a new reader there directly.
+**Retained** is a property of the channel in the channel table: a late subscriber receives the last published value from the ring once, without waiting for a new publish cycle. The ring marks such a channel with a flag in its header, and a reader that opens it starts at the latest frame instead of after it.
 
 ### Rate gating
 
@@ -293,9 +294,9 @@ The state machine, the parameters, the bitmask and the manual clear are describe
 
 ### Message processing
 
-`processMessages()` drains pending inbound messages by calling `transport_->spinOnce(1)` (1 ms spin slice, cheap atomic load per channel) in a tight loop until it returns 0 (no more messages). Each `spinOnce` advances reliability timers and dispatches any subscriber callbacks inline.
+`processMessages()` drains pending inbound messages by calling `transport_->spin_once(1)` (1 ms spin slice, cheap atomic load per channel) in a tight loop until it returns 0 (no more messages). Each `spin_once` advances reliability timers and dispatches any subscriber callbacks inline.
 
-At every 100th call the broker logs a performance report: messages per call, loop rate (Hz), inbound latency statistics (min/avg/p99/max), publish deduplication count, and a per-channel handler timing breakdown (top-8 channels by message count, showing average and peak handler time plus share of total CPU).
+At every 100th call the broker writes a performance report to the log at `debug` level (it is not in the journal at the default level): messages per call, loop rate (Hz), inbound latency statistics (min/avg/p99/max), publish deduplication count, and a per-channel handler timing breakdown (top-8 channels by message count, showing average and peak handler time plus share of total CPU).
 
 ### Latency alerting
 
@@ -311,10 +312,10 @@ All communication between the bridge and its clients goes through `raccoon::Tran
 
 What matters for the bridge:
 
-- **Restarts are safe.** When `stm32-data-reader` restarts it calls `rrb_writer_create()` on the existing files, which re-initialises the header in place. Subscribers resync without a restart of BotUI or raccoon-lib. This is why the unit must never wipe `/dev/shm`.
+- **Restarts are safe.** When `stm32-data-reader` restarts it attaches to the existing ring files. Subscribers keep running without a restart of BotUI or raccoon-lib. This is why the unit must never wipe `/dev/shm`.
 - **`PrivateTmp=false` is mandatory.** The unit sets it explicitly. Any option that creates a mount namespace (`PrivateTmp=true`, `ProtectSystem=`, `ProtectHome=`) would hide the ring files from every other process, see [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md" >}}).
-- **One publisher per channel.** The bridge is the only publisher of the sensor channels and the only subscriber of the command channels it owns.
-- **Delivery options per call.** `publish`, `publishForce` and `publishRetained` on `LcmBroker` (see [DataPublisher](#datapublisher)) map to the transport's dedup and retain options. Handlers run inside `processMessages()` on the main loop thread.
+- **Several publishers per channel are possible.** Every ring accepts several writers. In practice the bridge is the only publisher of the sensor channels and the only subscriber of the command channels it owns.
+- **Delivery is a property of the channel.** `publish` and `publishForce` on `LcmBroker` (see [DataPublisher](#datapublisher)) differ only in deduplication; retained and reliable come from the channel table. Handlers run inside `processMessages()` on the main loop thread.
 
 ## Related pages
 
