@@ -71,7 +71,21 @@ Services on the robot send a message for the user on the transport channel `mess
 - An **error** has a red header with a crossed circle and the word **Error**, and a red button.
 - A **warning** has a yellow header with a warning triangle and the word **Warning**, and a yellow button.
 
-Below the header the dialog shows the title in bold and the text, centred. A long text scrolls. Use these messages to find the cause when a program fails: for example the STM32 reader reports a defective IMU (**IMU not working**) or a control loop that takes too long (**Slow control loop**), and the camera service reports a camera that cannot be opened (**Camera problem**).
+Below the header the dialog shows the title in bold and the text, centred. A long text scrolls. Use these messages to find the cause when a program fails: what the services send is:
+
+| Message | Kind | Sent by | Meaning |
+|---------|------|---------|---------|
+| **IMU not working** | error | STM32 reader | The IMU has delivered only zeros since the reader started |
+| **STM32 not responding** | error | STM32 reader | The STM32 has not updated its data for more than 10 seconds, the reader shuts down |
+| **Reader problem** | error | STM32 reader | The main loop, the device update, a sensor read or the start of the reader failed |
+| **Commands arrive slowly** | warning | STM32 reader | The messages from the program reach the reader late (over 20 ms) |
+| **Slow control loop** | warning | STM32 reader | One loop of the reader took longer than 50 ms |
+| **Command failed** | warning | STM32 reader | A motor, servo or chassis command could not be passed on to the STM32 |
+| **Command rejected** | warning | STM32 reader | The safety check of the reader refused a command |
+| **Camera problem** | error | Camera service | The camera cannot be opened after its last attempt, or a processor failed |
+| **Camera warning** | warning | Camera service | The frame stream for the UI is switched off, the camera keeps running |
+
+Everything else that the services log stays in the log and does not open a dialog.
 
 - Only **one** dialog is open at a time. A message that arrives meanwhile waits and opens after you acknowledge. At most three messages wait, when more arrive the oldest waiting one is dropped.
 - A message with the same kind and title as the one on screen, or as one that waits, replaces the text of that one instead of opening another dialog. A fault that repeats with changing numbers in the text therefore shows one dialog with the latest text, and an error that ends in a final message shows that message.

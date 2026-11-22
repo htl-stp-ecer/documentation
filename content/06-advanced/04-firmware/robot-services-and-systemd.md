@@ -274,7 +274,7 @@ The channel name is `system/state/cpu_temperature` (from `raccoon::Channels::CPU
 
 ### What it is
 
-`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error lines additionally reach the `messages/error` transport channel as a message with the title "STM32 reader" (via the logger), which means STM32 faults appear as an error dialog in BotUI without any extra tooling.
+`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error and warning lines stay in the journal: only messages that the reader marks for the user (a title and a text) reach the UI.
 
 ### Initialization details
 

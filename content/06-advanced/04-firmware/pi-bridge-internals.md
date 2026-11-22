@@ -300,7 +300,7 @@ At every 100th call the broker writes a performance report to the log at `debug`
 
 ### Latency alerting
 
-If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs an error, which the logger also sends to `messages/error` as a `message_t` with the title "Commands arrive slowly". Repeated alerts are rate-limited to every 10 occurrences.
+If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs a warning, which the logger also sends to `messages/warn` as a `message_t` with the title "Commands arrive slowly". Repeated alerts are rate-limited to every 10 occurrences.
 
 ### Per-subscription timing instrumentation
 
