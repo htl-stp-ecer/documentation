@@ -80,6 +80,7 @@ Below the header the dialog shows the title in bold and the text, centred. A lon
 | **Reader problem** | error | STM32 reader | The main loop, the device update, a sensor read or the start of the reader failed |
 | **Commands arrive slowly** | warning | STM32 reader | The messages from the program reach the reader late (over 20 ms) |
 | **Slow control loop** | warning | STM32 reader | One loop of the reader took longer than 50 ms |
+| **Updating the STM32 firmware** | warning | STM32 reader | The firmware does not match the reader and is flashed again, for about a minute the robot does not react and no sensor values arrive, then everything works again |
 | **Command failed** | warning | STM32 reader | A motor, servo or chassis command could not be passed on to the STM32 |
 | **Command rejected** | warning | STM32 reader | The safety check of the reader refused a command |
 | **Camera problem** | error | Camera service | The camera cannot be opened after its last attempt, or a processor failed |
