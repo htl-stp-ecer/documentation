@@ -42,7 +42,7 @@ A channel name consists of the characters `0-9 a-z A-Z _ -`, segments are separa
 | `hardware/latch/state/flags` | reader → everyone | Flags of the motor latch |
 | `camera/state/detections` | camera → library | Detections from `raccoon-cam` |
 | `ui/screen/render` | library → botui | Screen to show on the robot |
-| `messages/error`, `messages/warn` | everyone → botui | Errors and warnings as text |
+| `messages/error`, `messages/warn` | everyone → botui | Errors and warnings as a `message_t`: a title and a text. botui shows each as a dialog |
 
 In every language a channel is named by its path, generated from the table: `channels.hardware.motor.cmd.power(port)` in Python and Dart, `channels::hardware::motor::cmd::power(port)` in C++. A channel with a `cmd` segment is a command channel; commands are never deduplicated, because repeating a command (for example "velocity 0") is meaningful. The full list of the channels the reader publishes and subscribes is in the `stm32-data-reader` README.
 

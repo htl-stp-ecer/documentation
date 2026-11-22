@@ -250,7 +250,7 @@ IMU accuracy channels (gyro, accel, compass, quaternion) use a change-detector i
 | `hardware/odometry/state/wz` | `scalar_f_t` | 50 Hz, no eps | yes |
 | `hardware/feature/state/bemf_active` | `scalar_i32_t` | dedup only | yes |
 | `hardware/latch/state/flags` | `scalar_i32_t` | dedup only | yes |
-| `messages/error` | `string_t` | none (force) | no |
+| `messages/error` | `message_t` | none (force) | no |
 | `system/state/cpu_temperature` | `scalar_f_t` | 1 Hz (SystemMonitor) | no |
 
 ## CommandSubscriber
@@ -299,7 +299,7 @@ At every 100th call the broker logs a performance report: messages per call, loo
 
 ### Latency alerting
 
-If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs an error and publishes the alert message to `messages/error` via `publishForce`. Repeated alerts are rate-limited to every 10 occurrences.
+If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs an error, which the logger also sends to `messages/error` as a `message_t` with the title "Commands arrive slowly". Repeated alerts are rate-limited to every 10 occurrences.
 
 ### Per-subscription timing instrumentation
 

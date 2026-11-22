@@ -114,7 +114,7 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 | `camera/response` | service to clients | `string_t` with JSON: `request_id`, `ok`, `data` |
 | `camera/state/status` | service to clients | `string_t` with JSON, retained, every 2 seconds and on changes |
 | `camera/state/error` | service to clients | `string_t` with JSON `message` and `context`, retained |
-| `messages/error` | service to UI | The same errors as plain text, prefixed with `raccoon-cam:` |
+| `messages/error` | service to UI | The same errors as a `message_t` with the title "Camera problem" |
 
 `cam_blob_t` has no field for the source, so the label on the wire is `source/label`, for example `BrightSpot/bright`. The client splits it again, which is why processor names must not contain `/`. A detection from a backend carries the backend's name as source.
 

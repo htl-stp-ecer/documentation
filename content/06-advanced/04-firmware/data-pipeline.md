@@ -190,7 +190,7 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 | `hardware/odometry/state/wz` | `scalar_f_t` | body-frame wz (rad/s) | yes |
 | `hardware/feature/state/bemf_active` | `scalar_i32_t` | BEMF enable state (0 or 1) | yes |
 | `hardware/latch/state/flags` | `scalar_i32_t` | shutdown bitmask (bits: servo, motor, watchdog-source) | yes |
-| `messages/error` | `string_t` | STM32 UART error messages | no |
+| `messages/error` | `message_t` | STM32 UART error messages | no |
 | `system/state/cpu_temperature` | `scalar_f_t` | Pi CPU temperature (°C) | no |
 
 "Retained" channels use `publishRetained()`. A new subscriber that calls `subscribeWithRetain` immediately receives the last published value without waiting for the next SPI cycle. This is important for motor position and battery voltage, where a late subscriber must not block waiting for the next update.
