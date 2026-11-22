@@ -1,7 +1,7 @@
 ---
 title: "Motor Control"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 6
 ---
@@ -288,7 +288,7 @@ If `FEATURE_BEMF_DISABLE` is set in `rxBuffer.featureFlags`, MAV and CHASSIS mod
 
 `motor_mode_pwm()` — Passes `rxBuffer.motorTarget[ch]` directly to `applyMotorOutput()`. Signed range −399 to +399. Positive = CW; negative = CCW. No encoder feedback of any kind.
 
-**transport command:** `scalar_i32_t` on `Channels::motorPowerCommand(port)`. The Pi-side converts a −100…+100 percentage to a −400…+400 duty value (factor of 4), so the firmware sees the rescaled value. **No `reliable=True`** — this is a continuous stream.
+**transport command:** `scalar_i32_t` on `hardware/motor/<port>/cmd/power`. The Pi-side converts a −100…+100 percentage to a −400…+400 duty value (factor of 4), so the firmware sees the rescaled value. The channel is reliable.
 
 ### `MOT_MODE_MAV` — Move At Velocity (0b011)
 
@@ -301,7 +301,7 @@ applyMotorOutput(ch, pidOut);
 
 The velocity PID output is the signed PWM duty (−399…+399), passed directly to `applyMotorOutput`. This mode requires BEMF to be enabled; if `FEATURE_BEMF_DISABLE` is set, the STM32 holds the motor off.
 
-**transport command:** `scalar_i32_t` on `Channels::motorVelocityCommand(port)`. **No `reliable=True`** — continuous stream.
+**transport command:** `scalar_i32_t` on `hardware/motor/<port>/cmd/velocity`. The channel is reliable.
 
 ### `MOT_MODE_CHASSIS` — On-MCU Chassis Velocity (0b101)
 
@@ -319,13 +319,13 @@ applyMotorOutput(ch, pidOut);
 
 `rxBuffer.motorTarget[ch]` is ignored in this mode. All four motors must be set to CHASSIS mode independently. The chassis velocity loop closes entirely on-MCU — no SPI round-trip is in the feedback path, making it deterministic.
 
-**transport command:** `vector3f_t` (x=vx, y=vy, z=wz) on `Channels::CHASSIS_VELOCITY_CMD`. **No `reliable=True`** — continuous stream.
+**transport command:** `vector3f_t` (x=vx, y=vy, z=wz) on `hardware/chassis/cmd/velocity`. The channel is a stream, not reliable; the stop is `hardware/chassis/cmd/stop`.
 
 ### `MOT_MODE_MTP` — Move To Position (0b100)
 
 `motor_mode_mtp()` — Moves to an absolute position target (`rxBuffer.motorGoalPosition[ch]`) using a trapezoid profile (rate-limited acceleration, linear deceleration ramp) that feeds the velocity PID. After reaching the goal the motor brakes and keeps holding it.
 
-**transport command:** `vector3f_t` (x=speed_limit, y=goal_position) on `Channels::motorPositionCommand(port)`. Use `reliable=True`.
+**transport command:** `vector3f_t` (x=speed_limit, y=goal_position) on `hardware/motor/<port>/cmd/position` (reliable).
 
 See the dedicated section below for the full profile description.
 
@@ -413,7 +413,7 @@ These are loaded by `pid_init()` at startup:
 
 The Pi can push new gains at any time by writing `rxBuffer.motorPidSettings` and setting `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (0x01) in `rxBuffer.updates`. The firmware calls `update_motor_pidSettings()`, which copies `pids[port].Kp/Ki/Kd` into `pidControllers[]` and applies `limMaxInt` / `limMax` as the new `iMax` / `outMax` if non-zero.
 
-**transport command:** `vector3f_t` (x=kp, y=ki, z=kd) on `Channels::motorPidCommand(port)`. Use `reliable=True`.
+**transport command:** `vector3f_t` (x=kp, y=ki, z=kd) on `hardware/motor/<port>/cmd/pid` (reliable).
 
 ---
 
@@ -500,7 +500,7 @@ sequenceDiagram
     participant SPI as SpiReal → Spi.cpp
     participant STM as STM32 main.c
 
-    Py->>LCM: publish scalar_i32_t(value=1)<br/>Channels::motorPositionResetCommand(port)<br/>reliable=True
+    Py->>LCM: publish scalar_i32_t(value=1)<br/>hardware/motor/N/cmd/reset_position<br/>reliable channel
     LCM->>CS: onMotorPositionResetCommand(port, cmd)
     CS->>DC: resetMotorPosition(port)
     DC->>SPI: spi_->resetMotorPosition(port)
@@ -613,7 +613,7 @@ const float pos = s.startAngle + (s.targetAngle - s.startAngle) * eased;
 spi_->setServoState(port, {ServoMode::Enabled, pos});
 ```
 
-**transport command:** `vector3f_t` (x=target_angle_deg, y=speed_deg_per_sec, z=easing_type) on `Channels::servoSmoothPositionCommand(port)`. Use `reliable=True`. The trajectory runs on the Pi; each intermediate position update is written to the STM32 via SPI.
+**transport command:** `vector3f_t` (x=target_angle_deg, y=speed_deg_per_sec, z=easing_type) on `hardware/servo/<port>/cmd/smooth` (reliable). The trajectory runs on the Pi; each intermediate position update is written to the STM32 via SPI.
 
 **Update rate:** `update_servo_cmd()` is called from the STM32 main loop (effectively when BEMF is idle), which runs at ~200 Hz for the motor path. The servo command is processed at the rate the main loop delivers it — there is no dedicated servo timer interrupt. The smooth interpolation rate is limited by `DeviceController::processUpdate()`, which runs at the Pi's main loop rate.
 

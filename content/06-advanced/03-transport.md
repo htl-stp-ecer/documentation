@@ -1,7 +1,7 @@
 c---
 title: "Transport"
 author: "Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 20
 description: "How the components of RaccoonOS exchange data: channels, messages, the shared-memory ring, reliable delivery and the contract hash."
@@ -9,61 +9,87 @@ description: "How the components of RaccoonOS exchange data: channels, messages,
 
 # Transport
 
-`raccoon-transport` is the layer through which everything on the robot exchanges data: the reader publishes sensor values, `raccoon-lib` sends motor commands, botui shows both, and `raccoon-cam` publishes detections. It exists for C++, Python and Dart and is one small repository with four parts:
+`raccoon-transport` is the layer through which everything on the robot exchanges data: the reader publishes sensor values, `raccoon-lib` sends motor commands, botui shows both, and `raccoon-cam` publishes detections. It is one small repository with four parts:
 
+- the **channel table** (`channels.yml`), the list of every channel with its message type and the properties of its ring,
 - the **message types** (written by hand in C++, with matching Python and Dart classes),
-- the **C++ transport library** with retain and reliable delivery,
-- a **Python package** and a **Dart package**, and
+- the **C++ transport**, which holds all the logic: rings, retained and reliable channels, statistics. The **Python package** wraps it with pybind11 and the **Dart package** reaches it through a C bridge, and
 - the **contract** that lets every component check at startup that it speaks the same wire format.
+
+---
+
+## Channel table
+
+Only channels that are in `channels.yml` exist. A publish or subscribe on any other name is refused. Every entry has a name, a message type and the properties of its ring:
+
+| Property | Meaning |
+|----------|---------|
+| `type` | The message type the channel carries, for example `scalar_i32_t`. A typed publish or subscribe on the wrong type is refused |
+| `slots` | How many frames the ring holds (default 64) |
+| `max_payload` | For a type without a fixed size (strings, JSON, images): the largest frame in bytes. A fixed-size type needs no limit, its size follows from the type |
+| `retained` | A new subscriber first receives the latest frame, so a late-starting UI is not blank. Channels with a `state` segment are retained by default |
+| `reliable` | At-least-once delivery, see below |
+
+A channel name consists of the characters `0-9 a-z A-Z _ -`, segments are separated by `/`. The first segment is a root such as `hardware`, `camera`, `ui`, `system` or `messages`; the name has the form `<root>/<device>/<kind>/<property>`, where kind is `state` (a value the device reports) or `cmd` (a command to the device):
+
+| Channel | Direction | Carries |
+|---------|-----------|---------|
+| `hardware/imu/state/gyro` | reader → everyone | Gyroscope reading |
+| `hardware/motor/<n>/state/position` | reader → everyone | Motor position |
+| `hardware/motor/<n>/cmd/power` | library → reader | Motor power command |
+| `hardware/chassis/cmd/velocity` | library → reader | Body-frame velocity (vx, vy, wz), a stream |
+| `hardware/chassis/cmd/stop` | library → reader | Stop the chassis |
+| `hardware/latch/state/flags` | reader → everyone | Flags of the motor latch |
+| `camera/state/detections` | camera → library | Detections from `raccoon-cam` |
+| `ui/screen/render` | library → botui | Screen to show on the robot |
+| `messages/error`, `messages/warn` | everyone → botui | Errors and warnings as text |
+
+In every language a channel is named by its path, generated from the table: `channels.hardware.motor.cmd.power(port)` in Python and Dart, `channels::hardware::motor::cmd::power(port)` in C++. A channel with a `cmd` segment is a command channel; commands are never deduplicated, because repeating a command (for example "velocity 0") is meaningful. The full list of the channels the reader publishes and subscribes is in the `stm32-data-reader` README.
 
 ---
 
 ## Shared-memory ring
 
-There is no broker and no network involved. Every channel is one file under `/dev/shm/` named `raccoon_ring_<channel>` (slashes in the channel name are encoded). The one component that publishes on a channel maps the file and writes frames into a ring of fixed-size slots, by default 64 slots of up to 2 KiB each. Subscribers map the same file and read from it.
+There is no broker and no network involved. Every channel is one file under `/dev/shm/raccoon-rings/`, named like the channel with `.` for `/` (`hardware.motor.0.cmd.power`). A ring is a header and a fixed number of slots, and the table decides how many and how big. The first process that opens a channel, reader or writer, creates the file; every later one attaches to it.
 
-The design is deliberately boring. An earlier backend (iceoryx2) needed service descriptors, handshakes and cleanup daemons, and frames could still get lost when a component restarted. The ring has none of that:
-
-- **No daemon, no handshake.** Components can start, stop and crash independently. A subscriber may open a channel before its publisher exists and receives frames as soon as the file appears. When a publisher comes back it writes a fresh frame and subscribers resync.
-- **Single producer per channel.** For example, the reader is the only publisher of the sensor channels. The one exception is the internal acknowledgement channel, which every subscriber process writes to.
-- **Event-driven, not polling.** Every publish wakes waiting subscribers with a Linux `futex`. A subscriber thread sleeps in one `futex_waitv` call over all of its channels (Linux 5.16 or newer, at most 128 channels) and uses no CPU while nothing is published. A publisher skips the wake call entirely when nobody is waiting on that channel.
+- **No daemon, no handshake.** Components can start, stop and crash independently. A subscriber may open a channel before its publisher exists and receives frames as soon as the publisher writes. A program that restarts attaches to the ring that is already there.
+- **Every ring takes several writers.** A writer takes a slot with an atomic counter, so two processes never fill the same slot.
+- **Event-driven, not polling.** Every publish wakes waiting subscribers with a Linux `futex`. A subscriber thread sleeps in one `futex_waitv` call over all of its channels (Linux 5.16 or newer, at most 128 channels) and uses no CPU while nothing is published. A publisher skips the wake call when nobody is waiting on that channel.
 - **The publisher never blocks.** A subscriber that is too slow loses the oldest frames, it never holds the publisher back. For value channels like sensors this is what you want, because the newest frame is the one that counts.
+- **A new subscriber starts after the latest frame.** On a retained channel it receives the latest frame once, then the frames that follow.
 - **Copy-safe.** Each slot is protected by a sequence lock, so a subscriber never uses a half-written frame. Frames are copied in and out, which is fast for the small messages used here.
-- **Layout check.** The ring file carries a magic number and a version. A stale file from an incompatible build is detected and re-created by the publisher.
+- **Layout check.** The ring file carries a magic number and a version, and a subscriber checks that the layout in the header fits the file. A ring from an incompatible build is not used.
+- **Small.** A slot occupies the frame plus 16 bytes, rounded up to 64 bytes (a cache line of the Raspberry Pi). A 12-byte value takes one cache line.
 
-In C++ the transport runs one spin thread per process that waits for frames on all subscribed channels and calls your handlers. BotUI's Dart side drains the frames that the C++ bridge has queued into its streams about 30 times per second, which matches the UI's redraw rate.
+The transport runs one spin thread per process that waits for frames on all subscribed channels and calls your handlers. BotUI's Dart side drains the frames that the C bridge has queued into its streams about 30 times per second, which matches the UI's redraw rate. A handler that throws is counted and reported, and the other handlers keep running.
 
-Never delete the files in `/dev/shm` while components run: a subscriber keeps the old file mapped and will not see a newly created one.
-
----
-
-## Channels
-
-Channels follow the pattern `raccoon/<device>/<property>`. Examples:
-
-| Channel | Direction | Carries |
-|---------|-----------|---------|
-| `raccoon/gyro/value` | reader → everyone | Gyroscope reading |
-| `raccoon/motor/<n>/position` | reader → everyone | Motor position |
-| `raccoon/motor/<n>/power_cmd` | library → reader | Motor power command |
-| `raccoon/chassis/velocity_cmd` | library → reader | Body-frame velocity (vx, vy, wz) |
-| `raccoon/cam/detections` | camera → library | Detections from `raccoon-cam` |
-| `raccoon/screen_render` | library → botui | Screen to show on the robot |
-
-Commands end in `_cmd` or contain a `/cmd/` segment. Protocol channels used internally for acknowledgements and retained values start with `__raccoon/`. The full list of channels the reader publishes and subscribes is in the `stm32-data-reader` README; the source of truth is `cpp/include/raccoon/Channels.h` in `raccoon-transport`.
+If a ring file is deleted while components run, a subscriber that waits notices within about a second and attaches to the new file.
 
 ---
 
-## Publish options
+## Publishing and subscribing
 
-| Option | What it does |
-|--------|--------------|
-| plain publish | Writes the frame. Fast, no guarantees beyond the ring |
-| **retain** | A new subscriber immediately receives the latest frame in the ring, so a late-starting UI is not blank |
-| **reliable** | At-least-once delivery. The publisher re-sends every 50 ms until the subscriber acknowledges, at most 20 times (about one second), and logs loudly if no acknowledgement ever arrives. This protects one-shot commands such as a single motor command that is sent while the reader is not yet listening. The subscriber has to subscribe with `reliable` too, so it acknowledges and ignores the re-sends. Do not use it for high-rate streams like the chassis velocity, they recover with the next frame |
-| **deduplicate** | Drops a publish whose payload is identical to the previous one. Only for value channels: command channels are never deduplicated, because repeating a command (for example "velocity 0") is meaningful |
+A publish returns a result: `Ok`, `NotInTable` (the channel is not in the table), `TypeMismatch` (a different message type, or a size other than the fixed size of the type), `TooBig` (above the `max_payload` of the channel) or `Closed` (the transport was shut down). In Python a refused publish raises `PublishError`; its `result` says why.
 
-The wire format of a reliable channel is unchanged, so subscribers that do not care about reliability keep working.
+```python
+import raccoon_transport as rt
+from raccoon_transport import channels
+from raccoon_transport.types.raccoon import scalar_i32_t
+
+transport = rt.get_transport()
+transport.publish(channels.hardware.motor.cmd.power(0), scalar_i32_t(timestamp=0, value=50))
+subscription = transport.subscribe(
+    channels.hardware.motor.state.position(0),
+    lambda channel, msg: print(msg.value),
+    message_type=scalar_i32_t,
+)
+```
+
+The one option of a publish is **deduplicate**: it drops a publish whose payload is identical to the previous one. It applies to value channels only.
+
+### Reliable channels
+
+A channel that is `reliable` in the table has at-least-once delivery. The publisher sends the frame again every 50 ms until a subscriber acknowledges it, at most 20 times (about one second), and reports a retransmit and a give-up to the log. This protects one-shot commands, such as a single motor command that is sent while the reader is not yet listening. A subscriber of a reliable channel acknowledges every frame and delivers each command once: it remembers the last 64 commands by timestamp and checksum, so a repeated frame is acknowledged but not delivered again. Streams such as `hardware/chassis/cmd/velocity` are not reliable, they recover with the next frame; the stop of the chassis is its own reliable channel.
 
 ---
 
@@ -206,15 +232,15 @@ A component that refuses to start exits with **78**. systemd units of long-runni
 
 ### For transport developers
 
-`scripts/contract.py` in `raccoon-transport` reads the **C++ sources** and writes `contract/contract.json` plus generated constants for C++, Python and Dart. The hash is the first 16 hex characters of the SHA-256 of the canonical JSON.
+`scripts/contract.py` in `raccoon-transport` reads the **C++ message headers**, `raccoon_ring.h` and `channels.yml` and writes `contract/contract.json` plus generated constants for C++, Python and Dart. The hash is the first 16 hex characters of the SHA-256 of the canonical JSON.
 
 | Goes into the hash | Does **not** |
 |--------------------|--------------|
 | every message type of `messages/include/raccoon/*_t.hpp`: name, fields **in order** (the wire order), field types | comments, whitespace, default values |
-| every channel name from `Channels.h` (port-indexed ones as a pattern like `raccoon/motor/{port}/done`), sorted | the order channels are declared in |
+| every channel of `channels.yml` with its message type, slot count, slot size, `reliable` and `retained` flag, sorted by name | the documentation text and the order of the entries |
 | the shared-memory ring magic and `RRB_VERSION` | the transport version number (display only) |
 
-After changing a message struct, a channel or the ring layout, regenerate and commit:
+After changing a message struct, a channel or the ring layout, regenerate and commit (a channel in `channels.yml` also needs `python3 scripts/channels.py --write`, which generates the channel names for C++, Python and Dart):
 
 ```bash
 python3 scripts/contract.py --write     # regenerate contract.json and the constants
@@ -228,6 +254,7 @@ CI runs `contract.py --check`. It fails when a generated file is stale or when t
 ## Where the code is
 
 - Messages and protocol types: `messages/`
-- C++ library, channels, ring and tests: `cpp/`
-- Python package: `python/`, Dart package: `dart/`
+- Channel table: `channels.yml`, generator: `scripts/channels.py`
+- C++ transport, ring, C bridge and tests: `cpp/`
+- Python package (with the pybind11 binding): `python/`, Dart package: `dart/`
 - Contract hash, check spec and test vectors: `contract/` and `scripts/contract.py`

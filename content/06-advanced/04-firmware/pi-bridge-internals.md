@@ -1,7 +1,7 @@
 ---
 title: "Pi Bridge Internals"
 author: "Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 5
 ---
@@ -36,7 +36,7 @@ graph TD
     end
 
     subgraph SHM["raccoon_ring SHM (/dev/shm/)"]
-        RING["One raccoon_ring_* file\nper transport channel"]
+        RING["One ring file\nper transport channel"]
     end
 
     subgraph Clients["Other processes"]
@@ -78,7 +78,7 @@ graph TD
 The `Application::initialize()` → `Application::initializeServices()` chain runs these steps in order:
 
 1. **Logger** is created first so all subsequent steps can log.
-2. **LcmBroker** is instantiated and connected to the logger so it can publish error messages to `raccoon/errors`.
+2. **LcmBroker** is instantiated and connected to the logger so it can publish error messages to `messages/error`.
 3. **SPI hardware** (`SpiReal` or `SpiMock`) is constructed and wrapped in `DeviceController`.
 4. **DataPublisher**, **CommandSubscriber**, **SystemMonitor**, and optionally **UartMonitor** are created.
 5. **LcmBroker is initialized** — this opens the `raccoon::Transport` and connects to the SHM ring backend. Must complete before any publish or subscribe call.
@@ -191,7 +191,7 @@ Motor and servo write calls update an internal `motors_[4]` / `servos_[4]` array
 | `publishForce<T>()` | no | no | Accelerometer (every frame must go through) |
 | `publishRetained<T>()` | yes | yes | Battery, motor state, servo state, odometry, feature flags |
 
-**Deduplication** is byte-level: the transport compares the encoded payload of the new message to the last published value for that channel. Command channels (names ending in `_cmd` or containing `/cmd/`) are always skipped by dedup regardless of the flag, because repeating the same command is semantically meaningful.
+**Deduplication** is byte-level: the transport compares the encoded payload of the new message to the last published value for that channel. Command channels (names with a `cmd` segment) are always skipped by dedup regardless of the flag, because repeating the same command is semantically meaningful.
 
 **Retained** means a late subscriber that calls `subscribeWithRetain` immediately receives the last published value from the ring without waiting for a new publish cycle. The ring implementation stores the latest frame in the slot at `producer_seq % slot_count` and `rrb_reader_seek_to_latest()` positions a new reader there directly.
 
@@ -222,36 +222,36 @@ IMU accuracy channels (gyro, accel, compass, quaternion) use a change-detector i
 
 | Channel | Type | Gate | Retained |
 |---|---|---|---|
-| `raccoon/gyro/value` | `vector3f_t` | 50 Hz + 0.01 rad/s eps | no |
-| `raccoon/accel/value` | `vector3f_t` | none (force) | no |
-| `raccoon/linear_accel/value` | `vector3f_t` | 50 Hz + 0.05 m/s² eps | no |
-| `raccoon/accel_velocity/value` | `vector3f_t` | 50 Hz + 0.05 m/s eps | no |
-| `raccoon/mag/value` | `vector3f_t` | 50 Hz + 0.5 count eps | no |
-| `raccoon/imu/quaternion` | `quaternion_t` | 50 Hz + 0.001 eps | no |
-| `raccoon/imu/heading` | `scalar_f_t` | 50 Hz + 0.05° eps | yes |
-| `raccoon/imu/temp/value` | `scalar_f_t` | 50 Hz + 0.1°C eps | no |
-| `raccoon/gyro/accuracy` | `scalar_i8_t` | on-change only | no |
-| `raccoon/accel/accuracy` | `scalar_i8_t` | on-change only | no |
-| `raccoon/mag/accuracy` | `scalar_i8_t` | on-change only | no |
-| `raccoon/imu/quaternion_accuracy` | `scalar_i8_t` | on-change only | no |
-| `raccoon/battery/voltage` | `scalar_f_t` | dedup only (broker) | yes |
-| `raccoon/analog/N/value` | `scalar_i32_t` | dedup only | no |
-| `raccoon/digital/N/value` | `scalar_i32_t` | dedup only | no |
-| `raccoon/bemf/N/value` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/motor/N/power` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/motor/N/position` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/servo/N/mode` | `scalar_i8_t` | dedup only | yes |
-| `raccoon/servo/N/position` | `scalar_f_t` | dedup only | yes |
-| `raccoon/odometry/pos_x` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/odometry/pos_y` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/odometry/heading` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/odometry/vx` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/odometry/vy` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/odometry/wz` | `scalar_f_t` | 50 Hz, no eps | yes |
-| `raccoon/feature/bemf_enabled` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/system/shutdown_status` | `scalar_i32_t` | dedup only | yes |
-| `raccoon/errors` | `string_t` | none (force) | no |
-| `raccoon/cpu/temp/value` | `scalar_f_t` | 1 Hz (SystemMonitor) | no |
+| `hardware/imu/state/gyro` | `vector3f_t` | 50 Hz + 0.01 rad/s eps | no |
+| `hardware/imu/state/accel` | `vector3f_t` | none (force) | no |
+| `hardware/imu/state/linear_accel` | `vector3f_t` | 50 Hz + 0.05 m/s² eps | no |
+| `hardware/imu/state/accel_velocity` | `vector3f_t` | 50 Hz + 0.05 m/s eps | no |
+| `hardware/imu/state/mag` | `vector3f_t` | 50 Hz + 0.5 count eps | no |
+| `hardware/imu/state/quaternion` | `quaternion_t` | 50 Hz + 0.001 eps | no |
+| `hardware/imu/state/heading` | `scalar_f_t` | 50 Hz + 0.05° eps | yes |
+| `hardware/imu/state/temperature` | `scalar_f_t` | 50 Hz + 0.1°C eps | no |
+| `hardware/imu/state/gyro_accuracy` | `scalar_i8_t` | on-change only | no |
+| `hardware/imu/state/accel_accuracy` | `scalar_i8_t` | on-change only | no |
+| `hardware/imu/state/mag_accuracy` | `scalar_i8_t` | on-change only | no |
+| `hardware/imu/state/quaternion_accuracy` | `scalar_i8_t` | on-change only | no |
+| `hardware/battery/state/voltage` | `scalar_f_t` | dedup only (broker) | yes |
+| `hardware/analog/N/state/value` | `scalar_i32_t` | dedup only | no |
+| `hardware/digital/N/state/value` | `scalar_i32_t` | dedup only | no |
+| `hardware/motor/N/state/bemf` | `scalar_i32_t` | dedup only | yes |
+| `hardware/motor/N/state/power` | `scalar_i32_t` | dedup only | yes |
+| `hardware/motor/N/state/position` | `scalar_i32_t` | dedup only | yes |
+| `hardware/servo/N/state/mode` | `scalar_i8_t` | dedup only | yes |
+| `hardware/servo/N/state/position` | `scalar_f_t` | dedup only | yes |
+| `hardware/odometry/state/pos_x` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/odometry/state/pos_y` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/odometry/state/heading` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/odometry/state/vx` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/odometry/state/vy` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/odometry/state/wz` | `scalar_f_t` | 50 Hz, no eps | yes |
+| `hardware/feature/state/bemf_active` | `scalar_i32_t` | dedup only | yes |
+| `hardware/latch/state/flags` | `scalar_i32_t` | dedup only | yes |
+| `messages/error` | `string_t` | none (force) | no |
+| `system/state/cpu_temperature` | `scalar_f_t` | 1 Hz (SystemMonitor) | no |
 
 ## CommandSubscriber
 
@@ -259,9 +259,9 @@ IMU accuracy channels (gyro, accel, compass, quaternion) use a change-detector i
 
 ### Subscription categories
 
-**Continuous commands (best-effort delivery):** Motor power (`raccoon/motor/N/power_cmd`) and motor velocity (`raccoon/motor/N/velocity_cmd`) and chassis velocity (`raccoon/chassis/velocity_cmd`) are subscribed without reliable delivery. A dropped frame is acceptable because the user's control loop sends a fresh command on the next iteration. Queuing stale commands would be worse than dropping.
+**Continuous commands (best-effort delivery):** Motor power (`hardware/motor/N/cmd/power`) and motor velocity (`hardware/motor/N/cmd/velocity`) and chassis velocity (`hardware/chassis/cmd/velocity`) are subscribed without reliable delivery. A dropped frame is acceptable because the user's control loop sends a fresh command on the next iteration. Queuing stale commands would be worse than dropping.
 
-**Reliable commands:** Everything that changes discrete state — position targets, stop, mode changes, PID overrides, servo commands, odometry/position resets, kinematics config, shutdown, BEMF toggle — uses `SubscribeOptions{.reliable = true}`. The transport adds a sequence number envelope and retransmits until an ACK is received.
+**Reliable commands:** Everything that changes discrete state — position targets, stop, mode changes, PID overrides, servo commands, odometry/position resets, kinematics config, shutdown, BEMF toggle — is on a reliable channel of the channel table. The transport retransmits until an ACK is received, and the reader delivers each command once.
 
 ### Timestamp-based deduplication
 
@@ -273,7 +273,7 @@ Every handler calls `isTimestampNewer(channel, command.timestamp)` before acting
 
 ### BEMF enable/disable
 
-`onBemfEnabledCommand()` calls `deviceController_->setBemfEnabled()`, which toggles the `FEATURE_BEMF_DISABLE` bit in `featureFlags_` and pushes the byte to `RxBuffer.featureFlags` via `spi_->setFeatureFlags()`. It then calls `dataPublisher_->publishBemfEnabled()` to post an ACK on the retained `raccoon/feature/bemf_enabled` channel so the UI and raccoon-lib see the confirmed state.
+`onBemfEnabledCommand()` calls `deviceController_->setBemfEnabled()`, which toggles the `FEATURE_BEMF_DISABLE` bit in `featureFlags_` and pushes the byte to `RxBuffer.featureFlags` via `spi_->setFeatureFlags()`. It then calls `dataPublisher_->publishBemfEnabled()` to post an ACK on the retained `hardware/feature/state/bemf_active` channel so the UI and raccoon-lib see the confirmed state.
 
 When BEMF is disabled, the MAV (velocity PID) mode is rejected with a `std::runtime_error` thrown inside the SPI guard. The Application's main loop catches this, logs the rejection, and forces all motors to OFF.
 
@@ -283,7 +283,7 @@ When BEMF is disabled, the MAV (velocity PID) mode is rejected with a `std::runt
 
 ## MotorWatchdog
 
-`MotorWatchdog` (`src/wombat/services/MotorWatchdog.cpp`) is a member of `Application`. `CommandSubscriber` calls `feed()` for every heartbeat on `raccoon/system/heartbeat_cmd`, and `Application` calls `update()` on every main loop tick. If no heartbeat arrives for 500 ms after the first one, it calls `DeviceController::setShutdown(true)` and publishes `shutdown_status` `0x07`. Three consecutive on-time heartbeats clear the shutdown again. A user clearing the shutdown in BotUI calls `resetAfterManualClear()` through `CommandSubscriber::onShutdownCommand()`.
+`MotorWatchdog` (`src/wombat/services/MotorWatchdog.cpp`) is a member of `Application`. `CommandSubscriber` calls `feed()` for every heartbeat on `hardware/watchdog/cmd/heartbeat`, and `Application` calls `update()` on every main loop tick. If no heartbeat arrives for 500 ms after the first one, it calls `DeviceController::setShutdown(true)` and publishes `shutdown_status` `0x07`. Three consecutive on-time heartbeats clear the shutdown again. A user clearing the shutdown in BotUI calls `resetAfterManualClear()` through `CommandSubscriber::onShutdownCommand()`.
 
 The state machine, the parameters, the bitmask and the manual clear are described once, in [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md#motorwatchdog-pi-side-hardware-safety" >}}). The firmware side (`SHUTDOWN_MOTOR` check at the top of `update_motor()`) is in [Motor Control]({{< ref "/06-advanced/04-firmware/motor-control.md" >}}).
 
@@ -299,7 +299,7 @@ At every 100th call the broker logs a performance report: messages per call, loo
 
 ### Latency alerting
 
-If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs an error and publishes the alert message to `raccoon/errors` via `publishForce`. Repeated alerts are rate-limited to every 10 occurrences.
+If the p99 inbound latency exceeds **20 ms** (`kLatencyAlertThresholdUs = 20_000`), the broker logs an error and publishes the alert message to `messages/error` via `publishForce`. Repeated alerts are rate-limited to every 10 occurrences.
 
 ### Per-subscription timing instrumentation
 
@@ -323,4 +323,4 @@ What matters for the bridge:
 - [Firmware Runtime and Scheduling](/06-advanced/04-firmware/firmware-runtime/) — the STM32 side of the SPI link: circular DMA, `HAL_SPI_TxRxCpltCallback`, `updateFlags` dispatch
 - [Robot Services and systemd](/06-advanced/04-firmware/robot-services-and-systemd/) — how `stm32_data_reader.service` fits into the full service topology
 - [Motor Control](/06-advanced/04-firmware/motor-control/) — what happens on the STM32 side after commands arrive
-- [IMU Stack](/06-advanced/04-firmware/imu/) — how `ImuData` fields published on `raccoon/gyro/*`, `raccoon/imu/*` channels are produced
+- [IMU Stack](/06-advanced/04-firmware/imu/) — how `ImuData` fields published on `hardware/imu/state/*` channels are produced

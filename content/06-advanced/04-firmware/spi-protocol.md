@@ -1,7 +1,7 @@
 ---
 title: "SPI Communication Protocol"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-21
+date: 2026-11-22
 draft: false
 weight: 3
 ---
@@ -277,7 +277,7 @@ This is what the Pi *transmits* to the STM32. The Pi's local copy is `ctx.tx`; t
 |--------|-------|-------|------|-------|
 | 0 | 1 | `transferVersion` | `uint8_t` | Must equal 22; STM32 ignores the buffer if mismatched |
 | 1 | 4 | `updates` | `uint32_t` | Bitmask of which fields are new (see Update flags table) |
-| 5 | 1 | `systemShutdown` | `uint8_t` | Bitmask: `0x01`=servo off, `0x02`=motor off |
+| 5 | 1 | `systemShutdown` | `uint8_t` | Bitmask: `0x02`=motor off (`0x01` is reserved) |
 | 6 | 2 | `motorControlMode` | `uint16_t` | 3 bits per motor: motors 0–3 packed at bits [2:0],[5:3],[8:6],[11:9] |
 | 8 | 16 | `motorTarget[4]` | `int32_t[4]` | PWM: duty 0–400; MAV: velocity setpoint; MTP: speed limit |
 | 24 | 12 | `chassisVelocity[3]` | `float[3]` | Body-frame setpoint `[vx m/s, vy m/s, wz rad/s]` for MOT_MODE_CHASSIS |
@@ -349,7 +349,7 @@ When all four motors are in `MOT_MODE_CHASSIS` (value `0b101`):
 
 `motorTarget` is ignored in this mode. This closes the full chassis velocity loop on the MCU, removing the SPI round-trip from the control path. Loop latency is one BEMF cycle (1 250 µs), not 5 ms.
 
-The Pi-side call path: `raccoon/chassis/velocity_cmd` transport channel → `CommandSubscriber` → `DeviceController::setChassisVelocity` → `SpiReal::setChassisVelocity` → `set_chassis_velocity(vx, vy, wz)` → writes `ctx.tx.chassisVelocity` and calls `spi_force_update()`.
+The Pi-side call path: `hardware/chassis/cmd/velocity` transport channel → `CommandSubscriber` → `DeviceController::setChassisVelocity` → `SpiReal::setChassisVelocity` → `set_chassis_velocity(vx, vy, wz)` → writes `ctx.tx.chassisVelocity` and calls `spi_force_update()`.
 
 No `PI_BUFFER_UPDATE_*` flag is needed for `chassisVelocity` — the STM32 reads it on every transfer while any motor is in `MOT_MODE_CHASSIS`.
 
@@ -396,7 +396,7 @@ There are no Pi-side software position offsets. The zero happens in STM32 firmwa
 
 Gains are in **dt-explicit per-second units**. The firmware `pid_update(float dt)` multiplies `Ki` by `dt`, so gains are physically consistent regardless of BEMF cadence. Triggered by `PI_BUFFER_UPDATE_MOTOR_PID_SPEED` (velocity PID) or `PI_BUFFER_UPDATE_MOTOR_PID_POS` (position PID).
 
-To update gains at runtime: write `motorPidSettings`, set the appropriate update flag, and call `spi_force_update()`. Over the transport, publish a `vector3f_t` (`x=Kp, y=Ki, z=Kd`) to `raccoon/motor/N/pid_cmd`.
+To update gains at runtime: write `motorPidSettings`, set the appropriate update flag, and call `spi_force_update()`. Over the transport, publish a `vector3f_t` (`x=Kp, y=Ki, z=Kd`) to `hardware/motor/N/cmd/pid`.
 
 ### `KinematicsConfig` — geometry and calibration (128 bytes at offset 148)
 
@@ -505,7 +505,7 @@ stateDiagram-v2
 
 - The Pi reader's `spi_do_transfer()` checks `ctx.tx.featureFlags & FEATURE_BEMF_DISABLE` before every transfer. If any motor is in `MOT_MODE_MAV`, it throws `std::runtime_error` and `Application::processMainLoop` forces all motors to `MOT_MODE_OFF`.
 - Only `MOT_MODE_PWM`, `MOT_MODE_OFF`, and `MOT_MODE_PASSIV_BRAKE` are valid.
-- The `raccoon/feature/bemf_enabled` channel is published as `0`.
+- The `hardware/feature/state/bemf_active` channel is published as `0`.
 
 Enable at startup via `disableBemfOnStartup: true` in the reader configuration (default: `false`). Use for open-loop PWM profiles where the brief per-motor BEMF measurement window introduces unacceptable jitter.
 
@@ -549,7 +549,7 @@ sequenceDiagram
 
 | Bit | Constant | STM32 action |
 |-----|----------|-------------|
-| 0 | `SHUTDOWN_SERVO` (`0x01`) | Servo subsystem disabled |
+| 0 | `SHUTDOWN_SERVO` (`0x01`) | Servo subsystem disabled (the reader never sets it) |
 | 1 | `SHUTDOWN_MOTOR` (`0x02`) | Motor commands zeroed in `sanitizeMotorCommandsForShutdown()` |
 
 When `SHUTDOWN_MOTOR` is set, the `HAL_SPI_TxRxCpltCallback` calls `sanitizeMotorCommandsForShutdown()`, which:

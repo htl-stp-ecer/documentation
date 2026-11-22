@@ -1,7 +1,7 @@
 ---
 title: "BotUI"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-22
 draft: false
 weight: 50
 ---
@@ -41,7 +41,7 @@ graph LR
     end
 
     W --> TS
-    TS -->|"FFI: libraccoon_ring_bridge.so"| RING
+    TS -->|"FFI: libraccoon_transport_bridge.so"| RING
     RING <--> STM
     RING <--> LIB
     RING <--> CAM
@@ -51,7 +51,7 @@ graph LR
     SRV -->|"runs"| LIB
 ```
 
-**Transport.** `libraccoon_ring_bridge.so` is a small C++ library that is built into every BotUI package. It exposes the `raccoon_ring` API to Dart through FFI. `TransportService` is the single entry point in the app. Every screen subscribes to a channel (for example a sensor value) or publishes on one (for example a motor command). A timer drains the incoming frames about 30 times per second and hands them to Riverpod providers, which rebuild the widgets. The channel list is in [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
+**Transport.** `libraccoon_transport_bridge.so` is a small C++ library that is built into every BotUI package. It exposes the C++ transport to Dart through FFI. `TransportService` is the single entry point in the app. Every screen subscribes to a channel (for example a sensor value) or publishes on one (for example a motor command). A timer drains the incoming frames about 30 times per second and hands them to Riverpod providers, which rebuild the widgets. The channel list is in [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
 
 **Execution server.** To start, stop or inspect a program, BotUI calls the `raccoon-server`:
 

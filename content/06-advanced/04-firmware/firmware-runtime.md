@@ -1,7 +1,7 @@
 ---
 title: "Firmware Runtime & Scheduling"
 author: "Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 2
 ---
@@ -341,8 +341,8 @@ Because motor control (`update_motor`) runs inside the ADC2 callback at interrup
 
 ### Motor shutdown guard
 
-The `rxBuffer.systemShutdown` byte has two bits:
-- Bit 0 (`SHUTDOWN_SERVO`): cuts all servo PWM and disables the 6V servo rail.
+The `rxBuffer.systemShutdown` byte has two bits. The reader sets only bit 1:
+- Bit 0 (`SHUTDOWN_SERVO`): cuts all servo PWM and disables the 6V servo rail (reserved, the reader never sets it).
 - Bit 1 (`SHUTDOWN_MOTOR`): forces all motors to coast (`motor_setDirection(OFF)`), zeroes duty, suppresses all BEMF sampling, and clears motor-related updateFlags.
 
 The shutdown check is enforced in three places: the SPI2 completion callback (`sanitizeMotorCommandsForShutdown`), the TIM6 ISR (suppresses BEMF when `SHUTDOWN_MOTOR` is set), and the top of `update_motor()`. Defense in depth.

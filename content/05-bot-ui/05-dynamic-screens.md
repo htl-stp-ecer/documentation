@@ -1,7 +1,7 @@
 ---
 title: "Dynamic Screens"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-22
 draft: false
 weight: 6
 ---
@@ -18,8 +18,8 @@ Two transport channels carry everything ([Transport]({{< ref "/06-advanced/03-tr
 
 | Channel | Direction | Content |
 |---------|-----------|---------|
-| `raccoon/screen_render` | program → BotUI | The screen to show, as JSON |
-| `raccoon/screen_render/answer` | BotUI → program | What the user did, as JSON (sent reliably) |
+| `ui/screen/render` | program → BotUI | The screen to show, as JSON |
+| `ui/screen/answer` | BotUI → program | What the user did, as JSON (sent reliably) |
 
 ```mermaid
 sequenceDiagram
@@ -168,7 +168,7 @@ If the screen has a `setup_timer`, a countdown is shown at the right of the top 
 
 | Symptom | Likely reason |
 |---------|---------------|
-| A screen never shows | The program is not publishing on `raccoon/screen_render`, or `raccoon-transport` is not in the same bundle version as BotUI ([Settings → Versions]({{< ref "/05-bot-ui/03-settings.md#app-status" >}})) |
+| A screen never shows | The program is not publishing on `ui/screen/render`, or `raccoon-transport` is not in the same bundle version as BotUI ([Settings → Versions]({{< ref "/05-bot-ui/03-settings.md#app-status" >}})) |
 | The screen is stuck after the program ended | The program crashed before it sent `close`. Stop it from the [Dev Menu]({{< ref "/05-bot-ui/06-dev-menu.md" >}}) and use **Restart UI** if the screen stays. |
 | Buttons do nothing | The button is `disabled`, or the program does not handle the `id` that comes back |
 | The display freezes while logic continues | The rendering pipeline stalled, see below |

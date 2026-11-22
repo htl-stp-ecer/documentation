@@ -1,7 +1,7 @@
 ---
 title: "Build and Flash"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 10
 ---
@@ -253,7 +253,7 @@ python3 deploy.py --host 192.168.4.1
 `deploy.py` copies `builds/*.deb` to the Pi, sets `stm32-data-reader` to `dev` in `/etc/raccoon-bundle.json` and installs the package with `apt`. The `postinst` of the package then, in this order:
 
 1. Creates `/var/lib/stm32-data-reader` and removes old units of earlier installs.
-2. Enables `loginctl linger` for the `pi` user (keeps `/dev/shm/raccoon_ring_*` alive across SSH disconnects).
+2. Enables `loginctl linger` for the `pi` user (keeps `/dev/shm/raccoon-rings/*` alive across SSH disconnects).
 3. Links `~/flashFiles` to `/usr/lib/stm32-data-reader/firmware`.
 4. Flashes `wombat.bin` with `flash_wombat.sh` when `/dev/ttyAMA0`, `stm32flash` and `pinctrl` are present. A failed flash only prints a warning.
 5. Enables and restarts `stm32_data_reader.service`.
@@ -405,7 +405,7 @@ minicom -D /dev/ttyAMA0 -b 115200
 | `Version check: MISMATCH` at startup, loop of reflash attempts | `wombat.bin` not present in `/usr/lib/stm32-data-reader/firmware` (`~/flashFiles`) | Reinstall the package (`raccoon update` or `deploy.py`) |
 | `firmware flash failed` warning during the install | `stm32flash` not installed on Pi, or wrong GPIO wiring | `sudo apt install stm32flash`; check GPIO 17/23 |
 | UART heartbeats stop but SPI is live | Firmware writing calibration to flash | Normal; wait ~12s for recovery |
-| Pi bridge crashes immediately after systemd restart | `/dev/shm/raccoon_ring_*` inode inconsistency | Do NOT wipe `/dev/shm` on restart; unit file deliberately omits `ExecStartPre` wipe |
+| Pi bridge crashes immediately after systemd restart | ring files deleted while components run | Do NOT wipe `/dev/shm` on restart; unit file deliberately omits `ExecStartPre` wipe |
 
 ### Inspecting build artifacts
 

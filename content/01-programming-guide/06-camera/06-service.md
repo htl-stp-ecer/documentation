@@ -1,7 +1,7 @@
 ---
 title: "The Service"
 author: "Mario Scholze"
-date: 2026-11-19
+date: 2026-11-22
 draft: false
 weight: 60
 description: "Running the camera service as a project or system service, how frames are handled, and the channels, commands and status."
@@ -108,13 +108,13 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 
 | Channel | Direction | Content |
 |---|---|---|
-| `raccoon/cam/detections` | service to clients | `cam_detections_t`, retained. Detections of all processors and the backend together |
-| `raccoon/cam/frame` | service to UI | `cam_frame_t` with a JPEG. Only if the stream is on |
-| `raccoon/cam/cmd` | client to service | `string_t` with JSON: `request_id`, `command`, `data` |
-| `raccoon/cam/response` | service to clients | `string_t` with JSON: `request_id`, `ok`, `data` |
-| `raccoon/cam/status` | service to clients | `string_t` with JSON, retained, every 2 seconds and on changes |
-| `raccoon/cam/error` | service to clients | `string_t` with JSON `message` and `context`, retained |
-| `raccoon/errors` | service to UI | The same errors as plain text, prefixed with `raccoon-cam:` |
+| `camera/state/detections` | service to clients | `cam_detections_t`, retained. Detections of all processors and the backend together |
+| `camera/state/frame` | service to UI | `cam_frame_t` with a JPEG. Only if the stream is on |
+| `camera/cmd/request` | client to service | `string_t` with JSON: `request_id`, `command`, `data` |
+| `camera/response` | service to clients | `string_t` with JSON: `request_id`, `ok`, `data` |
+| `camera/state/status` | service to clients | `string_t` with JSON, retained, every 2 seconds and on changes |
+| `camera/state/error` | service to clients | `string_t` with JSON `message` and `context`, retained |
+| `messages/error` | service to UI | The same errors as plain text, prefixed with `raccoon-cam:` |
 
 `cam_blob_t` has no field for the source, so the label on the wire is `source/label`, for example `BrightSpot/bright`. The client splits it again, which is why processor names must not contain `/`. A detection from a backend carries the backend's name as source.
 

@@ -1,7 +1,7 @@
 ---
 title: "Data Pipeline"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-21
+date: 2026-11-22
 draft: false
 weight: 4
 ---
@@ -30,7 +30,7 @@ graph LR
         PUB["LcmBroker\nserialise + dedup\nraccoon::Transport"]
     end
 
-    subgraph SHM["raccoon_ring SHM\n(/dev/shm/raccoon_ring_*)"]
+    subgraph SHM["raccoon_ring SHM\n(/dev/shm/raccoon-rings/*)"]
         RING["64-slot × 2 KiB ring\nper channel\nSeqLock, futex wake"]
     end
 
@@ -45,7 +45,7 @@ graph LR
     RING --> LCMR --> CACHE --> API
 ```
 
-The reverse direction (Python command → motor output) follows the same path in reverse: Python publishes to a `raccoon/motor/N/power_cmd` transport channel, the reader's `CommandSubscriber` picks it up, writes the `RxBuffer`, and the next SPI transfer delivers it to the STM32.
+The reverse direction (Python command → motor output) follows the same path in reverse: Python publishes to a `hardware/motor/N/cmd/power` transport channel, the reader's `CommandSubscriber` picks it up, writes the `RxBuffer`, and the next SPI transfer delivers it to the STM32.
 
 This page traces a complete data path from a physical sensor reading to a value accessed in user Python code, and a complete command path from Python code to motor movement.
 
@@ -72,7 +72,7 @@ stm32-data-reader: DataPublisher::publishSensorData()
       │  (serialises fields to transport messages, publishes
       │   via raccoon::Transport using raccoon_ring SHM)
       ▼
-raccoon_ring shared memory (/dev/shm/raccoon_ring_<channel>)
+raccoon_ring shared memory (/dev/shm/raccoon-rings/<channel>)
       │  (primary IPC; one ring-buffer file per channel)
       ▼
 raccoon-lib: TransportReader (callbacks on the shared spin thread)
@@ -159,39 +159,39 @@ All topics below are on `raccoon::Transport` (shared-memory `raccoon_ring`). Mes
 
 | transport channel | Message type | Content | Retained? |
 |---|---|---|---|
-| `raccoon/gyro/value` | `vector3f_t` | angular velocity (rad/s) | no |
-| `raccoon/accel/value` | `vector3f_t` | acceleration (m/s²), ungated | no |
-| `raccoon/linear_accel/value` | `vector3f_t` | gravity-removed accel (m/s²) | no |
-| `raccoon/accel_velocity/value` | `vector3f_t` | integrated accel velocity (m/s, decay 0.998/cycle) | no |
-| `raccoon/mag/value` | `vector3f_t` | magnetometer (raw counts) | no |
-| `raccoon/imu/quaternion` | `quaternion_t` | DMP 6-axis orientation (w, x, y, z) | no |
-| `raccoon/imu/heading` | `scalar_f_t` | degrees, mag-corrected when calibrated | yes |
-| `raccoon/imu/temp/value` | `scalar_f_t` | IMU temperature (°C) | no |
-| `raccoon/gyro/accuracy` | `scalar_i8_t` | gyro calibration accuracy 0–3 | no |
-| `raccoon/accel/accuracy` | `scalar_i8_t` | accel calibration accuracy 0–3 | no |
-| `raccoon/mag/accuracy` | `scalar_i8_t` | compass calibration accuracy 0–3 | no |
-| `raccoon/imu/quaternion_accuracy` | `scalar_i8_t` | quaternion accuracy 0–3 | no |
-| `raccoon/battery/voltage` | `scalar_f_t` | battery voltage (volts) | yes |
-| `raccoon/analog/N/value` | `scalar_i32_t` | raw ADC counts for port N | no |
-| `raccoon/digital/N/value` | `scalar_i32_t` | 0 or 1 for digital port N | no |
-| `raccoon/bemf/N/value` | `scalar_i32_t` | filtered + offset-corrected BEMF ticks | yes |
-| `raccoon/motor/N/power` | `scalar_i32_t` | last commanded duty (−399 to +399) | yes |
-| `raccoon/motor/N/position` | `scalar_i32_t` | accumulated BEMF ticks (dt-aware) | yes |
-| `raccoon/servo/N/mode` | `scalar_i8_t` | servo mode state (reader→UI, not commands) | yes |
-| `raccoon/servo/N/position` | `scalar_f_t` | servo position (degrees) | yes |
-| `raccoon/servo/N/feedback` | `vector3f_t` | bus servo: x=position (deg, multi-turn), y=speed (deg/s), z=load (% of max torque, signed) | yes |
-| `raccoon/servo/N/health` | `vector3f_t` | bus servo: x=voltage (V), y=temperature (°C), z=error bits (−1 = no servo answers) | yes |
-| `raccoon/servo/N/done` | `scalar_i32_t` | bus servo: 0 = moving, 1 = reached, 2 = stalled | yes |
-| `raccoon/odometry/pos_x` | `scalar_f_t` | world-frame x (meters) | yes |
-| `raccoon/odometry/pos_y` | `scalar_f_t` | world-frame y (meters) | yes |
-| `raccoon/odometry/heading` | `scalar_f_t` | heading (radians, CCW+) | yes |
-| `raccoon/odometry/vx` | `scalar_f_t` | body-frame vx (m/s) | yes |
-| `raccoon/odometry/vy` | `scalar_f_t` | body-frame vy (m/s) | yes |
-| `raccoon/odometry/wz` | `scalar_f_t` | body-frame wz (rad/s) | yes |
-| `raccoon/feature/bemf_enabled` | `scalar_i32_t` | BEMF enable state (0 or 1) | yes |
-| `raccoon/system/shutdown_status` | `scalar_i32_t` | shutdown bitmask (bits: servo, motor, watchdog-source) | yes |
-| `raccoon/errors` | `string_t` | STM32 UART error messages | no |
-| `raccoon/cpu/temp/value` | `scalar_f_t` | Pi CPU temperature (°C) | no |
+| `hardware/imu/state/gyro` | `vector3f_t` | angular velocity (rad/s) | no |
+| `hardware/imu/state/accel` | `vector3f_t` | acceleration (m/s²), ungated | no |
+| `hardware/imu/state/linear_accel` | `vector3f_t` | gravity-removed accel (m/s²) | no |
+| `hardware/imu/state/accel_velocity` | `vector3f_t` | integrated accel velocity (m/s, decay 0.998/cycle) | no |
+| `hardware/imu/state/mag` | `vector3f_t` | magnetometer (raw counts) | no |
+| `hardware/imu/state/quaternion` | `quaternion_t` | DMP 6-axis orientation (w, x, y, z) | no |
+| `hardware/imu/state/heading` | `scalar_f_t` | degrees, mag-corrected when calibrated | yes |
+| `hardware/imu/state/temperature` | `scalar_f_t` | IMU temperature (°C) | no |
+| `hardware/imu/state/gyro_accuracy` | `scalar_i8_t` | gyro calibration accuracy 0–3 | no |
+| `hardware/imu/state/accel_accuracy` | `scalar_i8_t` | accel calibration accuracy 0–3 | no |
+| `hardware/imu/state/mag_accuracy` | `scalar_i8_t` | compass calibration accuracy 0–3 | no |
+| `hardware/imu/state/quaternion_accuracy` | `scalar_i8_t` | quaternion accuracy 0–3 | no |
+| `hardware/battery/state/voltage` | `scalar_f_t` | battery voltage (volts) | yes |
+| `hardware/analog/N/state/value` | `scalar_i32_t` | raw ADC counts for port N | no |
+| `hardware/digital/N/state/value` | `scalar_i32_t` | 0 or 1 for digital port N | no |
+| `hardware/motor/N/state/bemf` | `scalar_i32_t` | filtered + offset-corrected BEMF ticks | yes |
+| `hardware/motor/N/state/power` | `scalar_i32_t` | last commanded duty (−399 to +399) | yes |
+| `hardware/motor/N/state/position` | `scalar_i32_t` | accumulated BEMF ticks (dt-aware) | yes |
+| `hardware/servo/N/state/mode` | `scalar_i8_t` | servo mode state (reader→UI, not commands) | yes |
+| `hardware/servo/N/state/position` | `scalar_f_t` | servo position (degrees) | yes |
+| `hardware/servo/N/state/feedback` | `vector3f_t` | bus servo: x=position (deg, multi-turn), y=speed (deg/s), z=load (% of max torque, signed) | yes |
+| `hardware/servo/N/state/health` | `vector3f_t` | bus servo: x=voltage (V), y=temperature (°C), z=error bits (−1 = no servo answers) | yes |
+| `hardware/servo/N/state/done` | `scalar_i32_t` | bus servo: 0 = moving, 1 = reached, 2 = stalled | yes |
+| `hardware/odometry/state/pos_x` | `scalar_f_t` | world-frame x (meters) | yes |
+| `hardware/odometry/state/pos_y` | `scalar_f_t` | world-frame y (meters) | yes |
+| `hardware/odometry/state/heading` | `scalar_f_t` | heading (radians, CCW+) | yes |
+| `hardware/odometry/state/vx` | `scalar_f_t` | body-frame vx (m/s) | yes |
+| `hardware/odometry/state/vy` | `scalar_f_t` | body-frame vy (m/s) | yes |
+| `hardware/odometry/state/wz` | `scalar_f_t` | body-frame wz (rad/s) | yes |
+| `hardware/feature/state/bemf_active` | `scalar_i32_t` | BEMF enable state (0 or 1) | yes |
+| `hardware/latch/state/flags` | `scalar_i32_t` | shutdown bitmask (bits: servo, motor, watchdog-source) | yes |
+| `messages/error` | `string_t` | STM32 UART error messages | no |
+| `system/state/cpu_temperature` | `scalar_f_t` | Pi CPU temperature (°C) | no |
 
 "Retained" channels use `publishRetained()`. A new subscriber that calls `subscribeWithRetain` immediately receives the last published value without waiting for the next SPI cycle. This is important for motor position and battery voltage, where a late subscriber must not block waiting for the next update.
 
@@ -199,12 +199,12 @@ IMU accuracy channels (`gyro/accuracy`, `accel/accuracy`, `mag/accuracy`, `imu/q
 
 ### Step 4: raccoon-transport
 
-The [Transport]({{< ref "/06-advanced/03-transport.md" >}}) carries every value from the bridge to its subscribers (raccoon-lib, BotUI, diagnostic tools). Each channel is one ring file `/dev/shm/raccoon_ring_<channel>` with 64 slots of 2 KiB. The publisher copies the encoded message into the next slot and wakes parked subscribers with a futex. A subscriber that is too slow loses old frames and never blocks the publisher. You can list the files with `ls /dev/shm/raccoon_ring_*`.
+The [Transport]({{< ref "/06-advanced/03-transport.md" >}}) carries every value from the bridge to its subscribers (raccoon-lib, BotUI, diagnostic tools). Each channel is one ring file `/dev/shm/raccoon-rings/<channel with . for />` with the slots and slot size that the channel table gives it. The publisher copies the encoded message into the next slot and wakes parked subscribers with a futex. A subscriber that is too slow loses old frames and never blocks the publisher. You can list the files with `ls /dev/shm/raccoon-rings/`.
 
 ```mermaid
 sequenceDiagram
     participant PUB as DataPublisher (bridge)
-    participant RING as raccoon_ring file\n(/dev/shm/raccoon_ring_*)
+    participant RING as raccoon_ring file\n(/dev/shm/raccoon-rings/*)
     participant SUB as raccoon-lib spin thread
 
     PUB->>RING: rrb_writer_publish(encoded_msg, len)\nslot = producer_seq % 64\nSeqLock write, bump producer_seq\nFUTEX_WAKE if a subscriber is parked
@@ -215,7 +215,7 @@ sequenceDiagram
 
 **Retained channels:** `publishRetained()` marks a channel so that a new subscriber starts at the latest frame in the ring and gets the last value immediately. Battery voltage, motor position, servo state, odometry, heading and BEMF are retained for this reason.
 
-**Producer restart:** when `stm32-data-reader` restarts it re-initialises the existing ring files in place, and subscribers resync. Never wipe `/dev/shm/raccoon_ring_*` while components run.
+**Restart:** when `stm32-data-reader` restarts it attaches to the existing ring files, and subscribers keep running. Do not delete the files in `/dev/shm/raccoon-rings/` while components run.
 
 **Namespace:** `stm32_data_reader.service` sets `PrivateTmp=false` so the ring files are visible to every process, see [Robot Services and systemd]({{< ref "/06-advanced/04-firmware/robot-services-and-systemd.md" >}}).
 
@@ -235,7 +235,7 @@ raccoon-lib::hal::motor::Motor::setSpeed()
       │  (maps percent to signed duty, applies inversion)
       ▼
 TransportWriter::setMotor(port, duty)
-      │  (publishes scalar_i32_t to raccoon/motor/N/power_cmd)
+      │  (publishes scalar_i32_t to hardware/motor/N/cmd/power)
       ▼
 raccoon_ring SHM (/dev/shm)
       │
@@ -304,29 +304,29 @@ sequenceDiagram
 
 | Channel | Message type | Reliable? | Purpose |
 |---|---|---|---|
-| `raccoon/motor/N/power_cmd` | `scalar_i32_t` | no | open-loop PWM (−100 to +100%) |
-| `raccoon/motor/N/velocity_cmd` | `scalar_i32_t` | no | MAV velocity setpoint (BEMF ticks/s) |
-| `raccoon/motor/N/position_cmd` | `vector3f_t` | yes | MTP: x=speed_limit, y=goal_position |
-| `raccoon/motor/N/position_reset_cmd` | `scalar_i32_t` | yes | reset motor N position on STM32 |
-| `raccoon/motor/N/stop_cmd` | `scalar_i32_t` | yes | stop motor N (passive brake) |
-| `raccoon/motor/N/mode_cmd` | `scalar_i32_t` | yes | set raw motor control mode |
-| `raccoon/motor/N/pid_cmd` | `vector3f_t` | yes | override PID: x=kp, y=ki, z=kd |
-| `raccoon/chassis/velocity_cmd` | `vector3f_t` | no | chassis velocity: x=vx, y=vy, z=wz |
-| `raccoon/servo/N/mode_cmd` | `scalar_i8_t` | yes | servo mode (separate from state channel) |
-| `raccoon/servo/N/position_cmd` | `scalar_f_t` | yes | servo target angle (degrees) |
-| `raccoon/servo/N/smooth_cmd` | `vector3f_t` | yes | smooth servo: x=angle, y=speed, z=easing |
-| `raccoon/servo/N/velocity_cmd` | `scalar_f_t` | yes | bus servo: continuous rotation in deg/s (signed) |
-| `raccoon/odometry/reset_cmd` | `scalar_i32_t` | yes | reset odometry |
-| `raccoon/kinematics/config_cmd` | (kinematics type) | yes | send KinematicsConfig to STM32 |
-| `raccoon/system/heartbeat_cmd` | `scalar_i32_t` | no | MotorWatchdog heartbeat |
-| `raccoon/system/shutdown_cmd` | `scalar_i32_t` | yes | system shutdown command |
-| `raccoon/cmd/feature/bemf_enabled` | `scalar_i32_t` | yes | enable/disable BEMF at runtime |
+| `hardware/motor/N/cmd/power` | `scalar_i32_t` | no | open-loop PWM (−100 to +100%) |
+| `hardware/motor/N/cmd/velocity` | `scalar_i32_t` | no | MAV velocity setpoint (BEMF ticks/s) |
+| `hardware/motor/N/cmd/position` | `vector3f_t` | yes | MTP: x=speed_limit, y=goal_position |
+| `hardware/motor/N/cmd/reset_position` | `scalar_i32_t` | yes | reset motor N position on STM32 |
+| `hardware/motor/N/cmd/stop` | `scalar_i32_t` | yes | stop motor N (passive brake) |
+| `hardware/motor/N/cmd/mode` | `scalar_i32_t` | yes | set raw motor control mode |
+| `hardware/motor/N/cmd/pid` | `vector3f_t` | yes | override PID: x=kp, y=ki, z=kd |
+| `hardware/chassis/cmd/velocity` | `vector3f_t` | no | chassis velocity: x=vx, y=vy, z=wz |
+| `hardware/servo/N/cmd/mode` | `scalar_i8_t` | yes | servo mode (separate from state channel) |
+| `hardware/servo/N/cmd/position` | `scalar_f_t` | yes | servo target angle (degrees) |
+| `hardware/servo/N/cmd/smooth` | `vector3f_t` | yes | smooth servo: x=angle, y=speed, z=easing |
+| `hardware/servo/N/cmd/velocity` | `scalar_f_t` | yes | bus servo: continuous rotation in deg/s (signed) |
+| `hardware/odometry/cmd/reset` | `scalar_i32_t` | yes | reset odometry |
+| `hardware/kinematics/cmd/config` | (kinematics type) | yes | send KinematicsConfig to STM32 |
+| `hardware/watchdog/cmd/heartbeat` | `scalar_i32_t` | no | MotorWatchdog heartbeat |
+| `hardware/latch/cmd/engaged` | `scalar_i32_t` | yes | system shutdown command |
+| `hardware/feature/cmd/bemf_active` | `scalar_i32_t` | yes | enable/disable BEMF at runtime |
 
-**Servo mode vs. servo mode command:** The servo mode channel is split into two: `raccoon/servo/N/mode` (state, reader publishes) and `raccoon/servo/N/mode_cmd` (command, raccoon-lib publishes). This prevents the reader from subscribing to its own publishes, which previously caused a ~5 ms internal latency floor.
+**Servo mode vs. servo mode command:** The servo mode channel is split into two: `hardware/servo/N/state/mode` (state, reader publishes) and `hardware/servo/N/cmd/mode` (command, raccoon-lib publishes). This prevents the reader from subscribing to its own publishes, which previously caused a ~5 ms internal latency floor.
 
 ### Bus Servo Channels {#bus-servo-channels}
 
-A servo port can drive a Feetech STS serial bus servo (e.g. STS3215) instead of a PWM servo. Which one it is depends on the port's servo mode, which is set on `raccoon/servo/N/mode_cmd`:
+A servo port can drive a Feetech STS serial bus servo (e.g. STS3215) instead of a PWM servo. Which one it is depends on the port's servo mode, which is set on `hardware/servo/N/cmd/mode`:
 
 | Value | Mode |
 |-------|------|
@@ -341,18 +341,18 @@ The same command channels as for PWM servos drive a bus servo, with these meanin
 
 | Channel | On a bus servo |
 |---------|----------------|
-| `position_cmd` | Go to the angle (0–360°) at the servo's maximum speed, then hold |
-| `smooth_cmd` | Go to x=angle at y=speed (deg/s). The servo runs the ramp itself; z=0 uses its default acceleration, any other easing uses a ramp over about the first third of the move |
-| `velocity_cmd` | Turn continuously at the given signed speed |
-| `mode_cmd` = 3 while already in bus mode | Relax the servo (torque off) |
+| `cmd/position` | Go to the angle (0–360°) at the servo's maximum speed, then hold |
+| `cmd/smooth` | Go to x=angle at y=speed (deg/s). The servo runs the ramp itself; z=0 uses its default acceleration, any other easing uses a ramp over about the first third of the move |
+| `cmd/velocity` | Turn continuously at the given signed speed |
+| `cmd/mode` = 3 while already in bus mode | Relax the servo (torque off) |
 
 The servo has 4096 steps per revolution. `feedback` reports the position in degrees, unwrapped by the STM32, so it keeps counting past 360° and goes negative when the servo is turned back. `done` refers to the latest command: it is `0` until the move has finished, then `1` (target reached) or `2` (the servo stopped before the target). The error bits of `health` are `0x01` voltage, `0x02` sensor, `0x04` overheat, `0x08` current, `0x10` angle and `0x20` overload.
 
-`velocity_cmd` is the only command that fails on a PWM port: the reader logs an error and ignores it.
+`cmd/velocity` is the only command that fails on a PWM port: the reader logs an error and ignores it.
 
 ### Reliable Commands
 
-Commands that must not be lost (position targets, PID configuration, servo mode changes, shutdown, position resets) are subscribed with `reliableOpts` (`SubscribeOptions{.reliable = true}`). Reliable delivery is a transport-level option implemented in `raccoon::Transport`; there is no separate `ReliablePublisher` class. The reliable path adds a sequence number envelope and retransmits until an ACK is received.
+Commands that must not be lost (position targets, PID configuration, servo mode changes, shutdown, position resets) are on reliable channels of the channel table. Reliable delivery is implemented in `raccoon::Transport`: the sender repeats a frame until the receiver acknowledges it, and the receiver delivers each command once.
 
 Continuous commands (motor power percentage, motor velocity) are sent without reliable delivery to avoid queuing stale commands. If a power command is dropped, the next iteration of the user's control loop sends a fresh one.
 

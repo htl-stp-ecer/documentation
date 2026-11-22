@@ -1,7 +1,7 @@
 ---
 title: "System Popups"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-22
 draft: false
 weight: 8
 ---
@@ -15,7 +15,7 @@ Some events are too important to wait until you open the right screen. BotUI sho
 | Popup | When | Blocks the screen? |
 |-------|------|--------------------|
 | [Low Battery](#low-battery) | Battery voltage below 6 V | Yes, until ignored |
-| [Hardware Shutdown](#hardware-shutdown) | Motors or servos are latched off | Yes, until recovered |
+| [Hardware Shutdown](#hardware-shutdown) | The motors are latched off | Yes, until recovered |
 | [System mismatch](#system-mismatch) | BotUI does not match the installed system | Yes, until acknowledged |
 | [Error from the robot](#error-messages) | A service reports an error | Yes, until acknowledged |
 | [Ethernet cable](#ethernet-cable) | A cable is plugged in or pulled out | Question, answer it |
@@ -41,15 +41,15 @@ Swap the battery rather than ignoring the warning: the robot can restart in the 
 
 ## Hardware Shutdown {#hardware-shutdown}
 
-The STM32 coprocessor can switch off all motors and/or servos on its own. Then the display shows one of two popups:
+The STM32 coprocessor can switch off all motors on its own. Then the display shows one of two popups:
 
-**Hardware Watchdog Tripped**: the robot's safety watchdog did not get a heartbeat from the user program, so motors and servos were shut off.
+**Hardware Watchdog Tripped**: the robot's safety watchdog did not get a heartbeat from the user program, so the motors were shut off.
 
 **Hardware Shutdown Active**: the outputs were switched off on purpose (user-initiated shutdown, for example when `raccoon run` ends).
 
-Both popups list the **latched outputs** (servos, motors or both) and have one button, **Recover**. It re-enables the outputs and re-arms the watchdog.
+Both popups list the **latched outputs** (the motors) and have one button, **Recover**. It re-enables the outputs and re-arms the watchdog.
 
-While the shutdown is active, commands from the [motor and servo screens]({{< ref "/05-bot-ui/01-sensors-actors.md#shutdown-guard" >}}) are acknowledged, but nothing moves. That is why the popup is shown, and why the screens ask before they open.
+While the shutdown is active, commands from the [motor screens]({{< ref "/05-bot-ui/01-sensors-actors.md#shutdown-guard" >}}) are acknowledged, but nothing moves. That is why the popup is shown, and why the screens ask before they open.
 
 ## System mismatch {#system-mismatch}
 

@@ -1,7 +1,7 @@
 ---
 title: "Logs and errors"
 author: "Mario Scholze"
-date: 2026-11-19
+date: 2026-11-22
 draft: false
 weight: 80
 description: "Where the camera service logs, what ends up in the journal and in the log of each run, and which errors reach your program and the UI."
@@ -67,8 +67,8 @@ The service publishes an error as a message when something goes wrong while a ca
 
 | Channel | Receiver | Content |
 |---|---|---|
-| `raccoon/cam/error` | Clients | JSON with `message` and `context`. Retained, so a client that connects later sees the last one. `CamClient.last_error` holds it |
-| `raccoon/errors` | The UI | The same message as text, prefixed with `raccoon-cam:` |
+| `camera/state/error` | Clients | JSON with `message` and `context`. Retained, so a client that connects later sees the last one. `CamClient.last_error` holds it |
+| `messages/error` | The UI | The same message as text, prefixed with `raccoon-cam:` |
 
 What causes one:
 

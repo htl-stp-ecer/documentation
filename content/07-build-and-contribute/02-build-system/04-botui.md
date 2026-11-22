@@ -1,7 +1,7 @@
 ---
 title: "botui"
 author: "Mario Scholze"
-date: 2026-11-16
+date: 2026-11-22
 draft: false
 weight: 40
 description: "Build the .deb in Docker, deploy it, and try the UI on the PC."
@@ -20,7 +20,7 @@ python3 build.py --version 81    # release build (what CI does)
 
 Result: `builds/botui_<version>_arm64.deb` and `builds/manifest.json`. Only Docker and Python 3 are needed on the host. Other options: `--image` and `--cache-dir` (pub cache).
 
-Inside the container the app is built with `flutterpi_tool` for arm64, the ring bridge (`libraccoon_ring_bridge.so`, from raccoon-transport) is built next to it, and `dpkg-deb` packs everything. The `postinst` of the package removes a hand-placed unit in `/etc/systemd/system`, enables the service and restarts it.
+Inside the container the app is built with `flutterpi_tool` for arm64, the transport bridge (`libraccoon_transport_bridge.so`, from raccoon-transport) is built next to it, and `dpkg-deb` packs everything. The `postinst` of the package removes a hand-placed unit in `/etc/systemd/system`, enables the service and restarts it.
 
 ## Deploy
 

@@ -1,7 +1,7 @@
 ---
 title: "Firmware and Pi Bridge"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 30
 ---
@@ -63,7 +63,7 @@ sequenceDiagram
 
     Note over STM: TIM6 ISR fires every 1µs<br/>BEMF cycle at 1250µs intervals<br/>ADC1 analog at 4000µs
 
-    PY->>LCM: motor.set_velocity(port, v) → publish raccoon/motor/N/velocity_cmd
+    PY->>LCM: motor.set_velocity(port, v) → publish hardware/motor/N/cmd/velocity
     LCM->>CS: callback: onMotorVelocityCommand()
     CS->>DC: setMotorVelocity(port, v)
     DC->>SPI: stage RxBuffer.motorControlMode=MAV, motorTarget[N]=v
@@ -76,7 +76,7 @@ sequenceDiagram
 
     SPI->>DC: returns SensorData from TxBuffer
     DC->>DP: publishSensorData() called by Application::publishCurrentData()
-    DP->>LCM: publish raccoon/bemf/N/value, raccoon/motor/N/position<br/>(rate-gated 50Hz, noise-epsilon filtered)
+    DP->>LCM: publish hardware/motor/N/state/bemf, hardware/motor/N/state/position<br/>(rate-gated 50Hz, noise-epsilon filtered)
     LCM->>PY: raccoon-lib reads the TransportReader cache → motor.position()
 ```
 

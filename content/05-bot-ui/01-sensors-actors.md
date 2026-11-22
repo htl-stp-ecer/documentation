@@ -1,7 +1,7 @@
 ---
 title: "Sensors & Actors"
 author: "Jakob Schlögl, Mario Scholze"
-date: 2026-11-21
+date: 2026-11-22
 draft: false
 weight: 2
 ---
@@ -200,8 +200,8 @@ For driving a bus servo from your own tools, see [the bus servo channels]({{< re
 
 ### Shutdown Guard
 
-When the firmware has motors or servos latched off (after a watchdog trip or a user-initiated shutdown, see [System Popups]({{< ref "/05-bot-ui/07-system-popups.md#hardware-shutdown" >}})), opening a motor or servo port first asks:
+When the firmware has the motors latched off (after a watchdog trip or a user-initiated shutdown, see [System Popups]({{< ref "/05-bot-ui/07-system-popups.md#hardware-shutdown" >}})), opening a motor port first asks:
 
 > **Motors Disabled** — Shutdown flags are enabled. Motors cannot be controlled until shutdown is disabled.
 
-**Disable** clears the shutdown flag and continues to the screen, **Cancel** goes back. The same dialog says "Servos" for servo ports. Without this guard, commands would be acknowledged but nothing would move.
+**Disable** clears the shutdown flag and continues to the screen, **Cancel** goes back. Without this guard, commands would be acknowledged but nothing would move.

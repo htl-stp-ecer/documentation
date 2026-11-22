@@ -1,7 +1,7 @@
 ---
 title: "Architecture Overview"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 1
 ---
@@ -293,24 +293,24 @@ The `motorControlMode` field in `RxBuffer` packs 3 bits per motor (motors 0–3 
 ## transport channel taxonomy
 
 All channels are defined in `raccoon::Channels` (`Channels.h`). The naming convention:
-- Channels ending in `_cmd` or containing `/cmd/` carry **commands** (imperative, never deduplicated).
+- Channels with a `cmd` segment carry **commands** (imperative, never deduplicated).
 - All other channels carry **values / telemetry** (may be rate-limited or deduplicated).
 
 Key channel groups:
 
 | Group | Example channels | Direction |
 |---|---|---|
-| Motor telemetry | `raccoon/motor/N/power`, `/position`, `raccoon/bemf/N/value` | STM32 → Pi → transport |
-| Motor commands | `raccoon/motor/N/power_cmd`, `/velocity_cmd`, `/position_cmd`, `/stop_cmd` | transport → Pi → STM32 |
-| Chassis | `raccoon/chassis/velocity_cmd` | transport → Pi → STM32 |
-| Servo | `raccoon/servo/N/position`, `/mode` | STM32 → Pi → transport |
-| Servo commands | `raccoon/servo/N/position_cmd`, `/mode_cmd`, `/smooth_cmd` | transport → Pi → STM32 |
-| IMU | `raccoon/gyro/value`, `/accel/value`, `/imu/quaternion`, `/imu/heading` | STM32 → transport |
-| Odometry | `raccoon/odometry/pos_x`, `/pos_y`, `/heading`, `/vx`, `/vy`, `/wz` | STM32 → transport |
-| Odometry cmds | `raccoon/odometry/reset_cmd`, `raccoon/kinematics/config_cmd` | transport → Pi → STM32 |
-| Analog/Digital | `raccoon/analog/N/value`, `raccoon/digital/N/value` | STM32 → transport |
-| System | `raccoon/system/heartbeat_cmd`, `/shutdown_cmd`, `/shutdown_status` | bidirectional |
-| Feature flags | `raccoon/cmd/feature/bemf_enabled`, `raccoon/feature/bemf_enabled` | transport ↔ Pi |
+| Motor telemetry | `hardware/motor/N/state/power`, `/position`, `hardware/motor/N/state/bemf` | STM32 → Pi → transport |
+| Motor commands | `hardware/motor/N/cmd/power`, `.../cmd/velocity`, `.../cmd/position`, `.../cmd/stop` | transport → Pi → STM32 |
+| Chassis | `hardware/chassis/cmd/velocity` | transport → Pi → STM32 |
+| Servo | `hardware/servo/N/state/position`, `/mode` | STM32 → Pi → transport |
+| Servo commands | `hardware/servo/N/cmd/position`, `.../cmd/mode`, `.../cmd/smooth` | transport → Pi → STM32 |
+| IMU | `hardware/imu/state/gyro`, `/accel/value`, `/imu/quaternion`, `/imu/heading` | STM32 → transport |
+| Odometry | `hardware/odometry/state/pos_x`, `/pos_y`, `/heading`, `/vx`, `/vy`, `/wz` | STM32 → transport |
+| Odometry cmds | `hardware/odometry/cmd/reset`, `hardware/kinematics/cmd/config` | transport → Pi → STM32 |
+| Analog/Digital | `hardware/analog/N/state/value`, `hardware/digital/N/state/value` | STM32 → transport |
+| System | `hardware/watchdog/cmd/heartbeat`, `hardware/latch/cmd/engaged`, `hardware/latch/state/flags` | bidirectional |
+| Feature flags | `hardware/feature/cmd/bemf_active`, `hardware/feature/state/bemf_active` | transport ↔ Pi |
 
 ## Glossary
 
@@ -345,10 +345,10 @@ Feature flag bit 0 in `RxBuffer.featureFlags`. When set, the BEMF sampling cycle
 InvenSense's on-chip processor inside the MPU-9250 that runs sensor fusion (gyro + accel + compass) and produces a calibrated orientation quaternion at 50 Hz. The STM32 loads the DMP firmware blob over SPI3 during `setupImu()` and reads results via `readImu()` in the main loop.
 
 **`raccoon_ring`**
-The shared-memory transport of `raccoon-transport`: one ring file `/dev/shm/raccoon_ring_<channel>` per channel, with a futex wake on every publish. All processes (stm32-data-reader, raccoon-lib, camera, UI) subscribe and publish through it, without network and without a broker. See [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
+The shared-memory transport of `raccoon-transport`: one ring file `/dev/shm/raccoon-rings/<channel>` per channel, with a futex wake on every publish. All processes (stm32-data-reader, raccoon-lib, camera, UI) subscribe and publish through it, without network and without a broker. See [Transport]({{< ref "/06-advanced/03-transport.md" >}}).
 
 **MotorWatchdog**
-A Pi-side safety mechanism in `MotorWatchdog.cpp`. raccoon-lib publishes a heartbeat message to `raccoon/system/heartbeat_cmd` periodically. If the watchdog does not see a heartbeat within its timeout, it calls `setShutdown(true)`, which sets `RxBuffer.systemShutdown = SHUTDOWN_MOTOR | SHUTDOWN_SERVO` and pushes it to the STM32. The STM32 `sanitizeMotorCommandsForShutdown()` function (in `spi.c`) then zeroes all motor commands on the next SPI callback.
+A Pi-side safety mechanism in `MotorWatchdog.cpp`. raccoon-lib publishes a heartbeat message to `hardware/watchdog/cmd/heartbeat` periodically. If the watchdog does not see a heartbeat within its timeout, it calls `setShutdown(true)`, which sets `RxBuffer.systemShutdown = SHUTDOWN_MOTOR` and pushes it to the STM32. The STM32 `sanitizeMotorCommandsForShutdown()` function (in `spi.c`) then zeroes all motor commands on the next SPI callback.
 
 **`microSeconds`**
 A `volatile uint32_t` incremented in the TIM6 ISR every 1 µs (`timer.c`). Used as the system timestamp throughout the firmware: BEMF scheduling (`doEveryXuSeconds`), PID dt measurement, odometry dt, and `TxBuffer.updateTime`.

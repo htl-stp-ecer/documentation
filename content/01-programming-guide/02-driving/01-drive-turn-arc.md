@@ -1,7 +1,7 @@
 ---
 title: "Drive, Turn and Arc"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-22
 draft: false
 weight: 10
 description: "drive_forward, drive_backward, turn_left, turn_right and arc steps, plus speed mode."
@@ -136,4 +136,4 @@ Parameters:
 | `enabled` | `bool` | required | `True` = SpeedMode on (BEMF off), `False` = return to normal |
 | `timeout_s` | `float` | `0.5` | Max seconds to wait for firmware ACK before raising |
 
-The step publishes an transport command, waits for the firmware's acknowledgement on the retained `raccoon/feature/bemf_enabled` channel, then updates the library's internal speed-mode flag. If no ACK arrives within `timeout_s` it raises `RuntimeError` to prevent library and firmware state from diverging.
+The step publishes an transport command, waits for the firmware's acknowledgement on the retained `hardware/feature/state/bemf_active` channel, then updates the library's internal speed-mode flag. If no ACK arrives within `timeout_s` it raises `RuntimeError` to prevent library and firmware state from diverging.

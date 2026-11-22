@@ -1,7 +1,7 @@
 ---
 title: "Concept"
 author: "Mario Scholze"
-date: 2026-11-19
+date: 2026-11-22
 draft: false
 weight: 20
 description: "The parts of raccoon-cam and how data flows from the camera to your mission code."
@@ -27,7 +27,7 @@ graph LR
     HOST -. "loaded, idle" .-> P2["CamProcessor B"]
     P1 --> OUT["Detections"]
     BE -- "sink.detections(...)" --> OUT
-    OUT -- "raccoon/cam/detections" --> CLIENT["CamClient"]
+    OUT -- "camera/state/detections" --> CLIENT["CamClient"]
     CLIENT --> PROG["Your program"]
     PROG -- "commands" --> SVC["CamService"]
 ```

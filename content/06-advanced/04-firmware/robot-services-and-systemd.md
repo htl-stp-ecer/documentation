@@ -1,7 +1,7 @@
 ---
 title: "Robot Services And systemd"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-18
+date: 2026-11-22
 draft: false
 weight: 9
 description: "Systemd unit topology, PrivateTmp and SHM constraints, MotorWatchdog safety service, SystemMonitor, UartMonitor, and flash-based calibration storage."
@@ -26,8 +26,8 @@ graph TD
     NW -->|After| READER
     NW -->|After| UI
 
-    READER -- "/dev/shm/raccoon_ring_*\n(SHM channels)" --> PROJ
-    READER -- "/dev/shm/raccoon_ring_*\n(SHM channels)" --> MISSION
+    READER -- "/dev/shm/raccoon-rings/*\n(SHM channels)" --> PROJ
+    READER -- "/dev/shm/raccoon-rings/*\n(SHM channels)" --> MISSION
     PROJ -- "transport detections channel" --> MISSION
 
     style READER fill:#1a4a7a,color:#fff
@@ -53,7 +53,7 @@ Sources of truth in the repository:
 
 ### What it is
 
-This is the Pi-side bridge process. It owns the SPI connection to the STM32 and is the single publisher of all hardware state to the transport. Every Python mission process, the BotUI, and all project daemons consume data it puts on `/dev/shm/raccoon_ring_*` files.
+This is the Pi-side bridge process. It owns the SPI connection to the STM32 and is the single publisher of all hardware state to the transport. Every Python mission process, the BotUI, and all project daemons consume data it puts on `/dev/shm/raccoon-rings/*` files.
 
 ### Unit characteristics
 
@@ -72,11 +72,11 @@ This is the Pi-side bridge process. It owns the SPI connection to the STM32 and 
 
 ### The raccoon_ring SHM constraint: why `PrivateTmp=false` is mandatory
 
-`raccoon::Transport` creates one `/dev/shm/raccoon_ring_<channel>` file per transport channel. All inter-process communication on the robot goes through these shared-memory ring files: the reader writes, the BotUI and Python mission read.
+`raccoon::Transport` creates one `/dev/shm/raccoon-rings/<channel>` file per transport channel. All inter-process communication on the robot goes through these shared-memory ring files: the reader writes, the BotUI and Python mission read.
 
 Any systemd sandboxing directive that builds a private mount namespace — including `PrivateTmp=true`, `ProtectSystem=`, or `ProtectHome=` — causes systemd to create an `MS_SLAVE` bind mount over `/dev/shm` for the service. The ring files the reader creates under that namespace are then invisible to every other process on the host. From the perspective of a Python mission, the `/dev/shm` directory is empty and `raccoon_transport` channel subscriptions time out waiting for IMU heading, BEMF, and battery data.
 
-Additionally, wiping the `/dev/shm/raccoon_ring_*` files before a watchdog-triggered restart (as an earlier version of this unit did) kills every subscriber that has the file `mmap`'d. The new file after restart has a different inode; the old subscriber's `mmap` becomes an unreachable anonymous region it can never recover from. The current unit does not wipe those files — a restarted reader calls `rrb_writer_create`, which reinitialises the existing header in the same inode, and subscribers detect the `producer_seq` reset and resync automatically.
+The unit does not wipe the files in `/dev/shm/raccoon-rings/` before a restart: a restarted reader attaches to the existing rings, so subscribers keep running. A subscriber that waits notices a ring file that was deleted and created again within about a second.
 
 > **Do not add `PrivateTmp=true`, `ProtectSystem=`, or `ProtectHome=` to this unit.**
 >
@@ -135,7 +135,7 @@ Without a watchdog, a crashed or hung Python process leaves motors running at th
 
 ### Architecture
 
-`MotorWatchdog` is a member of `Application` (not a separate thread or process). Its `update()` method is called on every main loop tick. `CommandSubscriber` calls `feed()` whenever it receives a heartbeat message on `raccoon/system/heartbeat_cmd`.
+`MotorWatchdog` is a member of `Application` (not a separate thread or process). Its `update()` method is called on every main loop tick. `CommandSubscriber` calls `feed()` whenever it receives a heartbeat message on `hardware/watchdog/cmd/heartbeat`.
 
 ```
 Python mission (raccoon-lib)
@@ -185,21 +185,20 @@ When `fired_` transitions from `false` to `true`, `update()` calls:
 
 1. `DeviceController::setShutdown(true)` — this in turn:
    - Sets all four `motorStates_[port]` to `MotorState{}` (zeroed) and pushes them to the SPI buffer
-   - Sets all four servo commands to 0 and mode to `ServoMode::Disabled`
-   - Writes `rxBuffer.systemShutdown = SHUTDOWN_SERVO | SHUTDOWN_MOTOR` via SPI
-2. `DataPublisher::publishShutdownStatus(0x07)` — publishes the bitmask to `raccoon/system/shutdown_status`
+   - Writes `rxBuffer.systemShutdown = SHUTDOWN_MOTOR` via SPI
+2. `DataPublisher::publishShutdownStatus(0x06)` — publishes the bitmask to `hardware/latch/state/flags`
 
 ### SHUTDOWN_STATUS bitmask
 
 | Bit | Mask | Meaning |
 |---|---|---|
-| 0 | `0x01` | Servo shutdown active |
+| 0 | `0x01` | Reserved, never set |
 | 1 | `0x02` | Motor shutdown active |
-| 2 | `0x04` | Source = watchdog (vs. user-initiated `shutdown_cmd`) |
+| 2 | `0x04` | Source = watchdog (vs. a user-initiated command on `hardware/latch/cmd/engaged`) |
 
-`0x07` = all three bits set = watchdog fired. `0x00` = shutdown cleared.
+`0x06` = motor latch plus watchdog source = watchdog fired. `0x02` = user-initiated latch. `0x00` = shutdown cleared.
 
-The BotUI subscribes to `raccoon/system/shutdown_status` and displays the shutdown reason so operators can distinguish a watchdog stop from a deliberate stop command.
+The BotUI subscribes to `hardware/latch/state/flags` and displays the shutdown reason so operators can distinguish a watchdog stop from a deliberate stop command.
 
 ### Sending heartbeats from Python
 
@@ -231,7 +230,7 @@ The BotUI calls `MotorWatchdog::resetAfterManualClear()` when the operator ackno
 
 ### What it does
 
-`SystemMonitor` reads the Raspberry Pi's CPU temperature from the Linux thermal subsystem and publishes it to the `raccoon/cpu/temp/value` transport channel. It does not monitor RAM, load average, or any other metric — only CPU temperature.
+`SystemMonitor` reads the Raspberry Pi's CPU temperature from the Linux thermal subsystem and publishes it to the `system/state/cpu_temperature` transport channel. It does not monitor RAM, load average, or any other metric — only CPU temperature.
 
 ### Implementation
 
@@ -267,7 +266,7 @@ def on_cpu_temp(channel, data):
 transport.subscribe(Channels.CPU_TEMPERATURE, on_cpu_temp)
 ```
 
-The channel name is `raccoon/cpu/temp/value` (from `raccoon::Channels::CPU_TEMPERATURE`).
+The channel name is `system/state/cpu_temperature` (from `raccoon::Channels::CPU_TEMPERATURE`).
 
 ---
 
@@ -275,7 +274,7 @@ The channel name is `raccoon/cpu/temp/value` (from `raccoon::Channels::CPU_TEMPE
 
 ### What it is
 
-`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error lines additionally reach the `raccoon/errors` transport channel (via the logger's `LcmBroker` sink), which means STM32 faults appear in the BotUI error feed without any extra tooling.
+`UartMonitor` opens `/dev/ttyAMA0` in read-only, non-blocking raw mode and tails the STM32's UART3 debug output during the main loop. Every line the STM32 prints becomes a Pi-side log entry tagged `[STM32]`. Error lines additionally reach the `messages/error` transport channel (via the logger's `LcmBroker` sink), which means STM32 faults appear in the BotUI error feed without any extra tooling.
 
 ### Initialization details
 
@@ -292,7 +291,7 @@ If the device cannot be opened, the monitor logs a warning and sets `isOpen_ = f
 ```cpp
 // UartMonitor::processLine() — exact logic from source
 if (line contains "[ERROR]" or "Error" or "FAULT")
-    logger_->error("[STM32] " + line);   // → raccoon/errors channel
+    logger_->error("[STM32] " + line);   // → messages/error channel
 else if (line contains "[WARN]")
     logger_->warn("[STM32] " + line);
 else
@@ -420,7 +419,7 @@ from raccoon import RobotService, get_transport
 class VisionService(RobotService):
     def start(self):
         self._transport = get_transport()
-        self._transport.subscribe("raccoon/cam/detections", self._on_detections)
+        self._transport.subscribe("camera/state/detections", self._on_detections)
 ```
 
 ---
@@ -434,9 +433,9 @@ flowchart TD
     A1 --> A2{Healthy?}
     A2 -- no --> A3["Check logs:\njournalctl -u stm32_data_reader\nLook for SPI version mismatch\nor health-check fatal"]
     A2 -- yes --> Q2{Transport\nbroken locally?}
-    Q2 -- yes --> B1["ls -l /dev/shm/raccoon_ring_*\nraccoon doctor (contract check)"]
+    Q2 -- yes --> B1["ls -l /dev/shm/raccoon-rings/*\nraccoon doctor (contract check)"]
     Q1 -- no --> Q3{Robot stopped\nunexpectedly?}
-    Q3 -- yes --> C1["Check raccoon/system/shutdown_status\nbitmask 0x07 = watchdog fired\nbitmask 0x01/0x02 = user shutdown"]
+    Q3 -- yes --> C1["Check hardware/latch/state/flags\nbitmask 0x07 = watchdog fired\nbitmask 0x01/0x02 = user shutdown"]
     C1 --> C2{Watchdog?}
     C2 -- yes --> C3["Heartbeat gap > 500 ms\nCheck mission heartbeat loop\nor raccoon-lib wrapper"]
     Q3 -- no --> Q4{UI missing\nbut runtime alive?}
@@ -449,8 +448,8 @@ flowchart TD
 | Symptom | First check |
 |---|---|
 | Motors or sensors dead | `systemctl status stm32_data_reader.service` |
-| Transport dead locally | `ls /dev/shm/raccoon_ring_*` (ring files present?), then `systemctl status stm32_data_reader.service` |
-| Robot stopped unexpectedly mid-run | `raccoon/system/shutdown_status` — bitmask `0x07` means watchdog |
+| Transport dead locally | `ls /dev/shm/raccoon-rings/*` (ring files present?), then `systemctl status stm32_data_reader.service` |
+| Robot stopped unexpectedly mid-run | `hardware/latch/state/flags` — bitmask `0x07` means watchdog |
 | UI missing but hardware alive | `systemctl status flutter-ui.service` |
 | STM32 errors in application log | UartMonitor forwarded them — check firmware state |
 | Project daemon broken | `raccoon logs services show <service-name>` |
