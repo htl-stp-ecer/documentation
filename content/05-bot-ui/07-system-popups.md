@@ -74,7 +74,7 @@ Services on the robot send a message for the user on the transport channel `mess
 Below the header the dialog shows the title in bold and the text, centred. A long text scrolls. Use these messages to find the cause when a program fails: for example the STM32 reader reports a defective IMU (**IMU not working**) or a control loop that takes too long (**Slow control loop**), and the camera service reports a camera that cannot be opened (**Camera problem**).
 
 - Only **one** dialog is open at a time. A message that arrives meanwhile waits and opens after you acknowledge. At most three messages wait, when more arrive the oldest waiting one is dropped.
-- A message with the same kind and title as the one on screen, or as one that waits, is dropped. A fault that repeats with changing numbers in the text therefore shows one dialog.
+- A message with the same kind and title as the one on screen, or as one that waits, replaces the text of that one instead of opening another dialog. A fault that repeats with changing numbers in the text therefore shows one dialog with the latest text, and an error that ends in a final message shows that message.
 - Every message also goes into the BotUI log.
 
 ## Ethernet Cable {#ethernet-cable}
