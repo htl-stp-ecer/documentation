@@ -143,7 +143,7 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 | `describe` | `path` | One backend (`module:Class`) with its options |
 | `validate_config` | `path`, `cfg` | The configuration as typed values, or an error that names the option |
 
-A command may carry `"reliable_reply": false`. Without it the service repeats its answer until the client acknowledges it, which a client that never acknowledges (a UI) cannot do; with it the answer is sent once.
+Commands and answers are reliable: the transport repeats a command or an answer until the other side has acknowledged it, so a client sends a command once.
 
 ### Status
 
