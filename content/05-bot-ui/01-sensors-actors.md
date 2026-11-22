@@ -112,7 +112,7 @@ The **Camera** tile opens the camera menu. At the top are two buttons, **Configu
 
 **Configure processor** is the same screen for the processor that runs on the frames while the UI uses the camera: the live picture here and the camera picture in a program's UI screen. The dropdown lists the built-in processors (`Built-In · ColorBlobs`) and the processors that the projects on the robot define (`Project (<name>) · <processor>`); the projects are scanned for classes that inherit `CamProcessor`. Choosing one shows a form with a field for each of its options. A list of names that the processor offers, like the colours of `ColorBlobs`, is a row of buttons to switch on and off; other structured options are a field for JSON. **Save** checks the values with the processor and keeps them on the robot, **Reset** removes the choice. The camera applies a change at once, without a restart. The processor runs while the UI holds the camera open. A program that loads processors of its own takes its place for as long as it runs. See [Processors]({{< ref "/01-programming-guide/06-camera/04-processors.md#a-processor-chosen-in-the-ui" >}}).
 
-The camera is otherwise configured with the [raccoon-lib camera API]({{< ref "/01-programming-guide/06-camera/07-status.md" >}}) and `raccoon-cam.service` is managed under [Settings → Services]({{< ref "/05-bot-ui/03-settings.md#services" >}}).
+The camera is otherwise configured with the [raccoon-lib camera API]({{< ref "/01-programming-guide/06-camera/08-status.md" >}}) and `raccoon-cam.service` is managed under [Settings → Services]({{< ref "/05-bot-ui/03-settings.md#services" >}}).
 
 ## Motor Screen
 

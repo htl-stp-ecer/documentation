@@ -3,7 +3,7 @@ title: "Status"
 author: "Mario Scholze"
 date: 2026-11-19
 draft: false
-weight: 70
+weight: 80
 description: "What is verified in raccoon-cam, what has not been tried on a robot, and the decisions that are still open."
 ---
 

@@ -11,7 +11,7 @@ description: "The camera service: swappable camera backends, CamProcessors that 
 
 `raccoon-cam` is the camera part of RaccoonOS, split out of individual robot projects. A service owns the camera and runs your image processing, and your program reads the results through a small client.
 
-> **Work in progress.** The package, the service and the client are written and tested against an in-memory bus and a fake camera. They have not run on a robot with a real camera yet, and the service has not run as a system service on a robot. [Status]({{< ref "/01-programming-guide/06-camera/07-status.md" >}}) lists what is verified and what is not.
+> **Work in progress.** The package, the service and the client are written and tested against an in-memory bus and a fake camera. They have not run on a robot with a real camera yet, and the service has not run as a system service on a robot. [Status]({{< ref "/01-programming-guide/06-camera/08-status.md" >}}) lists what is verified and what is not.
 
 You work with two kinds of classes, and both are things you can inherit from:
 
@@ -26,7 +26,9 @@ You work with two kinds of classes, and both are things you can inherit from:
 | [Concept]({{< ref "/01-programming-guide/06-camera/02-concept.md" >}}) | How the pieces fit together and why processing runs in a service |
 | [Backends]({{< ref "/01-programming-guide/06-camera/03-backends.md" >}}) | `CamBackend`, selecting a backend, options, adding your own backend |
 | [Processors]({{< ref "/01-programming-guide/06-camera/04-processors.md" >}}) | Writing a `CamProcessor`, loading it, choosing and swapping the active one, and how the host runs it |
-| [Built-in Backends and Processors]({{< ref "/01-programming-guide/06-camera/05-built-in-backends-and-processors.md" >}}) | The USB and replay backends, the `ColorBlobs` processor and their options |
-| [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}) | Running the service (project or systemd service), settings, channels, commands and status |
-| [Status]({{< ref "/01-programming-guide/06-camera/07-status.md" >}}) | What is verified, what is missing, what is still undecided |
-| [Logs and errors]({{< ref "/01-programming-guide/06-camera/08-logs.md" >}}) | The journal, the log of each run, and the errors your program and the UI get |
+| [Built-in Backends]({{< ref "/01-programming-guide/06-camera/05-built-in-backends/_index.md" >}}) | The USB camera and replay backends with their options |
+| [Built-in Processors]({{< ref "/01-programming-guide/06-camera/06-built-in-processors/_index.md" >}}) | The `ColorBlobs` processor with its options, colours and calibration |
+| [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}}) | Running the service (project or systemd service), settings, channels, commands and status |
+| [Status]({{< ref "/01-programming-guide/06-camera/08-status.md" >}}) | What is verified, what is missing, what is still undecided |
+| [Logs and errors]({{< ref "/01-programming-guide/06-camera/09-logs.md" >}}) | The journal, the log of each run, and the errors your program and the UI get |
+| [Camera picture in a UI screen]({{< ref "/01-programming-guide/06-camera/10-ui-picture.md" >}}) | Showing the live picture with its detections in a program's UI screen |

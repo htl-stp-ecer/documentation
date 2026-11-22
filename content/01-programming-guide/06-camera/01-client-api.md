@@ -9,7 +9,7 @@ description: "Use the camera from your program: set_backend, load_processor, set
 
 # Client API
 
-This is what your program uses. A `CamClient` talks to the camera service, see [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}). Your program never loads OpenCV.
+This is what your program uses. A `CamClient` talks to the camera service, see [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}}). Your program never loads OpenCV.
 
 
 ```python

@@ -3,7 +3,7 @@ title: "Logs and errors"
 author: "Mario Scholze"
 date: 2026-11-22
 draft: false
-weight: 80
+weight: 90
 description: "Where the camera service logs, what ends up in the journal and in the log of each run, and which errors reach your program and the UI."
 ---
 
@@ -63,7 +63,7 @@ Without `raccoon-lib`, on a laptop or in tests, only `logging` is used.
 
 ## Errors in your program and in the UI
 
-The service publishes an error as a message when something goes wrong while a camera is in use. It sends it twice, on different channels (see [Channels]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}#channels)).
+The service publishes an error as a message when something goes wrong while a camera is in use. It sends it twice, on different channels (see [Channels]({{< ref "/01-programming-guide/06-camera/07-service.md" >}}#channels)).
 
 | Channel | Receiver | Content |
 |---|---|---|

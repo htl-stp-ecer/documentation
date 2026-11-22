@@ -26,7 +26,7 @@ There is no default backend. Which one runs is decided in this order:
 
 1. The backend your program declares with `set_backend`. It applies while your program holds the camera.
 2. The backend chosen on the robot: in the UI under **Sensors & Actors → Camera → Configure backend**. It is kept on the robot and applies to every program that does not declare its own.
-3. The service's own configuration (`RACCOON_CAM_BACKEND`, see [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}})).
+3. The service's own configuration (`RACCOON_CAM_BACKEND`, see [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}})).
 
 If none of them names a backend, `start_camera()` fails with a message that says so.
 
@@ -97,7 +97,7 @@ The 'usb' camera backend needs OpenCV (module 'cv2'): install with `sudo apt ins
 | `UsbCameraBackend` | OpenCV (`cv2`) | `sudo apt install python3-opencv` | `pip install opencv-python-headless` |
 | `ReplayBackend` | OpenCV (`cv2`) | `sudo apt install python3-opencv` | `pip install opencv-python-headless` |
 
-Every backend ships in the `raccoon-cam` package. There are no extras to choose. `pip install raccoon-cam` installs only `numpy` and `raccoon-transport`; the rest is checked when the backend is used. On the robot the image and `raccoon update` install what the built-in backends need (see [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}#as-a-system-service)). On a laptop nothing is installed unless you ask: run the `pip install` from the table when you want to use the backend there.
+Every backend ships in the `raccoon-cam` package. There are no extras to choose. `pip install raccoon-cam` installs only `numpy` and `raccoon-transport`; the rest is checked when the backend is used. On the robot the image and `raccoon update` install what the built-in backends need (see [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}}#as-a-system-service)). On a laptop nothing is installed unless you ask: run the `pip install` from the table when you want to use the backend there.
 
 For your own backend:
 

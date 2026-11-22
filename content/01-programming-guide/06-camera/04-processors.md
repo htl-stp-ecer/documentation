@@ -1,5 +1,5 @@
 ---
-title: "CamProcessor"
+title: "Processors"
 author: "Mario Scholze"
 date: 2026-11-19
 draft: false
@@ -105,7 +105,7 @@ Declaring only records. Your program sends the declarations to the service when 
 
 A processor does not have to be declared in a program. In the robot's UI (**Camera → Configure processor**) you choose a processor, built-in or from a project, and its options. The choice is kept on the robot in `processor.json` next to `backend.json`, and the camera service applies a change at once.
 
-The service loads this processor when the camera opens and no program has processors of its own. It runs on the frames while the UI holds the camera: the picture in the camera menu and the [camera picture widget]({{< ref "/01-programming-guide/06-camera/09-ui-picture.md" >}}) draw its detections. When the last user gives the camera back, the processor is unloaded; the next use loads it again.
+The service loads this processor when the camera opens and no program has processors of its own. It runs on the frames while the UI holds the camera: the picture in the camera menu and the [camera picture widget]({{< ref "/01-programming-guide/06-camera/10-ui-picture.md" >}}) draw its detections. When the last user gives the camera back, the processor is unloaded; the next use loads it again.
 
 A program that loads a processor takes the place of the chosen one: `load_processor` unloads it, and `start_camera` removes processors that the program did not declare (see `exclusive`). A program that loads the processor of the same name keeps it with the configuration of the program. A processor that cannot be loaded (a project that was changed, a missing option) gives an error message and does not keep the camera from opening.
 

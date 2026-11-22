@@ -3,7 +3,7 @@ title: "Camera picture in a UI screen"
 author: "Mario Scholze"
 date: 2026-11-22
 draft: false
-weight: 90
+weight: 100
 description: "Show the live camera picture, with the detections drawn over it, in a dynamic UI screen of your program with one widget."
 ---
 
@@ -24,7 +24,7 @@ class LookScreen(UIScreen[None]):
         return Column(children=[Text("What the camera sees"), CamFeed()])
 ```
 
-While the widget is on the display, the UI takes a lease on the camera and turns the frame stream on. It gives both back when the screen is gone, and the stream is set to what it was before. A program that uses the camera at the same time keeps working, because leases add up (see [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}})).
+While the widget is on the display, the UI takes a lease on the camera and turns the frame stream on. It gives both back when the screen is gone, and the stream is set to what it was before. A program that uses the camera at the same time keeps working, because leases add up (see [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}})).
 
 The camera needs a backend. Choose one on the robot in the UI (**Camera → Configure backend**), or select it in the program with `set_backend` (see [Backends]({{< ref "/01-programming-guide/06-camera/03-backends.md" >}})).
 

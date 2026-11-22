@@ -32,7 +32,7 @@ graph LR
     PROG -- "commands" --> SVC["CamService"]
 ```
 
-The `CamService` is the process around backend and host. [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}) describes it and the client.
+The `CamService` is the process around backend and host. [The Service]({{< ref "/01-programming-guide/06-camera/07-service.md" >}}) describes it and the client.
 
 A backend that already produces results, such as a camera that runs a model on the device, pushes them straight into the output. A backend that only delivers images feeds the processors.
 
