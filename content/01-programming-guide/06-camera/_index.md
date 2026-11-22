@@ -26,7 +26,7 @@ You work with two kinds of classes, and both are things you can inherit from:
 | [Concept]({{< ref "/01-programming-guide/06-camera/02-concept.md" >}}) | How the pieces fit together and why processing runs in a service |
 | [Backends]({{< ref "/01-programming-guide/06-camera/03-backends.md" >}}) | `CamBackend`, selecting a backend, options, adding your own backend |
 | [Processors]({{< ref "/01-programming-guide/06-camera/04-processors.md" >}}) | Writing a `CamProcessor`, loading it, choosing and swapping the active one, and how the host runs it |
-| [Built-in Backends and Processors]({{< ref "/01-programming-guide/06-camera/05-built-in-backends-and-processors.md" >}}) | The USB and replay backends and their options |
+| [Built-in Backends and Processors]({{< ref "/01-programming-guide/06-camera/05-built-in-backends-and-processors.md" >}}) | The USB and replay backends, the `ColorBlobs` processor and their options |
 | [The Service]({{< ref "/01-programming-guide/06-camera/06-service.md" >}}) | Running the service (project or systemd service), settings, channels, commands and status |
 | [Status]({{< ref "/01-programming-guide/06-camera/07-status.md" >}}) | What is verified, what is missing, what is still undecided |
 | [Logs and errors]({{< ref "/01-programming-guide/06-camera/08-logs.md" >}}) | The journal, the log of each run, and the errors your program and the UI get |
