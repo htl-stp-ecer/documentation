@@ -3,7 +3,7 @@ title: "Logs and errors"
 author: "Mario Scholze"
 date: 2026-11-22
 draft: false
-weight: 90
+weight: 80
 description: "Where the camera service logs, what ends up in the journal and in the log of each run, and which errors reach your program and the UI."
 ---
 

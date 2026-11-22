@@ -27,7 +27,7 @@ Without options it starts without a backend: a program selects one with `set_bac
 | `--stream-fps` | `RACCOON_CAM_STREAM_FPS` | Rate of the frame stream for the UI. `0` is off, which is the default |
 | `--jpeg-quality` | `RACCOON_CAM_JPEG_QUALITY` | JPEG quality of that stream. Default 60 |
 | `--eager-opencv` / `--no-eager-opencv` | `RACCOON_CAM_EAGERLY_LOAD_OPENCV` | `1`, `true`, `yes` or `on`: import OpenCV when the service starts. Otherwise it is imported when the camera first starts. The unit sets it, see [below](#opencv-at-start) |
-| none | `RACCOON_CAM_LOG_DIR` | Where the JSONL log goes, one subdirectory per run. Default: the logs directory systemd gives the service, `/var/log/raccoon-cam`. See [Logs and errors]({{< ref "/01-programming-guide/06-camera/09-logs.md" >}}) |
+| none | `RACCOON_CAM_LOG_DIR` | Where the JSONL log goes, one subdirectory per run. Default: the logs directory systemd gives the service, `/var/log/raccoon-cam`. See [Logs and errors]({{< ref "/01-programming-guide/06-camera/08-logs.md" >}}) |
 | none | `RACCOON_CAM_STATE_DIR` | Where `backend.json` is kept. Default: the state directory systemd gives the service, `/var/lib/raccoon-cam`. See [the backend chosen on the robot](#the-backend-chosen-on-the-robot) |
 | none | `RACCOON_BUNDLE_FILE` | The bundle file of the robot, for the version check at start. Default `/etc/raccoon-bundle.json` |
 
@@ -80,7 +80,7 @@ What the unit sets:
 | `Restart=always`, `RestartSec=1` | The service comes back after a crash |
 | `RestartPreventExitStatus=78` | A refusal by the version check is not restarted in a loop |
 | `Nice=5` | A lower priority than the robot program, so image processing does not starve it |
-| `LogsDirectory=raccoon-cam` | `/var/log/raccoon-cam`, for the [JSONL log of every run]({{< ref "/01-programming-guide/06-camera/09-logs.md" >}}) |
+| `LogsDirectory=raccoon-cam` | `/var/log/raccoon-cam`, for the [JSONL log of every run]({{< ref "/01-programming-guide/06-camera/08-logs.md" >}}) |
 | `StateDirectory=raccoon-cam` | `/var/lib/raccoon-cam`, for `backend.json` |
 | `RACCOON_NO_HEARTBEATS=1` | The service never feeds the watchdog |
 | `RACCOON_CAM_EAGERLY_LOAD_OPENCV=1` | OpenCV is loaded at start, see [above](#opencv-at-start) |

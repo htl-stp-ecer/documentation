@@ -3,7 +3,7 @@ title: "Camera picture in a UI screen"
 author: "Mario Scholze"
 date: 2026-11-22
 draft: false
-weight: 100
+weight: 90
 description: "Show the live camera picture, with the detections drawn over it, in a dynamic UI screen of your program with one widget."
 ---
 
