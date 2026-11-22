@@ -82,9 +82,9 @@ Frame(image: np.ndarray, timestamp: float, seq: int = 0)
 `image` is BGR, `uint8`, shape `(height, width, 3)`. `timestamp` is `time.monotonic()` at capture. `seq` increases by one for each frame from the backend.
 
 ```python
-Detection(label, x=0, y=0, w=0, h=0, confidence=1.0, area=0.0, extra={}, source="")
+Detection(label, x=0, y=0, w=0, h=0, confidence=1.0, area=0.0, extra={}, source="", color=None)
 ```
 
-`x` and `y` are the centre of the box, and `w` and `h` its size, all normalised to 0..1 relative to the frame. `area` is in pixels. The host fills `source` with the name of the processor that produced the detection when the processor leaves it empty.
+`x` and `y` are the centre of the box, and `w` and `h` its size, all normalised to 0..1 relative to the frame. `area` is in pixels. `color` is the colour the UI draws the box and its label in: `"#rrggbb"`, a tuple `(red, green, blue)` with values from 0 to 255, or `None` for the UI's own colour (by the name of the label, or by position). The colour travels to your program, so a `Detection` that you read from `detections()` has it as `"#rrggbb"`. The host fills `source` with the name of the processor that produced the detection when the processor leaves it empty.
 
 `extra` holds additional numbers or strings for code inside the service. It does not travel to your program, because the message type `cam_blob_t` has no field for it.

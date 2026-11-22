@@ -84,6 +84,7 @@ For every frame it scales the picture down, converts it to HSV, makes one mask f
 | `w`, `h` | The size of its bounding box, as fractions of the frame. |
 | `area` | The area in pixels of the frame, not of the scaled picture. |
 | `confidence` | The share of the bounding box that the area fills, 1 for a full rectangle. |
+| `color` | The colour the UI draws the box in: the colour of the name, for example red for `red`. |
 
 The areas of a colour come largest first.
 
