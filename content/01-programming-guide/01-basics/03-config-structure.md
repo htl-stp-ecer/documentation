@@ -1,7 +1,7 @@
 ---
 title: "Config Structure"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-24
 draft: false
 weight: 30
 description: "What each config file contains, which ones you edit and which ones the tools manage."
@@ -71,6 +71,7 @@ Tools that write values, such as the calibration commands, update the file that 
 | `definitions` | `!include` | `config/hardware.yml` |
 | `connection` | `!include` | `config/connection.yml` |
 | `simulation` | `mapping` | Optional, see below |
+| `validation` | `mapping` | Optional limits for the style checks of `raccoon validate`, see below |
 
 ### `simulation:` (optional)
 
@@ -93,6 +94,25 @@ simulation:
 | `simulation.start_pose.theta_deg` | `float` | from `physical.start_pose.theta_deg` | Simulation-only starting heading (degrees). |
 
 This block is intentionally separate from `physical.start_pose` so you can place the robot at a different starting position in simulation without affecting real-robot runs.
+
+### `validation:` (optional)
+
+Sets how strict the mission style checks of [`raccoon validate`]({{< ref "/03-raccoon-cli/12-validate.md" >}}#mission-style-checks) are. Without this block the defaults apply.
+
+```yaml
+validation:
+  max_mission_steps: 25
+  check_mission_comments: true
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `validation.max_mission_steps` | `integer` | `25` | Maximum number of steps in a mission's `seq([...])`. Longer missions produce a warning, and so does a limit above 75. |
+| `validation.check_mission_comments` | `bool` | `true` | Warns about more than six steps in a row without a comment. |
+
+## `raccoon.formatting.yml`
+
+An optional file next to `raccoon.project.yml` that switches on and configures `raccoon format`. Projects without it are not formatted. See [format]({{< ref "/03-raccoon-cli/19-format.md" >}}) for all options.
 
 ## `config/missions.yml`
 

@@ -1,7 +1,7 @@
 ---
 title: "Missions"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-24
 draft: false
 weight: 70
 ---
@@ -103,6 +103,10 @@ class M010DriveToConeMission(Mission):
 ```
 
 Notice how the mission reads almost like natural language: "raise arm, back up, turn, align against wall, find the line, follow it, drive to the cone."
+
+## Keeping Missions Readable
+
+`raccoon validate` warns when a mission gets too long, when the same steps are written out several times in a row, or when long stretches of steps have no comment. Split long missions, use `loop_for` for repetitions and add a comment for each part of the mission. The checks and their limits are described in [Mission style checks]({{< ref "/03-raccoon-cli/12-validate.md" >}}#mission-style-checks). [`raccoon format`]({{< ref "/03-raccoon-cli/19-format.md" >}}) formats the code in a way that keeps `seq([...])` and the blank lines between your steps.
 
 ## Composing Steps
 

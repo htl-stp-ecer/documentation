@@ -1,7 +1,7 @@
 ---
 title: "validate"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-16
+date: 2026-11-24
 draft: false
 weight: 12
 ---
@@ -39,7 +39,7 @@ raccoon validate --no-codegen-check  # skip the in-memory code generation check
 
 ## What it checks
 
-`raccoon validate` runs five categories of checks:
+`raccoon validate` runs these checks:
 
 | Check | Severity | What it looks for |
 |-------|----------|-------------------|
@@ -48,12 +48,93 @@ raccoon validate --no-codegen-check  # skip the in-memory code generation check
 | Files → config | WARNING | Every `m???_*_mission.py` file under `src/missions/` must be listed in `missions:` |
 | `main.py` imports | ERROR / WARNING | Every `from .missions.<module> import <Class>` in `src/main.py` must resolve to a file that exists and a class that is in config |
 | Python compile | ERROR | Every `.py` file under `src/` must be free of syntax errors (`py_compile`) |
+| Mission length | WARNING | A mission has more steps in its `seq([...])` than `validation.max_mission_steps` allows, or the limit itself is set unreasonably high. See [Mission style checks](#mission-style-checks) |
+| Repeated steps | WARNING | The same step or block of steps is written three or more times in a row. See [Mission style checks](#mission-style-checks) |
+| Uncommented steps | WARNING | More than six steps in a row have no comment. See [Mission style checks](#mission-style-checks) |
 
 **ERRORs** abort the command with exit code 1. **WARNINGs** are printed but do not fail.
 
 The naming convention the checker enforces is:
 - Class name `M030HelloMission` → file `src/missions/m030_hello_mission.py`
 - File `src/missions/m030_hello_mission.py` → expected class `M030HelloMission`
+
+## Mission style checks
+
+Three checks look at how your missions are written. They only produce warnings and never fail the command. They read the list in the `return seq([...])` of each mission's `sequence()` in `src/missions/`; steps nested deeper, for example inside a `parallel(...)`, count as part of their parent step. A mission that builds its sequence in another way, such as `return build_everything()`, is skipped.
+
+### Mission length
+
+A mission with more steps than `validation.max_mission_steps` (default `25`) gets a warning:
+
+```
+⚠ src/missions/m040_collect_botguy_mission.py has 30 steps in its sequence (validation.max_mission_steps: 25)
+  Split the mission into several missions or group steps into sub-sequences
+```
+
+Long missions are hard to read and to debug. Split them into several missions, or move a group of steps into a function that returns a `seq([...])`.
+
+You can raise the limit, but a limit above three times the default (75) always produces a warning of its own. That warning cannot be switched off. A value that is not a positive integer is reported and the default is used.
+
+### Repeated steps
+
+When the same step, or the same block of steps, appears three or more times directly after each other, the check suggests a loop:
+
+```
+⚠ src/missions/m010_drive_mission.py:12 repeats the same step 3 times in a row
+  Use a loop instead: loop_for(<step>, iterations=3)
+```
+
+```python
+# three identical steps ...
+drive_forward(10),
+drive_forward(10),
+drive_forward(10),
+
+# ... become one
+loop_for(drive_forward(10), iterations=3),
+```
+
+Steps are compared by what they call and with which arguments; comments and line breaks do not matter. The same step written twice, or in different places of the mission, is not reported. See [Looping]({{< ref "/01-programming-guide/01-basics/07-missions.md" >}}#looping) for `loop_for`.
+
+### Uncommented steps
+
+More than six steps in a row without a comment produce a warning that names the lines:
+
+```
+⚠ src/missions/m000_setup_mission.py:38-66 has 9 steps in a row without a comment
+  Add a short comment above the steps that explains what this part of the mission does
+```
+
+A step counts as commented when a comment stands on the line directly above it or at the end of its first line. A comment covers only that one step, so write one for each part of the mission, not one at the top:
+
+```python
+return seq([
+    # drive to the cones
+    drive_forward().until(over_line(Defs.front.left)),
+    grab_cone(heading=0),
+
+    # bring them to the basket
+    turn_to_heading_right(90),
+    drive_forward().until(after_cm(40)),
+])
+```
+
+### Options
+
+The limit and the comment check are set in the `validation:` block of `raccoon.project.yml`:
+
+```yaml
+validation:
+  max_mission_steps: 25         # warn when a mission has more steps
+  check_mission_comments: true  # false turns off the "uncommented steps" check
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `validation.max_mission_steps` | `integer` | `25` | Maximum number of steps in a mission's `seq([...])`. A value above 75 produces a warning. |
+| `validation.check_mission_comments` | `bool` | `true` | Turns the "uncommented steps" check on or off. |
+
+Without a `validation:` block, or for keys you leave out, the defaults apply. The "repeated steps" check has no option.
 
 ## Output examples
 

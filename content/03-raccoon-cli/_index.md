@@ -1,7 +1,7 @@
 ---
 title: "Raccoon CLI"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-24
 draft: false
 weight: 30
 description: "The raccoon command line tool: connect to the robot, generate code, sync and run your project, inspect logs and keep versions in line."
@@ -46,6 +46,7 @@ Code generation and all validation happen on your laptop. The Pi only receives t
 | `raccoon logs` | Show, tail, download and clear robot logs | [logs]({{< ref "/03-raccoon-cli/15-logs.md" >}}) |
 | `raccoon checkpoint` | Automatic safety snapshots of your project | [checkpoint]({{< ref "/03-raccoon-cli/13-checkpoint.md" >}}) |
 | `raccoon validate` | Check config, missions and imports | [validate]({{< ref "/03-raccoon-cli/12-validate.md" >}}) |
+| `raccoon format` | Format the code in `src/` with Black | [format]({{< ref "/03-raccoon-cli/19-format.md" >}}) |
 | `raccoon doctor` | Health check of tools, connection and versions | [doctor]({{< ref "/03-raccoon-cli/11-doctor.md" >}}) |
 | `raccoon update` | Bring laptop and robot to the same bundle | [update]({{< ref "/03-raccoon-cli/09-update.md" >}}) |
 | `raccoon migrate` | Apply project format migrations | [migrate]({{< ref "/03-raccoon-cli/10-migrate.md" >}}) |

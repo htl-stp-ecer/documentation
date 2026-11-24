@@ -1,7 +1,7 @@
 ---
 title: "run"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-24
 draft: false
 weight: 5
 ---
@@ -46,6 +46,10 @@ The exact sequence depends on whether you are connected to a Pi.
 5. **Sync (pull)** — after the program exits (or you press Ctrl+C), downloads any files written during the run (e.g. calibration data, recordings)
 
 There is **no post-run checkpoint** — only the single pre-run snapshot at step 1.
+
+### Formatting before the run
+
+When the project's `raccoon.formatting.yml` sets `auto_format: true`, `raccoon run` formats `src/` before it validates, checkpoints and runs, and lists every file it changed. See [format]({{< ref "/03-raccoon-cli/19-format.md" >}}#formatting-before-every-run).
 
 ### Local run
 
