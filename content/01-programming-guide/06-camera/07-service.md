@@ -112,8 +112,8 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 
 | Channel | Direction | Content |
 |---|---|---|
-| `camera/state/detections` | service to clients | `cam_detections_t`, retained. Detections of all processors and the backend together |
-| `camera/state/frame` | service to UI | `cam_frame_t` with a JPEG. Only if the stream is on |
+| `camera/state/detections` | service to clients | `cam_detections_t`, retained. Detections of all processors and the backend together, with the `frame_id` of the frame they were computed from |
+| `camera/state/frame` | service to UI | `cam_frame_t` with a JPEG and a `frame_id`. Only if the stream is on |
 | `camera/cmd/request` | client to service | `string_t` with JSON: `request_id`, `command`, `data` |
 | `camera/response` | service to clients | `string_t` with JSON: `request_id`, `ok`, `data` |
 | `camera/state/status` | service to clients | `string_t` with JSON, retained, every 2 seconds and on changes |
@@ -121,6 +121,8 @@ The backend pushes frames from its own thread. A worker thread takes the newest 
 | `messages/error` | service to UI | The same errors as a `message_t` with the title "Camera problem" |
 
 `cam_blob_t` has no field for the source, so the label on the wire is `source/label`, for example `BrightSpot/bright`. The client splits it again, which is why processor names must not contain `/`. A detection from a backend carries the backend's name as source.
+
+The frame and its detections are separate messages. The service numbers every frame it receives (`frame_id`, counting up from 1 while the service runs); the detections of a frame carry the number of that frame, and 0 when they belong to no frame (an AI camera delivers detections without frames). The UI draws the latest detections over the latest frame, which can be one frame behind when a processor is slower than the camera.
 
 > The existing `drum-bot` vision daemon uses the same channel names with different commands. Do not run both at once.
 
