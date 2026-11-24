@@ -21,17 +21,13 @@ Formats the Python files in your project's `src/` folder so that everybody on th
 
 ## Switching it on
 
-A project is formatted when it has a `raccoon.formatting.yml` in its root. The shortest file that does it is one line:
-
-```yaml
-enabled: true
-```
+`raccoon format` formats a project that has a `raccoon.formatting.yml` in its root. An empty file is enough; every option you leave out takes its default.
 
 Without the file, `raccoon format` and `raccoon format --check` change nothing and print this warning, then exit with code 0:
 
 ```
 ⚠ No raccoon.formatting.yml in this project, so nothing was formatted.
-  Create raccoon.formatting.yml (for example with the single line 'enabled: true') to turn formatting on.
+  Create raccoon.formatting.yml (an empty file is enough) to turn formatting on.
 ```
 
 ## Which files are formatted
@@ -125,7 +121,6 @@ With `--check` the first line reads `would reformat ...` and the command exits w
 `raccoon.formatting.yml` lives in the project root, next to `raccoon.project.yml`. The project is only formatted when the file exists. Every option you leave out takes its default. The file below lists all options with their defaults:
 
 ```yaml
-enabled: true                     # false: raccoon format does nothing
 auto_format: false                # true: raccoon run formats src/ before it starts
 line_length: 88                   # maximum line length
 skip_string_normalization: false  # true: keep 'single' and "double" quotes as written
@@ -141,8 +136,7 @@ exclude:                          # fnmatch patterns, relative to the project ro
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Turns formatting on or off for the project. With `false`, `raccoon format` prints a notice and changes nothing, and `auto_format` has no effect. |
-| `auto_format` | `bool` | `false` | Formats the project before [`raccoon run`]({{< ref "/03-raccoon-cli/05-run.md" >}}) starts. |
+| `auto_format` | `bool` | `false` | Formats the project before [`raccoon run`]({{< ref "/03-raccoon-cli/05-run.md" >}}) starts. `raccoon format` itself always formats when you run it. |
 | `line_length` | `integer` | `88` | Maximum line length, at least 20. |
 | `skip_string_normalization` | `bool` | `false` | Keeps quotes as you wrote them instead of converting to double quotes. |
 | `skip_magic_trailing_comma` | `bool` | `false` | Ignores trailing commas, so calls that fit on one line are joined even if they end with a comma. |
@@ -152,10 +146,6 @@ exclude:                          # fnmatch patterns, relative to the project ro
 | `exclude` | list of strings | `src/hardware/**` | [fnmatch](https://docs.python.org/3/library/fnmatch.html) patterns for files to skip, written relative to the project root with `/` as separator. Setting `exclude` replaces the default list, so include `src/hardware/**` again if you still want it excluded. |
 
 Unknown options and values of the wrong type are reported as an error, so a typo such as `line_lenght` does not go unnoticed.
-
-## Turning formatting off
-
-Set `enabled: false` in `raccoon.formatting.yml`, or leave the file out. The file is part of your project, so the setting applies to everyone who works on it.
 
 ## Formatting before every run
 
