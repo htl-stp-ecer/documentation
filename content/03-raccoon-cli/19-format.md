@@ -1,7 +1,7 @@
 ---
 title: "format"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-24
+date: 2026-11-26
 draft: false
 weight: 19
 description: "Format your mission code with Black, keeping the layout of seq([...]) and the blank lines between your steps."
@@ -151,4 +151,10 @@ Unknown options and values of the wrong type are reported as an error, so a typo
 
 With `auto_format: true`, `raccoon run` formats the project before it validates and runs it. Every file it changes is listed in the output. A file with a syntax error is skipped with a warning, and [validation]({{< ref "/03-raccoon-cli/12-validate.md" >}}) then reports the error. A broken `raccoon.formatting.yml` only produces a warning, and the run continues without formatting.
 
-The global `--no-validate` flag does not affect `auto_format`. Set `auto_format: false` to stop formatting before runs.
+The global `--no-format` flag skips the formatting for one call. Global flags go before the command:
+
+```bash
+raccoon --no-format run
+```
+
+[Runs started by the Pi server]({{< ref "/03-raccoon-cli/05-run.md" >}}#runs-started-by-the-pi-server) are never formatted. The global `--no-validate` flag does not affect `auto_format`. Set `auto_format: false` to stop formatting before all runs.

@@ -1,7 +1,7 @@
 ---
 title: "run"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-24
+date: 2026-11-26
 draft: false
 weight: 5
 ---
@@ -50,6 +50,14 @@ There is **no post-run checkpoint** — only the single pre-run snapshot at step
 ### Formatting before the run
 
 When the project's `raccoon.formatting.yml` sets `auto_format: true`, `raccoon run` formats `src/` before it validates, checkpoints and runs, and lists every file it changed. See [format]({{< ref "/03-raccoon-cli/19-format.md" >}}#formatting-before-every-run).
+
+### Runs started by the Pi server
+
+A program that the `raccoon-server` daemon starts, for example from [BotUI]({{< ref "/05-bot-ui/_index.md" >}}), is validated but neither formatted nor code-generated. It runs the project files as they are on the Pi. The server calls:
+
+```bash
+raccoon --no-format run --local --no-codegen
+```
 
 ### Local run
 
@@ -110,7 +118,7 @@ The same selection logic applies whether sync is triggered by `raccoon run` or b
 | `--local`, `-l` | off | Force local execution — skip remote even if a Pi is connected |
 | `--no-sync` | off | Skip the pre-run push sync (useful if you just synced manually) |
 | `--no-calibrate` | off | Skip calibration steps; use stored calibration values |
-| `--no-codegen` | off | Skip code generation entirely (used internally by the server when codegen was already run client-side) |
+| `--no-codegen` | off | Skip code generation entirely. [Runs started by the Pi server](#runs-started-by-the-pi-server) use it |
 | `--no-checkpoints` | off | Skip time-checkpoint waiting (wait_for_checkpoint steps return immediately) |
 | `--debug` | off | Enable debug mode: `breakpoint()` steps pause and wait for a button press instead of being a no-op |
 | `--record-localization` | off | Record particle filter state to `.raccoon/runs/<timestamp>/localization.jsonl` for replay in the Web-IDE |
