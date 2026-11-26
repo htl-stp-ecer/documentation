@@ -1,7 +1,7 @@
 ---
 title: "Drive System"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 10
 ---
@@ -404,7 +404,8 @@ auto_tune(
 
 **Key `auto_tune()` facts:**
 
-- `persist=True` (default) writes all tuned values to `raccoon.project.yml`. This modifies your project configuration file, which is intentional — the values are loaded on every subsequent run.
+- `persist=True` (default) writes the tuned values to your project configuration (`raccoon.project.yml` and the files it includes), which is intentional — the values are loaded on every subsequent run. The firmware PID gains and the tolerances are applied to the running robot only and are not written.
+- [`raccoon calibrate autotune`]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}#autotune) runs `auto_tune()` from your laptop, without a mission of your own.
 - `step_confirm=True` (default) pauses before each phase and asks for a button press. This gives you time to position the robot correctly between phases.
 - The BEMF velocity phase (`tune_bemf_velocity`) requires a **calibration board** connected and providing ground-truth position — this is the phase that benefits most from accurate positioning.
 - Run `auto_tune()` on a flat surface with at least 1 m clearance in every direction.

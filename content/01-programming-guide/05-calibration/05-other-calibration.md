@@ -1,7 +1,7 @@
 ---
 title: "Other Calibration"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 50
 description: "Skipping calibration with --no-calibrate, the motor calibration commands and the single-sensor calibration steps."
@@ -63,11 +63,11 @@ The values in `config/motors.yml` come from commands you run on your laptop with
 | Command | What it does |
 |---------|--------------|
 | `raccoon calibrate ticks` | Measures the encoder ticks per revolution and writes `ticks_to_rad` for each motor. |
-| `raccoon calibrate autotune` | Runs `auto_tune()` on the robot. Writes `vel_lpf_alpha`, `bemf_offset`, `static_friction_pct` and the per-motor `pid` values. |
+| `raccoon calibrate autotune` | Runs `auto_tune()` on the robot. Writes motor values (`ticks_to_rad`, `bemf_offset`, `vel_lpf_alpha`, `static_friction_pct`) and, in `config/robot.yml`, the motion constraints, the motion PID gains and the velocity command gains. |
 | `raccoon calibrate servos` | Sets servo offsets, see [Servo Offsets and Calibration]({{< ref "/01-programming-guide/03-actors/01-servos/02-offsets-and-calibration.md" >}}). |
-| `raccoon calibrate step-response` | Records the step response of the motors as CSV and plot. Writes nothing automatically. Use the plot to set the `motion_pid` constraints in [robot.yml]({{< ref "/06-advanced/06-motion-and-localization/06-robot-yml.md" >}}). |
+| `raccoon calibrate step-response` | Records the step response of the motors as CSV and plot, for diagnostics. Does not change the configuration. |
 
-Run `ticks` first, then `autotune`. The keys these commands write are described in [Motor Config]({{< ref "/01-programming-guide/03-actors/02-motors/01-motor-config.md" >}}).
+Run `ticks` first, then `autotune`. All options are described in [calibrate]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}). The motor keys these commands write are described in [Motor Config]({{< ref "/01-programming-guide/03-actors/02-motors/01-motor-config.md" >}}).
 
 `calibrate_deadzone(motor_ports=None, start_percent=1, max_percent=30, settle_time=0.3)` is a setup step that finds the power a motor needs to start turning. It raises the power slowly and asks you to confirm when the wheel moves.
 

@@ -1,7 +1,7 @@
 ---
 title: "Missions"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-24
+date: 2026-11-26
 draft: false
 weight: 70
 ---
@@ -484,6 +484,8 @@ class M000SetupMission(SetupMission):
 ```
 
 Call `robot._pre_start_gate()` (single underscore — it is a protected method on `GenericRobot`) to invoke the built-in gate. If you omit this call, the robot will not wait for the start light and the match will begin immediately after your setup sequence.
+
+[`raccoon calibrate autotune`]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}#autotune) runs the setup sequence but skips every pre-start gate.
 
 ## Mission Time Budget
 

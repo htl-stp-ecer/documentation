@@ -1,7 +1,7 @@
 ---
 title: "robot.yml Reference"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 60
 description: "Every key of config/robot.yml: shutdown_in, drive kinematics, motion PID and physical dimensions."
@@ -175,7 +175,7 @@ When the drive command saturates the actuators, the controller de-rates its outp
 
 ### Motion profile constraints
 
-These three sub-blocks are **populated automatically by `raccoon calibrate step-response`** and should not be edited manually. They are commented out in the scaffold until characterization is run.
+These three sub-blocks are **populated automatically by the drive characterization of [`raccoon calibrate autotune`]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}#autotune)** and should not be edited manually. They are commented out in the scaffold until characterization is run.
 
 ```yaml
 motion_pid:

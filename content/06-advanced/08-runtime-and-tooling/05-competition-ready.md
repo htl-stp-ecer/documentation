@@ -1,7 +1,7 @@
 ---
 title: "Competition Ready"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 50
 ---
@@ -227,6 +227,8 @@ def main():
 ```
 
 The override is safe because `shutdown_in` is read by `robot.start()`, not at construction time.
+
+[`raccoon calibrate autotune`]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}#autotune) needs neither override: it skips the pre-start gate and the shutdown timer by itself.
 
 > **Before competition:** Remove the `_pre_start_gate` patch and restore `shutdown_in` to 120. These are not flags you want to forget. Consider using a run configuration (see `config/run-configurations.yml`) to keep tuning overrides separate from competition code.
 

@@ -1,7 +1,7 @@
 ---
 title: "Servo Offsets and Calibration"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 20
 description: "Servo offsets, calibrating them with raccoon calibrate servos, finding angles and the limits of the hardware."
@@ -49,10 +49,10 @@ This way all named angles describe the arm's actual joint angle, and the hardwar
 
 ## Calibrate offsets with the CLI
 
-`raccoon calibrate servos` moves a servo to one of its positions and lets you correct it live, then writes the result into the `offset` of that servo in `config/servos.yml`. It needs a connected robot and works on servos that have `positions`.
+`raccoon calibrate servos` moves a servo to one of its positions and lets you correct it live, then writes the result into the `offset` of that servo in `config/servos.yml`. It works on servos that have `positions` and needs the robot: connected to your laptop, or with `raccoon calibrate --local servos` on the robot itself. See [calibrate]({{< ref "/03-raccoon-cli/07-calibrate.md" >}}#servos).
 
 1. Pick a servo, then one of its positions. The servo moves to `position + offset`.
-2. Move it with the up and down arrow keys. The left and right arrow keys change the step between 0.5, 1 and 2 degrees.
+2. Move it with the up and down arrow keys. The left and right arrow keys change the step between 0.5, 1, 2 and 5 degrees.
 3. Press Enter when the mechanism sits where this position should be. The change is added to the stored `offset`.
 4. Press Esc or Ctrl+C to leave without saving the current servo.
 

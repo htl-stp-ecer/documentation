@@ -1,7 +1,7 @@
 ---
 title: "Motor Config"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-19
+date: 2026-11-26
 draft: false
 weight: 10
 description: "Declaring motors in config/motors.yml: port, inversion and the calibration values."
@@ -28,12 +28,12 @@ These map directly to fields on the C++ `MotorCalibration` struct in `raccoon-li
 
 | Key | Type | C++ default | Description | Written by |
 |-----|------|-------------|-------------|-----------|
-| `ticks_to_rad` | `float` | `2π / 1440 ≈ 0.004363` | Converts raw encoder tick counts to radians of shaft rotation. Must be strictly positive. The scaffold placeholder `0.00002` is wrong for most hardware; run `raccoon calibrate ticks` to measure the real value. | `raccoon calibrate ticks` |
+| `ticks_to_rad` | `float` | `2π / 1440 ≈ 0.004363` | Converts raw encoder tick counts to radians of shaft rotation. Must be strictly positive. The scaffold placeholder `0.00002` is wrong for most hardware; run `raccoon calibrate ticks` to measure the real value. | `raccoon calibrate ticks`, `raccoon calibrate autotune` |
 | `vel_lpf_alpha` | `float` | `0.5` | IIR low-pass filter coefficient for the BEMF-derived velocity estimate. `1.0` = no filtering (raw); `0.0` = frozen. Must be in `[0, 1]`. Lower values smooth velocity at the cost of lag. | `raccoon calibrate autotune` |
 | `bemf_offset` | `float` | `0.0` | Per-motor BEMF zero-offset (ADC counts) subtracted on the STM32 before integrating encoder ticks. Corrects for drift so the tick integral stays proportional to wheel angle. | `raccoon calibrate autotune` |
-| `pid.kp` | `float` | `1.0` | Proportional gain for the optional per-motor velocity PID loop. The `pid` block is **optional** — omit it entirely to disable per-motor closed-loop control. | `raccoon calibrate autotune` |
-| `pid.ki` | `float` | `0.0` | Integral gain for the per-motor velocity PID. | `raccoon calibrate autotune` |
-| `pid.kd` | `float` | `0.0` | Derivative gain for the per-motor velocity PID. | `raccoon calibrate autotune` |
+| `pid.kp` | `float` | `1.0` | Proportional gain for the optional per-motor velocity PID loop. The `pid` block is **optional** — omit it entirely to disable per-motor closed-loop control. | Set by hand |
+| `pid.ki` | `float` | `0.0` | Integral gain for the per-motor velocity PID. | Set by hand |
+| `pid.kd` | `float` | `0.0` | Derivative gain for the per-motor velocity PID. | Set by hand |
 | `static_friction_pct` | `float` | `0.0` | Minimum open-loop PWM duty (as a percent) required to overcome motor stiction, measured during the autotune static-friction phase. `0.0` = unmeasured / not applied. | `raccoon calibrate autotune` |
 
 Minimal scaffold entry:
@@ -60,7 +60,7 @@ left_motor:
     vel_lpf_alpha: 0.8           # written by: raccoon calibrate autotune
     bemf_offset: -0.0041         # written by: raccoon calibrate autotune
     static_friction_pct: 3.2     # written by: raccoon calibrate autotune
-    pid:                         # optional — only present after autotune
+    pid:                         # optional — set by hand
       kp: 0.12
       ki: 0.0
       kd: 0.0
