@@ -1,7 +1,7 @@
 ---
 title: "validate"
 author: "Tobias Madlberger, Mario Scholze"
-date: 2026-11-24
+date: 2026-11-26
 draft: false
 weight: 12
 ---
@@ -49,6 +49,7 @@ raccoon validate --no-codegen-check  # skip the in-memory code generation check
 | `main.py` imports | ERROR / WARNING | Every `from .missions.<module> import <Class>` in `src/main.py` must resolve to a file that exists and a class that is in config |
 | Python compile | ERROR | Every `.py` file under `src/` must be free of syntax errors (`py_compile`) |
 | Mission length | WARNING | A mission has more steps in its `seq([...])` than `validation.max_mission_steps` allows, or the limit itself is set unreasonably high. See [Mission style checks](#mission-style-checks) |
+| Single-element `seq` / `parallel` | WARNING | A `seq([...])` holds only one step, or a `parallel(...)` has only one argument (the step a mission's `sequence()` returns is excepted). See [Single-element `seq` and `parallel`](#single-element-seq-and-parallel) |
 | Repeated steps | WARNING | The same step or block of steps is written three or more times in a row. See [Mission style checks](#mission-style-checks) |
 | Uncommented steps | WARNING | More than six steps in a row have no comment. See [Mission style checks](#mission-style-checks) |
 
@@ -60,7 +61,7 @@ The naming convention the checker enforces is:
 
 ## Mission style checks
 
-Three checks look at how your missions are written. They only produce warnings and never fail the command. They read the list in the `return seq([...])` of each mission's `sequence()` in `src/missions/`; steps nested deeper, for example inside a `parallel(...)`, count as part of their parent step. A mission that builds its sequence in another way, such as `return build_everything()`, is skipped.
+These checks look at how your missions are written. They only produce warnings and never fail the command. Mission length, repeated steps and uncommented steps read the list in the `return seq([...])` of each mission's `sequence()` in `src/missions/`; steps nested deeper, for example inside a `parallel(...)`, count as part of their parent step. A mission that builds its sequence in another way, such as `return build_everything()`, is skipped.
 
 ### Mission length
 
@@ -119,6 +120,27 @@ return seq([
 ])
 ```
 
+### Single-element `seq` and `parallel`
+
+A `seq([...])` with one step runs exactly like the step itself, and a `parallel(...)` with one argument has nothing to run in parallel. Both get a warning, in every `.py` file under `src/` and at any nesting depth:
+
+```
+⚠ src/missions/m010_drive_mission.py:12 uses seq([...]) with only one step
+  No seq() needed here: use the step directly
+⚠ src/missions/m010_drive_mission.py:18 uses parallel(...) with only one argument
+  No parallel() needed here: use the step directly, or seq([...]) for a list of steps
+```
+
+A single list passed to `parallel(...)` is one branch, so `parallel([a(), b()])` is reported too: write `seq([a(), b()])`. Calls with unpacked arguments, such as `parallel(*branches)`, are not reported.
+
+The step that the `sequence()` of a mission in `src/missions/` returns is not reported, so `return seq([a()])` and `return parallel(a())` are fine. The steps inside it are checked:
+
+```python
+return seq([           # not reported
+    parallel(a()),     # reported
+])
+```
+
 ### Options
 
 The limit and the comment check are set in the `validation:` block of `raccoon.project.yml`:
@@ -134,7 +156,7 @@ validation:
 | `validation.max_mission_steps` | `integer` | `25` | Maximum number of steps in a mission's `seq([...])`. A value above 75 produces a warning. |
 | `validation.check_mission_comments` | `bool` | `true` | Turns the "uncommented steps" check on or off. |
 
-Without a `validation:` block, or for keys you leave out, the defaults apply. The "repeated steps" check has no option.
+Without a `validation:` block, or for keys you leave out, the defaults apply. The "repeated steps" and "single-element `seq` and `parallel`" checks have no option.
 
 ## Output examples
 
